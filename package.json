@@ -1,0 +1,37 @@
+{
+  "name": "cc-token-meter",
+  "version": "1.0.0",
+  "description": "Local-only CLI + web dashboard for Claude Code token usage, cost estimates, and waste-reduction tips. 100% local, no API calls, no telemetry.",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "cc-token-meter": "./bin/cc-token-meter.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "token",
+    "usage",
+    "cost",
+    "dashboard",
+    "cli"
+  ],
+  "dependencies": {
+    "glob": "^11.0.0",
+    "open": "^10.1.0"
+  }
+}

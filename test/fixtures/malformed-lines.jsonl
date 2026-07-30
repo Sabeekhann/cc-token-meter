@@ -1,0 +1,3 @@
+{"type":"assistant","sessionId":"22222222-2222-2222-2222-222222222222","timestamp":"2026-07-30T11:00:00.000Z","cwd":"/Users/dev/project-b","message":{"model":"claude-sonnet-5","id":"msg_001","role":"assistant","content":[{"type":"text","text":"first"}],"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+this is not valid json at all {{{ garbage ]][
+{"type":"assistant","sessionId":"22222222-2222-2222-2222-222222222222","timestamp":"2026-07-30T11:00:05.000Z","cwd":"/Users/dev/project-b","message":{"model":"claude-sonnet-5","id":"msg_002","role":"assistant","content":[{"type":"text","text":"second"}],"usage":{"input_tokens":200,"output_tokens":75,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}

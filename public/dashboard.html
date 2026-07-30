@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Token Meter — for Claude Code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/dashboard.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 0 L14.2 9.8 L24 12 L14.2 14.2 L12 24 L9.8 14.2 L0 12 L9.8 9.8 Z" fill="currentColor"/></svg>
+        </span>
+        <div class="brand-text">
+          <span class="brand-name">Token Meter</span>
+          <span class="brand-sub">for Claude Code</span>
+        </div>
+      </div>
+      <div class="local-badge" title="100% local — no data leaves your machine">
+        <span class="dot"></span> 100% local &middot; offline
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero-stats">
+      <div class="stat-card gauge-card">
+        <div id="gauge" class="gauge">
+          <div class="gauge-inner">
+            <div id="gaugeValue" class="gauge-value">—</div>
+            <div class="gauge-label">tokens today</div>
+          </div>
+        </div>
+        <div id="gaugeSubtext" class="gauge-subtext">No daily cap configured</div>
+      </div>
+
+      <div class="stat-stack">
+        <div class="stat-card">
+          <div class="stat-label">Today's cost <span class="est">est.</span></div>
+          <div id="todayCost" class="stat-value">$0.00</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">All-time tokens</div>
+          <div id="allTimeTokens" class="stat-value">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">All-time cost <span class="est">est.</span></div>
+          <div id="allTimeCost" class="stat-value">$0.00</div>
+        </div>
+      </div>
+    </section>
+
+    <div id="budgetBanner" class="budget-banner hidden"></div>
+
+    <section class="panel">
+      <h2><span class="sparkle">✳</span> Projects</h2>
+      <div id="projectList" class="project-list">
+        <div class="empty-row">Loading…</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="sparkle">✳</span> Tips</h2>
+      <div id="tipsPanel" class="tips-panel">
+        <div class="empty-row">No tips — you're efficient.</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer" title="All data read from ~/.claude/projects/**/*.jsonl on this machine only. No network calls except this local server.">
+    <span class="dot"></span> Local only &middot; no network calls
+  </footer>
+
+  <script src="/dashboard.js"></script>
+</body>
+</html>
