@@ -198,4 +198,58 @@ export function getTodayTotal(sessions) {
   );
 }
 
+// Cap on the number of timeline points returned per session — a burn
+// timeline chart doesn't need more resolution than this to look smooth, and
+// it keeps the SSE payload bounded for very long-running sessions instead of
+// shipping an ever-growing unbounded array every ~1.5s tick.
+const TIMELINE_MAX_POINTS = 500;
+
+/**
+ * Build a chronological burn-timeline for a single session from its
+ * usageRecords (one point per assistant message: timestamp, per-message
+ * token breakdown/total, model) and toolEvents (lightweight markers only —
+ * name + timestamp — useful for correlating tool calls with burn spikes on
+ * the same chart). Pure transformation, no I/O.
+ *
+ * Downsampled to at most TIMELINE_MAX_POINTS usage points by taking an even
+ * stride through the array (keeps chronological order and first/last
+ * points) — most sessions are far below this cap and pass through
+ * untouched.
+ *
+ * @param {object} session - a session aggregate with usageRecords[]/toolEvents[]
+ * @returns {{usage: Array<{timestamp: string, model: string|null, inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, tokenTotal: number}>, tools: Array<{timestamp: string, name: string, kind: string}>}}
+ */
+export function buildTimeline(session) {
+  const usageRecords = Array.isArray(session.usageRecords) ? session.usageRecords : [];
+  const toolEvents = Array.isArray(session.toolEvents) ? session.toolEvents : [];
+
+  let points = usageRecords.map((r) => ({
+    timestamp: r.timestamp ?? null,
+    model: r.model ?? null,
+    inputTokens: r.inputTokens || 0,
+    outputTokens: r.outputTokens || 0,
+    cacheCreationInputTokens: r.cacheCreationInputTokens || 0,
+    cacheReadInputTokens: r.cacheReadInputTokens || 0,
+    tokenTotal: tokenTotal(r),
+  }));
+
+  if (points.length > TIMELINE_MAX_POINTS) {
+    const stride = points.length / TIMELINE_MAX_POINTS;
+    const sampled = [];
+    for (let i = 0; i < TIMELINE_MAX_POINTS - 1; i++) {
+      sampled.push(points[Math.floor(i * stride)]);
+    }
+    sampled.push(points[points.length - 1]); // always keep the last point
+    points = sampled;
+  }
+
+  const tools = toolEvents.map((evt) => ({
+    timestamp: evt.timestamp ?? null,
+    name: evt.name ?? null,
+    kind: evt.kind ?? null,
+  }));
+
+  return { usage: points, tools };
+}
+
 export { tokenTotal, localDateKey };

@@ -34,6 +34,8 @@ export function longSessionNoCompact(sessionRecord, toolEvents, allSessionsHisto
       sessionId: sessionRecord.sessionId,
       severity: 'warn',
       message: `This session has run ${messageCount} turns without a /compact. Long uncompacted sessions tend to accumulate stale context, inflating cache-write costs. Consider running /compact soon.`,
+      estimatedSavingsTokens: null,
+      estimatedSavingsUsd: null,
     },
   ];
 }

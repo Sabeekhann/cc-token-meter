@@ -1,3 +1,6 @@
+import { sessionInputRatePerToken } from './_pricingHelper.js';
+import { CACHE_READ_MULTIPLIER } from '../pricing/models.js';
+
 /**
  * Detect a significant drop in cache reuse later in a session: if the mean
  * cache-write/cache-read ratio of the last 25% of assistant messages is
@@ -24,17 +27,25 @@ export function cacheRatio(sessionRecord) {
   const meanFirst = mean(firstQuarter);
   const meanLast = mean(lastQuarter);
 
+  const lastQuarterRecords = sorted.slice(sorted.length - quarterLen);
+
   if (meanFirst <= 0) {
     // Avoid divide-by-zero; if there was literally no cache activity at the
     // start, treat any nonzero later ratio as a hard trigger only if it's
     // meaningfully large, otherwise skip (not enough signal).
     if (meanLast > 0) {
+      const { estimatedSavingsTokens, estimatedSavingsUsd } = estimateCacheSavings(
+        lastQuarterRecords,
+        sessionRecord
+      );
       return [
         {
           id: `cacheRatio:${sessionRecord.sessionId}`,
           sessionId: sessionRecord.sessionId,
           severity: 'info',
-          message: `Cache reuse dropped significantly later in this session (cache writes are outpacing cache reads ${meanLast.toFixed(1)}x vs the session start). This usually means context is being rebuilt rather than reused — consider running /compact or starting a fresh session for the next task.`,
+          message: `Cache reuse dropped significantly later in this session (cache writes are outpacing cache reads ${meanLast.toFixed(1)}x vs the session start). This usually means context is being rebuilt rather than reused — consider running /compact or starting a fresh session for the next task.${savingsClause(estimatedSavingsTokens, estimatedSavingsUsd)}`,
+          estimatedSavingsTokens,
+          estimatedSavingsUsd,
         },
       ];
     }
@@ -44,17 +55,50 @@ export function cacheRatio(sessionRecord) {
   const ratioOfRatios = meanLast / meanFirst;
 
   if (ratioOfRatios >= 2) {
+    const { estimatedSavingsTokens, estimatedSavingsUsd } = estimateCacheSavings(
+      lastQuarterRecords,
+      sessionRecord
+    );
     return [
       {
         id: `cacheRatio:${sessionRecord.sessionId}`,
         sessionId: sessionRecord.sessionId,
         severity: 'info',
-        message: `Cache reuse dropped significantly later in this session (cache writes are outpacing cache reads ${ratioOfRatios.toFixed(1)}x vs the session start). This usually means context is being rebuilt rather than reused — consider running /compact or starting a fresh session for the next task.`,
+        message: `Cache reuse dropped significantly later in this session (cache writes are outpacing cache reads ${ratioOfRatios.toFixed(1)}x vs the session start). This usually means context is being rebuilt rather than reused — consider running /compact or starting a fresh session for the next task.${savingsClause(estimatedSavingsTokens, estimatedSavingsUsd)}`,
+        estimatedSavingsTokens,
+        estimatedSavingsUsd,
       },
     ];
   }
 
   return [];
+}
+
+/**
+ * Estimate the $/token saveable if the last-quarter cache-write tokens had
+ * instead hit cache reads. `cacheCreationInputTokens` in the degraded
+ * (last-quarter) window is the token volume that plausibly could've been
+ * cache reads instead, priced at the delta between the full input rate and
+ * the (much cheaper) cache-read rate — that delta is what's actually
+ * saveable per token if it had hit cache instead of being rewritten.
+ */
+function estimateCacheSavings(lastQuarterRecords, sessionRecord) {
+  const tokens = lastQuarterRecords.reduce((sum, r) => sum + (r.cacheCreationInputTokens || 0), 0);
+  if (tokens <= 0) return { estimatedSavingsTokens: null, estimatedSavingsUsd: null };
+
+  const fullRate = sessionInputRatePerToken(sessionRecord);
+  const cacheReadRate = fullRate * CACHE_READ_MULTIPLIER;
+  const deltaRate = fullRate - cacheReadRate;
+
+  return {
+    estimatedSavingsTokens: Math.round(tokens),
+    estimatedSavingsUsd: tokens * deltaRate,
+  };
+}
+
+function savingsClause(estimatedSavingsTokens, estimatedSavingsUsd) {
+  if (estimatedSavingsTokens == null || estimatedSavingsUsd == null) return '';
+  return ` That's roughly ${estimatedSavingsTokens.toLocaleString()} tokens (~$${estimatedSavingsUsd.toFixed(2)}) that could've been cheap cache reads instead of full-price cache rebuilds.`;
 }
 
 function mean(arr) {

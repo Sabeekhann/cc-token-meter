@@ -1,3 +1,16 @@
+import { sessionInputRatePerToken } from './_pricingHelper.js';
+
+/** Byte-size threshold above which a tool_result is considered "large". */
+export const LARGE_RESULT_BYTE_THRESHOLD = 50000;
+
+/**
+ * Rough bytes-per-token approximation used to convert a tool_result's byte
+ * size into an estimated token count. This is a coarse approximation (real
+ * tokenization varies by content), documented here rather than hidden as a
+ * bare literal.
+ */
+export const BYTES_PER_TOKEN_ESTIMATE = 4;
+
 /**
  * Flag a large tool_result (>50KB) that immediately precedes an assistant
  * message with an unusually large output-token count (top 10% of that
@@ -26,7 +39,7 @@ export function largeToolResultSpike(sessionRecord, toolEvents) {
 
   const toolUseEvents = toolEvents.filter((e) => e.kind === 'tool_use');
   const toolResultEvents = toolEvents
-    .filter((e) => e.kind === 'tool_result' && e.contentByteLength > 50000)
+    .filter((e) => e.kind === 'tool_result' && e.contentByteLength > LARGE_RESULT_BYTE_THRESHOLD)
     .slice()
     .sort((a, b) => compareTimestamps(a.timestamp, b.timestamp));
 
@@ -59,11 +72,17 @@ export function largeToolResultSpike(sessionRecord, toolEvents) {
 
     const kb = Math.round(resultEvt.contentByteLength / 1024);
 
+    const bytesOverThreshold = resultEvt.contentByteLength - LARGE_RESULT_BYTE_THRESHOLD;
+    const estimatedSavingsTokens = Math.round(bytesOverThreshold / BYTES_PER_TOKEN_ESTIMATE);
+    const estimatedSavingsUsd = estimatedSavingsTokens * sessionInputRatePerToken(sessionRecord);
+
     tips.push({
       id: `largeToolResultSpike:${sessionRecord.sessionId}:${dedupeKey}`,
       sessionId: sessionRecord.sessionId,
       severity: 'info',
-      message: `A tool call returned a very large result (~${kb}KB of output) right before an unusually long response. If this was a file read or command output, consider using offset/limit, grep for specific content, or truncating the tool output rather than passing it through in full.`,
+      message: `A tool call returned a very large result (~${kb}KB of output) right before an unusually long response. If this was a file read or command output, consider using offset/limit, grep for specific content, or truncating the tool output rather than passing it through in full. That's roughly ${estimatedSavingsTokens.toLocaleString()} extra tokens (~$${estimatedSavingsUsd.toFixed(2)}) above the ${Math.round(LARGE_RESULT_BYTE_THRESHOLD / 1024)}KB threshold.`,
+      estimatedSavingsTokens,
+      estimatedSavingsUsd,
     });
   }
 

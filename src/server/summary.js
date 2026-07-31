@@ -4,6 +4,7 @@ import {
   aggregateByDay,
   getTodayTotal,
   tokenTotal,
+  buildTimeline,
 } from '../ingest/aggregate.js';
 import { computeAlerts } from '../budget/alerts.js';
 import { readConfig } from '../budget/config.js';
@@ -66,6 +67,7 @@ export function buildSummary(store) {
     tokenTotal: tokenTotal(s),
     gitBranch: s.gitBranch,
     version: s.version,
+    timeline: buildTimeline(s),
   }));
 
   const activeSessionTotals = sessionSummaries.map((s) => ({

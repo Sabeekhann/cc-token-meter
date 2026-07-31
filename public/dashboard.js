@@ -15,6 +15,7 @@
   var expandedProjects = Object.create(null);
   var expandedBranches = Object.create(null);
   var expandedTips = Object.create(null);
+  var expandedTimelines = Object.create(null);
 
   var TIP_KINDS = [
     { prefix: 'repeatedReads', icon: '↻', label: 'Re-reading a file' },
@@ -61,9 +62,22 @@
     renderGauge(summary);
     renderTotals(summary);
     renderBudgetBanner(summary.alerts);
-    renderProjects(summary.byProject);
+    renderProjects(summary.byProject, summary.sessions);
     renderBranches(summary.byBranch);
     renderTips(summary.tips);
+  }
+
+  // Build a sessionId -> timeline lookup from the top-level sessions array
+  // (byProject's nested session rows are a lighter-weight projection that
+  // doesn't itself carry `timeline` — it lives only on summary.sessions).
+  function buildTimelineIndex(sessions) {
+    var index = Object.create(null);
+    if (!sessions) return index;
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i];
+      if (s && s.sessionId) index[s.sessionId] = s.timeline;
+    }
+    return index;
   }
 
   function renderGauge(summary) {
@@ -115,12 +129,13 @@
     budgetBannerEl.innerHTML = '<strong>' + escapeHtml(heading) + '</strong><ul>' + items + '</ul>';
   }
 
-  function renderProjects(byProject) {
+  function renderProjects(byProject, sessions) {
     if (!byProject || byProject.length === 0) {
       projectListEl.innerHTML = '<div class="empty-row">No sessions found yet.</div>';
       return;
     }
 
+    var timelineIndex = buildTimelineIndex(sessions);
     var maxCost = byProject.reduce(function (m, p) { return Math.max(m, p.costUsd || 0); }, 0) || 1;
 
     var html = byProject.map(function (p) {
@@ -141,17 +156,24 @@
 
       if (!isExpanded) return row;
 
-      var sessions = p.sessions.map(function (s) {
-        return (
-          '<div class="session-item">' +
+      var sessionRows = p.sessions.map(function (s) {
+        var timelineExpanded = !!expandedTimelines[s.sessionId];
+        var timeline = timelineIndex[s.sessionId];
+        var sessionRow =
+          '<div class="session-item" data-session="' + escapeHtmlAttr(s.sessionId) + '">' +
+            '<span class="session-timeline-caret">' + (timelineExpanded ? '▾' : '▸') + '</span>' +
             '<span class="session-id">' + escapeHtml(s.sessionId.slice(0, 8)) + ' &middot; ' + s.messageCount + ' msgs</span>' +
             '<span class="session-tokens" title="' + formatTokens(s.tokenTotal) + ' tokens">' + formatCompact(s.tokenTotal) + '</span>' +
             '<span class="session-cost">' + formatCost(s.costUsd) + '</span>' +
-          '</div>'
-        );
+          '</div>';
+
+        if (timelineExpanded) {
+          sessionRow += '<div class="session-timeline">' + renderTimelineChart(timeline) + '</div>';
+        }
+        return sessionRow;
       }).join('');
 
-      return row + '<div class="session-list">' + sessions + '</div>';
+      return row + '<div class="session-list">' + sessionRows + '</div>';
     }).join('');
 
     projectListEl.innerHTML = html;
@@ -163,6 +185,100 @@
         if (window.__lastSummary) render(window.__lastSummary);
       });
     });
+
+    projectListEl.querySelectorAll('.session-item').forEach(function (row) {
+      row.addEventListener('click', function (evt) {
+        evt.stopPropagation();
+        var sessionId = row.getAttribute('data-session');
+        expandedTimelines[sessionId] = !expandedTimelines[sessionId];
+        if (window.__lastSummary) render(window.__lastSummary);
+      });
+    });
+  }
+
+  // Burn-timeline chart: an SVG bar chart of per-message token totals over
+  // time (bar height ~ tokenTotal for that message), with a cumulative-burn
+  // line overlaid, and tool events marked as small ticks along the x-axis.
+  // Pure string-template rendering, consistent with the rest of this file —
+  // cheap enough to redo on every ~1.5s SSE tick even for the 500-point cap.
+  var TIMELINE_WIDTH = 640;
+  var TIMELINE_HEIGHT = 120;
+  var TIMELINE_PAD = 8;
+
+  function renderTimelineChart(timeline) {
+    if (!timeline || !Array.isArray(timeline.usage) || timeline.usage.length === 0) {
+      return '<div class="empty-row timeline-empty">No timeline data for this session.</div>';
+    }
+
+    var usage = timeline.usage;
+    var tools = Array.isArray(timeline.tools) ? timeline.tools : [];
+
+    var firstTs = usage[0].timestamp ? new Date(usage[0].timestamp).getTime() : 0;
+    var lastTs = usage[usage.length - 1].timestamp ? new Date(usage[usage.length - 1].timestamp).getTime() : firstTs;
+    var span = Math.max(1, lastTs - firstTs);
+
+    var maxPoint = usage.reduce(function (m, u) { return Math.max(m, u.tokenTotal || 0); }, 0) || 1;
+
+    var cumulative = 0;
+    var cumSeries = usage.map(function (u) {
+      cumulative += u.tokenTotal || 0;
+      return cumulative;
+    });
+    var maxCumulative = cumulative || 1;
+
+    var innerW = TIMELINE_WIDTH - TIMELINE_PAD * 2;
+    var innerH = TIMELINE_HEIGHT - TIMELINE_PAD * 2;
+
+    function xFor(ts) {
+      if (!ts) return TIMELINE_PAD;
+      var t = new Date(ts).getTime();
+      return TIMELINE_PAD + ((t - firstTs) / span) * innerW;
+    }
+
+    var barWidth = usage.length > 1 ? Math.max(1, innerW / usage.length - 1) : Math.max(1, innerW);
+
+    var bars = usage.map(function (u, i) {
+      var x = usage.length > 1 ? TIMELINE_PAD + (i / usage.length) * innerW : TIMELINE_PAD;
+      var h = ((u.tokenTotal || 0) / maxPoint) * innerH;
+      var y = TIMELINE_PAD + (innerH - h);
+      var title = escapeHtmlAttr(
+        (u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : 'unknown time') +
+        ' · ' + formatTokens(u.tokenTotal) + ' tokens' +
+        (u.model ? ' · ' + u.model : '')
+      );
+      return '<rect class="timeline-bar" x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + barWidth.toFixed(2) + '" height="' + Math.max(0.5, h).toFixed(2) + '"><title>' + title + '</title></rect>';
+    }).join('');
+
+    var linePoints = usage.map(function (u, i) {
+      var x = xFor(u.timestamp);
+      var y = TIMELINE_PAD + (innerH - (cumSeries[i] / maxCumulative) * innerH);
+      return x.toFixed(2) + ',' + y.toFixed(2);
+    }).join(' ');
+
+    var toolTicks = tools.map(function (t) {
+      var x = xFor(t.timestamp);
+      var title = escapeHtmlAttr(
+        (t.name || 'tool') + (t.kind ? ' (' + t.kind + ')' : '') +
+        (t.timestamp ? ' · ' + new Date(t.timestamp).toLocaleTimeString() : '')
+      );
+      return '<line class="timeline-tick" x1="' + x.toFixed(2) + '" x2="' + x.toFixed(2) + '" y1="' + (TIMELINE_HEIGHT - TIMELINE_PAD) + '" y2="' + TIMELINE_HEIGHT + '"><title>' + title + '</title></line>';
+    }).join('');
+
+    var legend =
+      '<div class="timeline-legend">' +
+        '<span><span class="timeline-swatch timeline-swatch-bar"></span>per-message tokens</span>' +
+        '<span><span class="timeline-swatch timeline-swatch-line"></span>cumulative burn</span>' +
+        (tools.length ? '<span><span class="timeline-swatch timeline-swatch-tick"></span>tool events</span>' : '') +
+      '</div>';
+
+    var svg =
+      '<svg class="timeline-svg" viewBox="0 0 ' + TIMELINE_WIDTH + ' ' + TIMELINE_HEIGHT + '" preserveAspectRatio="none">' +
+        bars +
+        '<polyline class="timeline-line" points="' + linePoints + '" fill="none"></polyline>' +
+        toolTicks +
+      '</svg>';
+
+    return legend + svg;
   }
 
   function renderBranches(byBranch) {
