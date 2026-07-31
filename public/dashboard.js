@@ -11,6 +11,8 @@
   var projectListEl = document.getElementById('projectList');
   var branchListEl = document.getElementById('branchList');
   var tipsPanelEl = document.getElementById('tipsPanel');
+  var forecastWindowEl = document.getElementById('forecastWindow');
+  var forecastBodyEl = document.getElementById('forecastBody');
 
   var expandedProjects = Object.create(null);
   var expandedBranches = Object.create(null);
@@ -62,9 +64,50 @@
     renderGauge(summary);
     renderTotals(summary);
     renderBudgetBanner(summary.alerts);
+    renderForecast(summary.forecast, summary.config);
     renderProjects(summary.byProject, summary.sessions);
     renderBranches(summary.byBranch);
     renderTips(summary.tips);
+  }
+
+  function renderForecast(forecast, config) {
+    if (!forecast || !forecast.daysObserved) {
+      forecastWindowEl.textContent = '';
+      forecastBodyEl.innerHTML = '<div class="forecast-empty">Not enough data yet — check back after a day or two of usage.</div>';
+      return;
+    }
+
+    forecastWindowEl.textContent =
+      'based on last ' + forecast.daysObserved + ' day' + (forecast.daysObserved === 1 ? '' : 's');
+
+    var cap = config && config.dailyCostCapUsd;
+    var overBudget = forecast.exceedsDailyCap === true;
+    var projectedValueCls = 'forecast-stat-value' + (overBudget ? ' over-budget' : '');
+
+    var monthLabel = forecast.projectionDays === 30 ? 'this month' : 'next ' + forecast.projectionDays + ' days';
+
+    var html =
+      '<div class="forecast-stat">' +
+        '<span class="forecast-stat-label">Avg daily burn</span>' +
+        '<span class="forecast-stat-value">' + escapeHtml(formatCost(forecast.avgDailyCostUsd)) +
+          ' <span class="est">(' + escapeHtml(formatCompact(forecast.avgDailyTokens)) + ' tok)</span></span>' +
+      '</div>' +
+      '<div class="forecast-stat">' +
+        '<span class="forecast-stat-label">Projected ' + escapeHtml(monthLabel) + '</span>' +
+        '<span class="' + escapeHtmlAttr(projectedValueCls) + '" title="' + escapeHtmlAttr(formatTokens(forecast.projectedTokens) + ' tokens') + '">' +
+          escapeHtml(formatCost(forecast.projectedCostUsd)) +
+        '</span>' +
+      '</div>';
+
+    if (overBudget) {
+      html +=
+        '<div class="forecast-stat">' +
+          '<span class="forecast-stat-label">vs. daily cap</span>' +
+          '<span class="forecast-stat-value over-budget">exceeds ' + escapeHtml(formatCost(cap)) + '/day</span>' +
+        '</div>';
+    }
+
+    forecastBodyEl.innerHTML = html;
   }
 
   // Build a sessionId -> timeline lookup from the top-level sessions array

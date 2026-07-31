@@ -5,6 +5,7 @@ import {
   aggregateByBranch,
   aggregateByDay,
   getTodayTotal,
+  forecastBurnRate,
   buildTimeline,
 } from '../src/ingest/aggregate.js';
 
@@ -219,6 +220,71 @@ test('getTodayTotal picks up a message timestamped right now', () => {
   const today = getTodayTotal([session]);
   assert.equal(today.inputTokens, 42);
   assert.equal(today.outputTokens, 7);
+});
+
+test('forecastBurnRate returns zeroed defaults for zero days of history', () => {
+  const forecast = forecastBurnRate([]);
+  assert.equal(forecast.daysObserved, 0);
+  assert.equal(forecast.avgDailyTokens, 0);
+  assert.equal(forecast.avgDailyCostUsd, 0);
+  assert.equal(forecast.projectedTokens, 0);
+  assert.equal(forecast.projectedCostUsd, 0);
+});
+
+test('forecastBurnRate uses the single day available when history has only one entry', () => {
+  const days = [{ date: '2026-07-30', tokenTotal: 1000, costUsd: 2 }];
+  const forecast = forecastBurnRate(days);
+  assert.equal(forecast.daysObserved, 1);
+  assert.equal(forecast.avgDailyTokens, 1000);
+  assert.equal(forecast.avgDailyCostUsd, 2);
+  assert.equal(forecast.projectedTokens, 1000 * 30);
+  assert.equal(forecast.projectedCostUsd, 2 * 30);
+});
+
+test('forecastBurnRate averages a consistent daily burn rate across multiple days and projects forward', () => {
+  const days = [
+    { date: '2026-07-24', tokenTotal: 500, costUsd: 1 },
+    { date: '2026-07-25', tokenTotal: 500, costUsd: 1 },
+    { date: '2026-07-26', tokenTotal: 500, costUsd: 1 },
+    { date: '2026-07-27', tokenTotal: 500, costUsd: 1 },
+    { date: '2026-07-28', tokenTotal: 500, costUsd: 1 },
+    { date: '2026-07-29', tokenTotal: 500, costUsd: 1 },
+    { date: '2026-07-30', tokenTotal: 500, costUsd: 1 },
+  ];
+  const forecast = forecastBurnRate(days);
+  assert.equal(forecast.daysObserved, 7);
+  assert.equal(forecast.avgDailyTokens, 500);
+  assert.equal(forecast.avgDailyCostUsd, 1);
+  assert.equal(forecast.projectedTokens, 500 * 30);
+  assert.equal(forecast.projectedCostUsd, 1 * 30);
+});
+
+test('forecastBurnRate uses whatever days are available when fewer than the window size exist', () => {
+  const days = [
+    { date: '2026-07-29', tokenTotal: 200, costUsd: 0.5 },
+    { date: '2026-07-30', tokenTotal: 400, costUsd: 1.5 },
+  ];
+  const forecast = forecastBurnRate(days, { windowDays: 7 });
+  assert.equal(forecast.daysObserved, 2);
+  assert.equal(forecast.avgDailyTokens, 300);
+  assert.equal(forecast.avgDailyCostUsd, 1);
+});
+
+test('forecastBurnRate only considers the last windowDays entries when more history exists', () => {
+  const days = [
+    { date: '2026-07-01', tokenTotal: 9999, costUsd: 999 }, // outside window, should be ignored
+    { date: '2026-07-24', tokenTotal: 100, costUsd: 1 },
+    { date: '2026-07-25', tokenTotal: 100, costUsd: 1 },
+    { date: '2026-07-26', tokenTotal: 100, costUsd: 1 },
+    { date: '2026-07-27', tokenTotal: 100, costUsd: 1 },
+    { date: '2026-07-28', tokenTotal: 100, costUsd: 1 },
+    { date: '2026-07-29', tokenTotal: 100, costUsd: 1 },
+    { date: '2026-07-30', tokenTotal: 100, costUsd: 1 },
+  ];
+  const forecast = forecastBurnRate(days, { windowDays: 7 });
+  assert.equal(forecast.daysObserved, 7);
+  assert.equal(forecast.avgDailyTokens, 100);
+  assert.equal(forecast.avgDailyCostUsd, 1);
 });
 
 test('buildTimeline maps usageRecords to chronological usage points with correct field mapping', () => {

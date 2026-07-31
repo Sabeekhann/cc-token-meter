@@ -4,6 +4,7 @@ import {
   aggregateByDay,
   getTodayTotal,
   tokenTotal,
+  forecastBurnRate,
   buildTimeline,
 } from '../ingest/aggregate.js';
 import { computeAlerts } from '../budget/alerts.js';
@@ -28,6 +29,13 @@ export function buildSummary(store) {
   const byProject = aggregateByProject(sessions);
   const byBranch = aggregateByBranch(sessions);
   const byDay = aggregateByDay(sessions);
+  const rawForecast = forecastBurnRate(byDay);
+  const cap = config.dailyCostCapUsd;
+  const exceedsDailyCap =
+    rawForecast.daysObserved === 0 || !cap || cap <= 0
+      ? null
+      : rawForecast.avgDailyCostUsd > cap;
+  const forecast = { ...rawForecast, exceedsDailyCap };
 
   const allTimeTotals = sessions.reduce(
     (acc, s) => {
@@ -125,6 +133,7 @@ export function buildSummary(store) {
       })),
     })),
     byDay,
+    forecast,
     sessions: sessionSummaries,
     tips,
     alerts,

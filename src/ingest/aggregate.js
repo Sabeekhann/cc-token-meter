@@ -198,6 +198,76 @@ export function getTodayTotal(sessions) {
   );
 }
 
+/**
+ * Linear burn-rate forecast from recent daily totals. Takes the last
+ * `windowDays` entries of `dailyTotals` (as produced by aggregateByDay,
+ * already sorted ascending by date), averages their tokenTotal/costUsd, and
+ * projects that average rate forward over `projectionDays` (default 30,
+ * i.e. an approximate "month"). This is intentionally a simple linear
+ * extrapolation of recent average burn rate, not a trend-fit/regression —
+ * see CLAUDE.md guidance to keep this simple.
+ *
+ * Edge cases:
+ * - No days of history: returns zeroed averages/projections (no throw).
+ * - Fewer than `windowDays` available: uses however many days exist.
+ * - Exactly one day of history: uses that single day's totals as the rate.
+ *
+ * @param {Array<{date: string, tokenTotal: number, costUsd: number}>} dailyTotals
+ *   Ascending-by-date daily totals, e.g. the output of aggregateByDay().
+ * @param {{windowDays?: number, projectionDays?: number}} [options]
+ * @returns {{
+ *   windowDays: number,
+ *   daysObserved: number,
+ *   avgDailyTokens: number,
+ *   avgDailyCostUsd: number,
+ *   projectionDays: number,
+ *   projectedTokens: number,
+ *   projectedCostUsd: number,
+ * }}
+ */
+export function forecastBurnRate(dailyTotals, options = {}) {
+  const windowDays = options.windowDays || 7;
+  const projectionDays = options.projectionDays || 30;
+
+  const days = Array.isArray(dailyTotals) ? dailyTotals : [];
+  const window = days.slice(Math.max(0, days.length - windowDays));
+  const daysObserved = window.length;
+
+  if (daysObserved === 0) {
+    return {
+      windowDays,
+      daysObserved: 0,
+      avgDailyTokens: 0,
+      avgDailyCostUsd: 0,
+      projectionDays,
+      projectedTokens: 0,
+      projectedCostUsd: 0,
+    };
+  }
+
+  const totals = window.reduce(
+    (acc, d) => {
+      acc.tokenTotal += d.tokenTotal || 0;
+      acc.costUsd += d.costUsd || 0;
+      return acc;
+    },
+    { tokenTotal: 0, costUsd: 0 }
+  );
+
+  const avgDailyTokens = totals.tokenTotal / daysObserved;
+  const avgDailyCostUsd = totals.costUsd / daysObserved;
+
+  return {
+    windowDays,
+    daysObserved,
+    avgDailyTokens,
+    avgDailyCostUsd,
+    projectionDays,
+    projectedTokens: avgDailyTokens * projectionDays,
+    projectedCostUsd: avgDailyCostUsd * projectionDays,
+  };
+}
+
 // Cap on the number of timeline points returned per session — a burn
 // timeline chart doesn't need more resolution than this to look smooth, and
 // it keeps the SSE payload bounded for very long-running sessions instead of
