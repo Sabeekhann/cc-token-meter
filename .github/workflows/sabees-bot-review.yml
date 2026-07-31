@@ -1,0 +1,92 @@
+name: Sabee's Bot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Sabee's Bot (architect-level Claude review)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are reviewing this pull request against the base branch, acting
+            ONLY as an architect-level reviewer. You are NOT reviewing for
+            correctness bugs, security, test coverage, or UX — a human handles
+            those. Stay narrowly in scope.
+
+            Review the diff for cc-token-meter, a local-only Node.js CLI + web
+            dashboard, against these repo-specific conventions (from
+            CONTRIBUTING.md):
+
+            - No framework, no build step. The server uses Node's built-in
+              `http` with a tiny manual router; the dashboard is vanilla
+              HTML/CSS/JS. Flag any PR introducing a bundler, frontend
+              framework, or Express/Fastify-style server.
+            - Dependency-light. The repo has exactly two runtime deps (`glob`,
+              `open`). Flag any new dependency added without clear, stated
+              justification.
+            - Pure-function boundary. `src/heuristics/*`, `src/pricing/*`,
+              `src/budget/alerts.js`, and `src/ingest/aggregate.js` must stay
+              free of `fs`/`http`/network I/O — data in, data out only. Flag
+              any I/O creeping into those modules.
+            - New heuristics must be one pure function per file in
+              `src/heuristics/`, with signature
+              `(sessionRecord, toolEvents, allSessionsHistory) => Tip[]`,
+              registered in `src/heuristics/index.js`'s `runHeuristics()`, with
+              true/false-case fixture tests in `test/heuristics.test.js`.
+            - Duplication/reuse: flag logic copy-pasted across modules that
+              should instead be a shared, imported function.
+            - File placement: flag new files landing outside the existing
+              `bin/`, `src/`, `public/`, `test/` structure without a stated
+              reason.
+
+            Post your findings as normal PR review comments (specific,
+            file:line references, no vague generalities). Then, as your final
+            action, write EXACTLY one line to a file named
+            `.claude-review-verdict` at the repository root:
+
+            - `APPROVE` if you found no violations of the above.
+            - `REQUEST_CHANGES: <one-sentence reason>` if you found at least
+              one genuine violation.
+
+            Do not write anything else to that file. Do not create the file if
+            you are unable to complete the review for any reason.
+
+      - name: Submit PR review verdict
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ ! -f .claude-review-verdict ]; then
+            gh pr review "$PR_NUMBER" --request-changes \
+              -b "Sabee's Bot: automated architect review did not complete (no verdict produced). Requesting changes as a fail-safe — please investigate the Sabee's Bot workflow run and re-request review once resolved."
+            exit 0
+          fi
+
+          VERDICT_LINE="$(head -n1 .claude-review-verdict)"
+          rm -f .claude-review-verdict
+
+          if [ "$VERDICT_LINE" = "APPROVE" ]; then
+            gh pr review "$PR_NUMBER" --approve \
+              -b "Sabee's Bot (architect-level review): no structural issues found (file placement, duplication, module boundaries, dependency footprint). This is a narrow structural check only — a human reviewer should still cover correctness, security, and tests."
+          else
+            REASON="${VERDICT_LINE#REQUEST_CHANGES: }"
+            gh pr review "$PR_NUMBER" --request-changes \
+              -b "Sabee's Bot (architect-level review) found a structural issue: ${REASON}. See inline comments above for detail."
+          fi
