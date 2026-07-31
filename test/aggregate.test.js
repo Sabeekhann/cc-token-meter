@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   aggregateByProject,
+  aggregateByBranch,
   aggregateByDay,
   getTodayTotal,
   forecastBurnRate,
+  buildTimeline,
 } from '../src/ingest/aggregate.js';
 
 function makeSession(overrides = {}) {
@@ -47,6 +49,78 @@ test('aggregateByProject falls back to projectDirNameFallback when no cwd', () =
   const sessions = [makeSession({ projectCwd: null, projectDirNameFallback: '/fallback/path' })];
   const result = aggregateByProject(sessions);
   assert.equal(result[0].project, '/fallback/path');
+});
+
+test('aggregateByBranch groups multiple sessions on the same branch and sums totals', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: 'feature/foo', inputTokens: 100, costUsd: 1 }),
+    makeSession({ sessionId: 's2', gitBranch: 'feature/foo', inputTokens: 200, costUsd: 2 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].branch, 'feature/foo');
+  assert.equal(result[0].sessions.length, 2);
+  assert.equal(result[0].inputTokens, 300);
+  assert.equal(result[0].costUsd, 3);
+});
+
+test('aggregateByBranch keeps sessions on different branches separate', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: 'main', inputTokens: 100 }),
+    makeSession({ sessionId: 's2', gitBranch: 'feature/bar', inputTokens: 50 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  const main = result.find((b) => b.branch === 'main');
+  const feature = result.find((b) => b.branch === 'feature/bar');
+
+  assert.ok(main);
+  assert.ok(feature);
+  assert.equal(main.sessions.length, 1);
+  assert.equal(feature.sessions.length, 1);
+  assert.equal(main.inputTokens, 100);
+  assert.equal(feature.inputTokens, 50);
+});
+
+test('aggregateByBranch groups sessions with null/missing gitBranch under (no branch)', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: null, inputTokens: 10 }),
+    makeSession({ sessionId: 's2', gitBranch: undefined, inputTokens: 20 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].branch, '(no branch)');
+  assert.equal(result[0].sessions.length, 2);
+  assert.equal(result[0].inputTokens, 30);
+});
+
+test('aggregateByBranch handles a single session correctly', () => {
+  const sessions = [makeSession({ sessionId: 's1', gitBranch: 'solo-branch', inputTokens: 42, costUsd: 0.42 })];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].branch, 'solo-branch');
+  assert.equal(result[0].sessions.length, 1);
+  assert.equal(result[0].inputTokens, 42);
+  assert.equal(result[0].costUsd, 0.42);
+});
+
+test('aggregateByBranch sorts buckets by tokenTotal descending', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: 'small', inputTokens: 10, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }),
+    makeSession({ sessionId: 's2', gitBranch: 'big', inputTokens: 1000, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }),
+    makeSession({ sessionId: 's3', gitBranch: 'medium', inputTokens: 100, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.deepEqual(result.map((b) => b.branch), ['big', 'medium', 'small']);
 });
 
 test('aggregateByDay buckets usageRecords by local calendar date, attributing per-message not per-session', () => {
@@ -211,4 +285,140 @@ test('forecastBurnRate only considers the last windowDays entries when more hist
   assert.equal(forecast.daysObserved, 7);
   assert.equal(forecast.avgDailyTokens, 100);
   assert.equal(forecast.avgDailyCostUsd, 1);
+});
+
+test('buildTimeline maps usageRecords to chronological usage points with correct field mapping', () => {
+  const session = makeSession({
+    usageRecords: [
+      {
+        timestamp: '2026-07-30T10:00:00.000Z',
+        model: 'claude-sonnet-5-20260101',
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheCreationInputTokens: 5,
+        cacheReadInputTokens: 2,
+      },
+      {
+        timestamp: '2026-07-30T10:05:00.000Z',
+        model: 'claude-sonnet-5-20260101',
+        inputTokens: 50,
+        outputTokens: 10,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+      },
+    ],
+    toolEvents: [],
+  });
+
+  const timeline = buildTimeline(session);
+
+  assert.equal(timeline.usage.length, 2);
+  // Chronological order preserved (input order, since usageRecords are
+  // already chronological as produced by store.js).
+  assert.equal(timeline.usage[0].timestamp, '2026-07-30T10:00:00.000Z');
+  assert.equal(timeline.usage[1].timestamp, '2026-07-30T10:05:00.000Z');
+
+  const first = timeline.usage[0];
+  assert.equal(first.model, 'claude-sonnet-5-20260101');
+  assert.equal(first.inputTokens, 100);
+  assert.equal(first.outputTokens, 20);
+  assert.equal(first.cacheCreationInputTokens, 5);
+  assert.equal(first.cacheReadInputTokens, 2);
+  assert.equal(first.tokenTotal, 100 + 20 + 5 + 2);
+});
+
+test('buildTimeline maps toolEvents to tools[] with timestamp/name/kind', () => {
+  const session = makeSession({
+    usageRecords: [],
+    toolEvents: [
+      { timestamp: '2026-07-30T10:00:00.000Z', name: 'Read', kind: 'tool_use' },
+      { timestamp: '2026-07-30T10:01:00.000Z', name: 'Bash', kind: 'tool_use' },
+    ],
+  });
+
+  const timeline = buildTimeline(session);
+
+  assert.equal(timeline.tools.length, 2);
+  assert.deepEqual(timeline.tools[0], {
+    timestamp: '2026-07-30T10:00:00.000Z',
+    name: 'Read',
+    kind: 'tool_use',
+  });
+  assert.deepEqual(timeline.tools[1], {
+    timestamp: '2026-07-30T10:01:00.000Z',
+    name: 'Bash',
+    kind: 'tool_use',
+  });
+});
+
+test('buildTimeline gracefully handles missing/empty usageRecords and toolEvents', () => {
+  const sessionMissing = makeSession({ usageRecords: undefined, toolEvents: undefined });
+  delete sessionMissing.usageRecords;
+
+  const timelineMissing = buildTimeline(sessionMissing);
+  assert.deepEqual(timelineMissing, { usage: [], tools: [] });
+
+  const sessionEmpty = makeSession({ usageRecords: [], toolEvents: [] });
+  const timelineEmpty = buildTimeline(sessionEmpty);
+  assert.deepEqual(timelineEmpty, { usage: [], tools: [] });
+});
+
+test('buildTimeline downsamples sessions with more than 500 usageRecords to exactly 500 points via even-stride sampling, keeping the last point', () => {
+  const totalRecords = 1000;
+  const usageRecords = Array.from({ length: totalRecords }, (_, i) => ({
+    timestamp: new Date(2026, 0, 1, 0, i).toISOString(),
+    model: 'claude-sonnet-5',
+    inputTokens: i, // unique per-record marker to verify stride sampling
+    outputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+  }));
+
+  const session = makeSession({ usageRecords, toolEvents: [] });
+  const timeline = buildTimeline(session);
+
+  assert.equal(timeline.usage.length, 500);
+
+  // First point should be the first record (stride sampling starts at index 0).
+  assert.equal(timeline.usage[0].inputTokens, 0);
+
+  // Last point must always be the actual last record (index 999), per the
+  // implementation's explicit "always keep the last point" behavior.
+  assert.equal(timeline.usage[499].inputTokens, totalRecords - 1);
+
+  // Verify even-stride sampling for the rest: point i (i < 499) should be
+  // record at index floor(i * stride), where stride = totalRecords / 500.
+  const stride = totalRecords / 500;
+  for (let i = 0; i < 499; i++) {
+    const expectedIndex = Math.floor(i * stride);
+    assert.equal(timeline.usage[i].inputTokens, expectedIndex);
+  }
+
+  // Chronological order is preserved (timestamps strictly increasing).
+  for (let i = 1; i < timeline.usage.length; i++) {
+    assert.ok(
+      new Date(timeline.usage[i].timestamp).getTime() >=
+        new Date(timeline.usage[i - 1].timestamp).getTime()
+    );
+  }
+});
+
+test('buildTimeline passes sessions at exactly the 500-point cap through untouched', () => {
+  const usageRecords = Array.from({ length: 500 }, (_, i) => ({
+    timestamp: new Date(2026, 0, 1, 0, i).toISOString(),
+    inputTokens: i,
+    outputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+  }));
+
+  const session = makeSession({ usageRecords, toolEvents: [] });
+  const timeline = buildTimeline(session);
+
+  assert.equal(timeline.usage.length, 500);
+  // No downsampling should occur at exactly the cap — every original point
+  // preserved in order.
+  for (let i = 0; i < 500; i++) {
+    assert.equal(timeline.usage[i].inputTokens, i);
+  }
 });

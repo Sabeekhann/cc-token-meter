@@ -20,7 +20,14 @@ const heuristicsCache = new Map(); // sessionId -> { lastComputedAtMessageCount,
  * @param {Array<object>} toolEvents
  * @param {Array<object>} allSessionsHistory
  * @param {Array<object>} [rawLines] optional raw parsed lines (for longSessionNoCompact's compact detection)
- * @returns {Array<object>} Tip[]
+ * @returns {Array<{
+ *   id: string,
+ *   sessionId: string,
+ *   severity: string,
+ *   message: string,
+ *   estimatedSavingsTokens: number|null,
+ *   estimatedSavingsUsd: number|null,
+ * }>} Tip[]
  */
 export function runHeuristics(sessionRecord, toolEvents, allSessionsHistory, rawLines = []) {
   const sessionId = sessionRecord.sessionId;

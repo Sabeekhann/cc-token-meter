@@ -51,6 +51,47 @@ export function aggregateByProject(sessions) {
 }
 
 /**
+ * Roll sessions up by git branch (last-seen value per session — gitBranch is
+ * NOT tracked per-message, so a session that switches branches mid-way has
+ * its whole cost attributed to whichever branch was last seen, not split
+ * proportionally). Sessions with no observed branch are grouped under the
+ * '(no branch)' bucket.
+ *
+ * @param {Array<object>} sessions
+ * @returns {Array<{branch: string, sessions: object[], inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, costUsd: number, tokenTotal: number}>}
+ */
+export function aggregateByBranch(sessions) {
+  const byBranch = new Map();
+
+  for (const s of sessions) {
+    const branch = s.gitBranch || '(no branch)';
+    let bucket = byBranch.get(branch);
+    if (!bucket) {
+      bucket = {
+        branch,
+        sessions: [],
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        costUsd: 0,
+        tokenTotal: 0,
+      };
+      byBranch.set(branch, bucket);
+    }
+    bucket.sessions.push(s);
+    bucket.inputTokens += s.inputTokens || 0;
+    bucket.outputTokens += s.outputTokens || 0;
+    bucket.cacheCreationInputTokens += s.cacheCreationInputTokens || 0;
+    bucket.cacheReadInputTokens += s.cacheReadInputTokens || 0;
+    bucket.costUsd += s.costUsd || 0;
+    bucket.tokenTotal += tokenTotal(s);
+  }
+
+  return Array.from(byBranch.values()).sort((a, b) => b.tokenTotal - a.tokenTotal);
+}
+
+/**
  * Local calendar date (YYYY-MM-DD) from an ISO timestamp string, using the
  * host machine's local timezone.
  */
@@ -225,6 +266,60 @@ export function forecastBurnRate(dailyTotals, options = {}) {
     projectedTokens: avgDailyTokens * projectionDays,
     projectedCostUsd: avgDailyCostUsd * projectionDays,
   };
+}
+
+// Cap on the number of timeline points returned per session — a burn
+// timeline chart doesn't need more resolution than this to look smooth, and
+// it keeps the SSE payload bounded for very long-running sessions instead of
+// shipping an ever-growing unbounded array every ~1.5s tick.
+const TIMELINE_MAX_POINTS = 500;
+
+/**
+ * Build a chronological burn-timeline for a single session from its
+ * usageRecords (one point per assistant message: timestamp, per-message
+ * token breakdown/total, model) and toolEvents (lightweight markers only —
+ * name + timestamp — useful for correlating tool calls with burn spikes on
+ * the same chart). Pure transformation, no I/O.
+ *
+ * Downsampled to at most TIMELINE_MAX_POINTS usage points by taking an even
+ * stride through the array (keeps chronological order and first/last
+ * points) — most sessions are far below this cap and pass through
+ * untouched.
+ *
+ * @param {object} session - a session aggregate with usageRecords[]/toolEvents[]
+ * @returns {{usage: Array<{timestamp: string, model: string|null, inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, tokenTotal: number}>, tools: Array<{timestamp: string, name: string, kind: string}>}}
+ */
+export function buildTimeline(session) {
+  const usageRecords = Array.isArray(session.usageRecords) ? session.usageRecords : [];
+  const toolEvents = Array.isArray(session.toolEvents) ? session.toolEvents : [];
+
+  let points = usageRecords.map((r) => ({
+    timestamp: r.timestamp ?? null,
+    model: r.model ?? null,
+    inputTokens: r.inputTokens || 0,
+    outputTokens: r.outputTokens || 0,
+    cacheCreationInputTokens: r.cacheCreationInputTokens || 0,
+    cacheReadInputTokens: r.cacheReadInputTokens || 0,
+    tokenTotal: tokenTotal(r),
+  }));
+
+  if (points.length > TIMELINE_MAX_POINTS) {
+    const stride = points.length / TIMELINE_MAX_POINTS;
+    const sampled = [];
+    for (let i = 0; i < TIMELINE_MAX_POINTS - 1; i++) {
+      sampled.push(points[Math.floor(i * stride)]);
+    }
+    sampled.push(points[points.length - 1]); // always keep the last point
+    points = sampled;
+  }
+
+  const tools = toolEvents.map((evt) => ({
+    timestamp: evt.timestamp ?? null,
+    name: evt.name ?? null,
+    kind: evt.kind ?? null,
+  }));
+
+  return { usage: points, tools };
 }
 
 export { tokenTotal, localDateKey };
