@@ -51,6 +51,47 @@ export function aggregateByProject(sessions) {
 }
 
 /**
+ * Roll sessions up by git branch (last-seen value per session — gitBranch is
+ * NOT tracked per-message, so a session that switches branches mid-way has
+ * its whole cost attributed to whichever branch was last seen, not split
+ * proportionally). Sessions with no observed branch are grouped under the
+ * '(no branch)' bucket.
+ *
+ * @param {Array<object>} sessions
+ * @returns {Array<{branch: string, sessions: object[], inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, costUsd: number, tokenTotal: number}>}
+ */
+export function aggregateByBranch(sessions) {
+  const byBranch = new Map();
+
+  for (const s of sessions) {
+    const branch = s.gitBranch || '(no branch)';
+    let bucket = byBranch.get(branch);
+    if (!bucket) {
+      bucket = {
+        branch,
+        sessions: [],
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        costUsd: 0,
+        tokenTotal: 0,
+      };
+      byBranch.set(branch, bucket);
+    }
+    bucket.sessions.push(s);
+    bucket.inputTokens += s.inputTokens || 0;
+    bucket.outputTokens += s.outputTokens || 0;
+    bucket.cacheCreationInputTokens += s.cacheCreationInputTokens || 0;
+    bucket.cacheReadInputTokens += s.cacheReadInputTokens || 0;
+    bucket.costUsd += s.costUsd || 0;
+    bucket.tokenTotal += tokenTotal(s);
+  }
+
+  return Array.from(byBranch.values()).sort((a, b) => b.tokenTotal - a.tokenTotal);
+}
+
+/**
  * Local calendar date (YYYY-MM-DD) from an ISO timestamp string, using the
  * host machine's local timezone.
  */
