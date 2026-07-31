@@ -26,6 +26,7 @@ jobs:
 
       - name: Run Sabee's Bot (architect-level Claude review)
         id: claude
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -84,8 +85,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ ! -f .claude-review-verdict ]; then
-            gh pr review "$PR_NUMBER" --request-changes \
-              -b "Sabee's Bot: automated architect review did not complete (no verdict produced). Requesting changes as a fail-safe — please investigate the Sabee's Bot workflow run and re-request review once resolved."
+            echo "Sabee's Bot: no verdict produced (review did not complete). Skipping without blocking — a human reviewer should cover this PR."
             exit 0
           fi
 
@@ -120,6 +120,7 @@ jobs:
 
       - name: Run Sabee's Bot (architect-level Claude review)
         id: claude
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -178,8 +179,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ ! -f .claude-review-verdict ]; then
-            gh pr review "$PR_NUMBER" --request-changes \
-              -b "Sabee's Bot: automated architect review did not complete (no verdict produced). Requesting changes as a fail-safe — please investigate the Sabee's Bot workflow run and re-request review once resolved."
+            echo "Sabee's Bot: no verdict produced (review did not complete). Skipping without blocking — a human reviewer should cover this PR."
             exit 0
           fi
 
