@@ -1,4 +1,4 @@
-name: Architect Review
+name: Sabee's Bot
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run architect-level Claude review
+      - name: Run Sabee's Bot (architect-level Claude review)
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
@@ -75,7 +75,7 @@ jobs:
         run: |
           if [ ! -f .claude-review-verdict ]; then
             gh pr review "$PR_NUMBER" --request-changes \
-              -b "Automated architect review did not complete (no verdict produced). Requesting changes as a fail-safe — please investigate the Architect Review workflow run and re-request review once resolved."
+              -b "Sabee's Bot: automated architect review did not complete (no verdict produced). Requesting changes as a fail-safe — please investigate the Sabee's Bot workflow run and re-request review once resolved."
             exit 0
           fi
 
@@ -84,9 +84,9 @@ jobs:
 
           if [ "$VERDICT_LINE" = "APPROVE" ]; then
             gh pr review "$PR_NUMBER" --approve \
-              -b "Automated architect-level review: no structural issues found (file placement, duplication, module boundaries, dependency footprint). This is a narrow structural check only — a human reviewer should still cover correctness, security, and tests."
+              -b "Sabee's Bot (architect-level review): no structural issues found (file placement, duplication, module boundaries, dependency footprint). This is a narrow structural check only — a human reviewer should still cover correctness, security, and tests."
           else
             REASON="${VERDICT_LINE#REQUEST_CHANGES: }"
             gh pr review "$PR_NUMBER" --request-changes \
-              -b "Automated architect-level review found a structural issue: ${REASON}. See inline comments above for detail."
+              -b "Sabee's Bot (architect-level review) found a structural issue: ${REASON}. See inline comments above for detail."
           fi
