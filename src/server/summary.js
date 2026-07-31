@@ -1,4 +1,10 @@
-import { aggregateByProject, aggregateByDay, getTodayTotal, tokenTotal } from '../ingest/aggregate.js';
+import {
+  aggregateByProject,
+  aggregateByBranch,
+  aggregateByDay,
+  getTodayTotal,
+  tokenTotal,
+} from '../ingest/aggregate.js';
 import { computeAlerts } from '../budget/alerts.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
@@ -19,6 +25,7 @@ export function buildSummary(store) {
 
   const todayTotal = getTodayTotal(sessions);
   const byProject = aggregateByProject(sessions);
+  const byBranch = aggregateByBranch(sessions);
   const byDay = aggregateByDay(sessions);
 
   const allTimeTotals = sessions.reduce(
@@ -92,6 +99,22 @@ export function buildSummary(store) {
       costUsd: p.costUsd,
       tokenTotal: p.tokenTotal,
       sessions: p.sessions.map((s) => ({
+        sessionId: s.sessionId,
+        messageCount: s.messageCount,
+        tokenTotal: tokenTotal(s),
+        costUsd: s.costUsd,
+        lastTimestamp: s.lastTimestamp,
+      })),
+    })),
+    byBranch: byBranch.map((b) => ({
+      branch: b.branch,
+      inputTokens: b.inputTokens,
+      outputTokens: b.outputTokens,
+      cacheCreationInputTokens: b.cacheCreationInputTokens,
+      cacheReadInputTokens: b.cacheReadInputTokens,
+      costUsd: b.costUsd,
+      tokenTotal: b.tokenTotal,
+      sessions: b.sessions.map((s) => ({
         sessionId: s.sessionId,
         messageCount: s.messageCount,
         tokenTotal: tokenTotal(s),

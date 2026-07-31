@@ -9,9 +9,11 @@
   var allTimeCostEl = document.getElementById('allTimeCost');
   var budgetBannerEl = document.getElementById('budgetBanner');
   var projectListEl = document.getElementById('projectList');
+  var branchListEl = document.getElementById('branchList');
   var tipsPanelEl = document.getElementById('tipsPanel');
 
   var expandedProjects = Object.create(null);
+  var expandedBranches = Object.create(null);
   var expandedTips = Object.create(null);
 
   var TIP_KINDS = [
@@ -60,6 +62,7 @@
     renderTotals(summary);
     renderBudgetBanner(summary.alerts);
     renderProjects(summary.byProject);
+    renderBranches(summary.byBranch);
     renderTips(summary.tips);
   }
 
@@ -157,6 +160,56 @@
       row.addEventListener('click', function () {
         var project = row.getAttribute('data-project');
         expandedProjects[project] = !expandedProjects[project];
+        if (window.__lastSummary) render(window.__lastSummary);
+      });
+    });
+  }
+
+  function renderBranches(byBranch) {
+    if (!byBranch || byBranch.length === 0) {
+      branchListEl.innerHTML = '<div class="empty-row">No sessions found yet.</div>';
+      return;
+    }
+
+    var maxCost = byBranch.reduce(function (m, b) { return Math.max(m, b.costUsd || 0); }, 0) || 1;
+
+    var html = byBranch.map(function (b) {
+      var isExpanded = !!expandedBranches[b.branch];
+      var barPct = Math.max(3, Math.round(((b.costUsd || 0) / maxCost) * 100));
+
+      var row =
+        '<div class="project-row" data-branch="' + escapeHtmlAttr(b.branch) + '">' +
+          '<div class="project-bar" style="width:' + barPct + '%"></div>' +
+          '<div class="project-row-inner">' +
+            '<span class="project-caret">' + (isExpanded ? '▾' : '▸') + '</span>' +
+            '<span class="project-name" title="' + escapeHtmlAttr(b.branch) + '">' + escapeHtml(b.branch) + '</span>' +
+            '<span class="project-sessions">' + b.sessions.length + '</span>' +
+            '<span class="project-tokens" title="' + formatTokens(b.tokenTotal) + ' tokens">' + formatCompact(b.tokenTotal) + '</span>' +
+            '<span class="project-cost">' + formatCost(b.costUsd) + '</span>' +
+          '</div>' +
+        '</div>';
+
+      if (!isExpanded) return row;
+
+      var sessions = b.sessions.map(function (s) {
+        return (
+          '<div class="session-item">' +
+            '<span class="session-id">' + escapeHtml(s.sessionId.slice(0, 8)) + ' &middot; ' + s.messageCount + ' msgs</span>' +
+            '<span class="session-tokens" title="' + formatTokens(s.tokenTotal) + ' tokens">' + formatCompact(s.tokenTotal) + '</span>' +
+            '<span class="session-cost">' + formatCost(s.costUsd) + '</span>' +
+          '</div>'
+        );
+      }).join('');
+
+      return row + '<div class="session-list">' + sessions + '</div>';
+    }).join('');
+
+    branchListEl.innerHTML = html;
+
+    branchListEl.querySelectorAll('.project-row').forEach(function (row) {
+      row.addEventListener('click', function () {
+        var branch = row.getAttribute('data-branch');
+        expandedBranches[branch] = !expandedBranches[branch];
         if (window.__lastSummary) render(window.__lastSummary);
       });
     });

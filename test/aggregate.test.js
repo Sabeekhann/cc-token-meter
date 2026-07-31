@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateByProject, aggregateByDay, getTodayTotal } from '../src/ingest/aggregate.js';
+import {
+  aggregateByProject,
+  aggregateByBranch,
+  aggregateByDay,
+  getTodayTotal,
+} from '../src/ingest/aggregate.js';
 
 function makeSession(overrides = {}) {
   return {
@@ -42,6 +47,78 @@ test('aggregateByProject falls back to projectDirNameFallback when no cwd', () =
   const sessions = [makeSession({ projectCwd: null, projectDirNameFallback: '/fallback/path' })];
   const result = aggregateByProject(sessions);
   assert.equal(result[0].project, '/fallback/path');
+});
+
+test('aggregateByBranch groups multiple sessions on the same branch and sums totals', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: 'feature/foo', inputTokens: 100, costUsd: 1 }),
+    makeSession({ sessionId: 's2', gitBranch: 'feature/foo', inputTokens: 200, costUsd: 2 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].branch, 'feature/foo');
+  assert.equal(result[0].sessions.length, 2);
+  assert.equal(result[0].inputTokens, 300);
+  assert.equal(result[0].costUsd, 3);
+});
+
+test('aggregateByBranch keeps sessions on different branches separate', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: 'main', inputTokens: 100 }),
+    makeSession({ sessionId: 's2', gitBranch: 'feature/bar', inputTokens: 50 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  const main = result.find((b) => b.branch === 'main');
+  const feature = result.find((b) => b.branch === 'feature/bar');
+
+  assert.ok(main);
+  assert.ok(feature);
+  assert.equal(main.sessions.length, 1);
+  assert.equal(feature.sessions.length, 1);
+  assert.equal(main.inputTokens, 100);
+  assert.equal(feature.inputTokens, 50);
+});
+
+test('aggregateByBranch groups sessions with null/missing gitBranch under (no branch)', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: null, inputTokens: 10 }),
+    makeSession({ sessionId: 's2', gitBranch: undefined, inputTokens: 20 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].branch, '(no branch)');
+  assert.equal(result[0].sessions.length, 2);
+  assert.equal(result[0].inputTokens, 30);
+});
+
+test('aggregateByBranch handles a single session correctly', () => {
+  const sessions = [makeSession({ sessionId: 's1', gitBranch: 'solo-branch', inputTokens: 42, costUsd: 0.42 })];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].branch, 'solo-branch');
+  assert.equal(result[0].sessions.length, 1);
+  assert.equal(result[0].inputTokens, 42);
+  assert.equal(result[0].costUsd, 0.42);
+});
+
+test('aggregateByBranch sorts buckets by tokenTotal descending', () => {
+  const sessions = [
+    makeSession({ sessionId: 's1', gitBranch: 'small', inputTokens: 10, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }),
+    makeSession({ sessionId: 's2', gitBranch: 'big', inputTokens: 1000, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }),
+    makeSession({ sessionId: 's3', gitBranch: 'medium', inputTokens: 100, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }),
+  ];
+
+  const result = aggregateByBranch(sessions);
+
+  assert.deepEqual(result.map((b) => b.branch), ['big', 'medium', 'small']);
 });
 
 test('aggregateByDay buckets usageRecords by local calendar date, attributing per-message not per-session', () => {
