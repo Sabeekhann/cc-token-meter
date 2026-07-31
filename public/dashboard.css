@@ -529,7 +529,7 @@ body{
 
 .tips-panel{
   display:flex;
-  flex-wrap:wrap;
+  flex-direction:column;
   gap:8px;
 }
 
@@ -538,9 +538,10 @@ body{
   align-items:center;
   gap:10px;
   border:1px solid var(--border);
+  border-left:3px solid var(--border2);
   background:var(--card2);
-  border-radius:999px;
-  padding:8px 14px 8px 8px;
+  border-radius:12px;
+  padding:8px 14px 8px 10px;
   font-size:13px;
   color:var(--ink);
   cursor:pointer;
@@ -553,10 +554,17 @@ body{
 }
 
 .tip.expanded{
-  border-radius:14px;
   align-items:flex-start;
   width:100%;
   box-shadow:var(--shadow);
+}
+
+.tip.warn{
+  border-left-color:var(--warn);
+}
+
+.tip.info{
+  border-left-color:var(--accent-soft2);
 }
 
 .tip-icon{
@@ -577,6 +585,21 @@ body{
   color:var(--warn);
 }
 
+.tip-body{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.tip-headline{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+
 .tip-label{
   font-weight:500;
   white-space:nowrap;
@@ -587,6 +610,31 @@ body{
 .tip.expanded .tip-label{
   white-space:normal;
   line-height:1.55;
+}
+
+.tip-savings{
+  flex:none;
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:600;
+  color:var(--accent-dark);
+  background:var(--accent-soft);
+  border:1px solid var(--accent-soft2);
+  border-radius:999px;
+  padding:2px 9px;
+  white-space:nowrap;
+}
+
+.tip.warn .tip-savings{
+  color:var(--warn);
+  background:var(--warn-soft);
+  border-color:rgba(201,138,43,0.3);
+}
+
+.tip-detail{
+  font-size:12.5px;
+  line-height:1.55;
+  color:var(--muted);
 }
 
 .footer{
