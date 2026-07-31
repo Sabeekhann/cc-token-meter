@@ -4,20 +4,68 @@
   var gaugeEl = document.getElementById('gauge');
   var gaugeValueEl = document.getElementById('gaugeValue');
   var gaugeSubtextEl = document.getElementById('gaugeSubtext');
-  var todayCostEl = document.getElementById('todayCost');
-  var allTimeTokensEl = document.getElementById('allTimeTokens');
-  var allTimeCostEl = document.getElementById('allTimeCost');
+  var statSessionsEl = document.getElementById('statSessions');
+  var statInputEl = document.getElementById('statInput');
+  var statOutputEl = document.getElementById('statOutput');
+  var statCacheReadEl = document.getElementById('statCacheRead');
+  var statCacheCreationEl = document.getElementById('statCacheCreation');
+  var statCostEl = document.getElementById('statCost');
   var budgetBannerEl = document.getElementById('budgetBanner');
   var projectListEl = document.getElementById('projectList');
   var branchListEl = document.getElementById('branchList');
   var tipsPanelEl = document.getElementById('tipsPanel');
   var forecastWindowEl = document.getElementById('forecastWindow');
   var forecastBodyEl = document.getElementById('forecastBody');
+  var modelFilterEl = document.getElementById('modelFilter');
+  var rangeFilterEl = document.getElementById('rangeFilter');
+  var dailyChartEl = document.getElementById('dailyChart');
+  var tabButtons = document.querySelectorAll('.tab-btn');
+  var tabPanels = document.querySelectorAll('.tab-panel');
+  var tipFilterPillsEl = document.getElementById('tipFilterPills');
+  var tipSortSelectEl = document.getElementById('tipSortSelect');
+  var tipsSummaryEl = document.getElementById('tipsSummary');
 
   var expandedProjects = Object.create(null);
   var expandedBranches = Object.create(null);
-  var expandedTips = Object.create(null);
   var expandedTimelines = Object.create(null);
+  var expandedTipGroups = Object.create(null);
+  var filterState = { model: 'all', range: 'all' };
+  var tipFilterState = { severity: 'all', sort: 'severity' };
+
+  tipFilterPillsEl.querySelectorAll('.pill').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      tipFilterState.severity = btn.getAttribute('data-severity');
+      tipFilterPillsEl.querySelectorAll('.pill').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      if (window.__lastSummary) render(window.__lastSummary);
+    });
+  });
+
+  tipSortSelectEl.addEventListener('change', function () {
+    tipFilterState.sort = tipSortSelectEl.value;
+    if (window.__lastSummary) render(window.__lastSummary);
+  });
+
+  tabButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tab = btn.getAttribute('data-tab');
+      tabButtons.forEach(function (b) { b.classList.toggle('active', b === btn); });
+      tabPanels.forEach(function (p) {
+        p.classList.toggle('active', p.getAttribute('data-tab-panel') === tab);
+      });
+    });
+  });
+
+  modelFilterEl.addEventListener('change', function () {
+    filterState.model = modelFilterEl.value;
+    if (window.__lastSummary) render(window.__lastSummary);
+  });
+
+  rangeFilterEl.addEventListener('change', function () {
+    filterState.range = rangeFilterEl.value;
+    if (window.__lastSummary) render(window.__lastSummary);
+  });
 
   var TIP_KINDS = [
     { prefix: 'repeatedReads', icon: '↻', label: 'Re-reading a file' },
@@ -71,14 +119,207 @@
     return '…/' + parts.slice(-2).join('/');
   }
 
+  function localDateKey(isoTimestamp) {
+    var d = new Date(isoTimestamp);
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function getRangeCutoff(range) {
+    var now = new Date();
+    if (range === 'today') {
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    }
+    if (range === '7d') return now.getTime() - 7 * 24 * 60 * 60 * 1000;
+    if (range === '30d') return now.getTime() - 30 * 24 * 60 * 60 * 1000;
+    return null;
+  }
+
+  function updateModelOptions(sessions) {
+    var models = Object.create(null);
+    (sessions || []).forEach(function (s) {
+      (s.models || []).forEach(function (m) { if (m && m.indexOf('<') !== 0) models[m] = true; });
+    });
+    var modelNames = Object.keys(models).sort();
+    var options = '<option value="all">All models</option>' + modelNames.map(function (m) {
+      return '<option value="' + escapeHtmlAttr(m) + '">' + escapeHtml(m) + '</option>';
+    }).join('');
+    if (modelFilterEl.innerHTML !== options) {
+      modelFilterEl.innerHTML = options;
+    }
+    if (filterState.model !== 'all' && modelNames.indexOf(filterState.model) === -1) {
+      filterState.model = 'all';
+    }
+    modelFilterEl.value = filterState.model;
+    rangeFilterEl.value = filterState.range;
+  }
+
+  // Recomputes stat totals + a daily bucket series from
+  // summary.sessions[].timeline.usage[] when a filter is active, so filtering
+  // stays entirely client-side (no new API calls). Falls back to the
+  // existing server-computed summary.allTime/byDay when both filters are at
+  // their defaults, since that's cheaper and already exact.
+  function computeFilteredData(summary) {
+    var isDefault = filterState.model === 'all' && filterState.range === 'all';
+    if (isDefault) {
+      return {
+        sessionsCount: summary.sessions.length,
+        inputTokens: summary.allTime.inputTokens,
+        outputTokens: summary.allTime.outputTokens,
+        cacheCreationInputTokens: summary.allTime.cacheCreationInputTokens,
+        cacheReadInputTokens: summary.allTime.cacheReadInputTokens,
+        costUsd: summary.allTime.costUsd,
+        byDay: summary.byDay
+      };
+    }
+
+    var cutoff = getRangeCutoff(filterState.range);
+    var totals = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, costUsd: 0 };
+    var byDayMap = Object.create(null);
+    var sessionIdsSeen = Object.create(null);
+
+    (summary.sessions || []).forEach(function (s) {
+      var timeline = s.timeline;
+      if (!timeline || !Array.isArray(timeline.usage)) return;
+      var perMessageCost = s.messageCount > 0 ? (s.costUsd || 0) / s.messageCount : 0;
+
+      timeline.usage.forEach(function (u) {
+        if (filterState.model !== 'all' && u.model !== filterState.model) return;
+        if (!u.timestamp) return;
+        var ts = new Date(u.timestamp).getTime();
+        if (cutoff !== null && ts < cutoff) return;
+
+        totals.inputTokens += u.inputTokens || 0;
+        totals.outputTokens += u.outputTokens || 0;
+        totals.cacheCreationInputTokens += u.cacheCreationInputTokens || 0;
+        totals.cacheReadInputTokens += u.cacheReadInputTokens || 0;
+        totals.costUsd += perMessageCost;
+        sessionIdsSeen[s.sessionId] = true;
+
+        var dateKey = localDateKey(u.timestamp);
+        var bucket = byDayMap[dateKey];
+        if (!bucket) {
+          bucket = byDayMap[dateKey] = {
+            date: dateKey,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 0,
+            costUsd: 0,
+            messageCount: 0
+          };
+        }
+        bucket.inputTokens += u.inputTokens || 0;
+        bucket.outputTokens += u.outputTokens || 0;
+        bucket.cacheCreationInputTokens += u.cacheCreationInputTokens || 0;
+        bucket.cacheReadInputTokens += u.cacheReadInputTokens || 0;
+        bucket.costUsd += perMessageCost;
+        bucket.messageCount += 1;
+      });
+    });
+
+    var byDay = Object.keys(byDayMap).sort().map(function (k) { return byDayMap[k]; });
+
+    return {
+      sessionsCount: Object.keys(sessionIdsSeen).length,
+      inputTokens: totals.inputTokens,
+      outputTokens: totals.outputTokens,
+      cacheCreationInputTokens: totals.cacheCreationInputTokens,
+      cacheReadInputTokens: totals.cacheReadInputTokens,
+      costUsd: totals.costUsd,
+      byDay: byDay
+    };
+  }
+
+  function renderStatsGrid(data) {
+    statSessionsEl.textContent = String(data.sessionsCount);
+    statInputEl.textContent = formatCompact(data.inputTokens);
+    statInputEl.title = formatTokens(data.inputTokens) + ' tokens';
+    statOutputEl.textContent = formatCompact(data.outputTokens);
+    statOutputEl.title = formatTokens(data.outputTokens) + ' tokens';
+    statCacheReadEl.textContent = formatCompact(data.cacheReadInputTokens);
+    statCacheReadEl.title = formatTokens(data.cacheReadInputTokens) + ' tokens';
+    statCacheCreationEl.textContent = formatCompact(data.cacheCreationInputTokens);
+    statCacheCreationEl.title = formatTokens(data.cacheCreationInputTokens) + ' tokens';
+    statCostEl.textContent = formatCost(data.costUsd);
+  }
+
+  var DAILY_CHART_WIDTH = 640;
+  var DAILY_CHART_HEIGHT = 200;
+  var DAILY_CHART_PAD = 10;
+
+  // Grouped input/output bar chart (left axis, token counts) with a cost
+  // polyline overlay (right axis, its own independent scale) — same
+  // dual-scale technique renderTimelineChart already uses for its
+  // cumulative-burn line.
+  function renderDailyChart(byDay) {
+    if (!byDay || byDay.length === 0) {
+      return '<div class="empty-row timeline-empty">No daily data yet.</div>';
+    }
+
+    var innerW = DAILY_CHART_WIDTH - DAILY_CHART_PAD * 2;
+    var innerH = DAILY_CHART_HEIGHT - DAILY_CHART_PAD * 2;
+
+    var maxTokens = byDay.reduce(function (m, d) {
+      return Math.max(m, d.inputTokens || 0, d.outputTokens || 0);
+    }, 0) || 1;
+    var maxCost = byDay.reduce(function (m, d) { return Math.max(m, d.costUsd || 0); }, 0) || 1;
+
+    var n = byDay.length;
+    var groupWidth = innerW / n;
+    var barWidth = Math.max(1, groupWidth / 2 - 2);
+
+    var bars = byDay.map(function (d) {
+      var idx = byDay.indexOf(d);
+      var groupX = DAILY_CHART_PAD + idx * groupWidth;
+      var inH = ((d.inputTokens || 0) / maxTokens) * innerH;
+      var outH = ((d.outputTokens || 0) / maxTokens) * innerH;
+      var inY = DAILY_CHART_PAD + (innerH - inH);
+      var outY = DAILY_CHART_PAD + (innerH - outH);
+      var title = escapeHtmlAttr(
+        d.date + ' · in ' + formatTokens(d.inputTokens) + ' / out ' + formatTokens(d.outputTokens) + ' tok · ' + formatCost(d.costUsd)
+      );
+      return (
+        '<rect class="daily-bar daily-bar-input" x="' + groupX.toFixed(2) + '" y="' + inY.toFixed(2) + '" width="' + barWidth.toFixed(2) + '" height="' + Math.max(0.5, inH).toFixed(2) + '"><title>' + title + '</title></rect>' +
+        '<rect class="daily-bar daily-bar-output" x="' + (groupX + barWidth + 2).toFixed(2) + '" y="' + outY.toFixed(2) + '" width="' + barWidth.toFixed(2) + '" height="' + Math.max(0.5, outH).toFixed(2) + '"><title>' + title + '</title></rect>'
+      );
+    }).join('');
+
+    var linePoints = byDay.map(function (d, i) {
+      var x = DAILY_CHART_PAD + i * groupWidth + groupWidth / 2;
+      var y = DAILY_CHART_PAD + (innerH - ((d.costUsd || 0) / maxCost) * innerH);
+      return x.toFixed(2) + ',' + y.toFixed(2);
+    }).join(' ');
+
+    var legend =
+      '<div class="timeline-legend">' +
+        '<span><span class="timeline-swatch daily-swatch-input"></span>input tokens</span>' +
+        '<span><span class="timeline-swatch daily-swatch-output"></span>output tokens</span>' +
+        '<span><span class="timeline-swatch timeline-swatch-line"></span>est. cost</span>' +
+      '</div>';
+
+    var svg =
+      '<svg class="timeline-svg daily-chart-svg" viewBox="0 0 ' + DAILY_CHART_WIDTH + ' ' + DAILY_CHART_HEIGHT + '" preserveAspectRatio="none">' +
+        bars +
+        '<polyline class="timeline-line daily-cost-line" points="' + linePoints + '" fill="none"></polyline>' +
+      '</svg>';
+
+    return legend + svg;
+  }
+
   function render(summary) {
+    updateModelOptions(summary.sessions);
+    var filtered = computeFilteredData(summary);
     renderGauge(summary);
-    renderTotals(summary);
+    renderStatsGrid(filtered);
+    dailyChartEl.innerHTML = renderDailyChart(filtered.byDay);
     renderBudgetBanner(summary.alerts);
     renderForecast(summary.forecast, summary.config);
     renderProjects(summary.byProject, summary.sessions);
     renderBranches(summary.byBranch);
-    renderTips(summary.tips);
+    renderTips(summary.tips, summary.sessions);
   }
 
   function renderForecast(forecast, config) {
@@ -152,16 +393,6 @@
       gaugeEl.style.background = 'conic-gradient(#D97757 360deg, rgba(217,119,87,0.12) 360deg)';
       gaugeSubtextEl.textContent = 'No cap set';
     }
-  }
-
-  function renderTotals(summary) {
-    todayCostEl.textContent = formatCost(summary.today ? summary.today.costUsd : 0);
-
-    var allTimeTokens = summary.allTime ? summary.allTime.tokenTotal : 0;
-    allTimeTokensEl.textContent = formatCompact(allTimeTokens);
-    allTimeTokensEl.title = formatTokens(allTimeTokens) + ' tokens';
-
-    allTimeCostEl.textContent = formatCost(summary.allTime ? summary.allTime.costUsd : 0);
   }
 
   function renderBudgetBanner(alerts) {
@@ -385,50 +616,160 @@
     });
   }
 
-  function renderTips(tips) {
+  function buildSessionIndexForTips(sessions) {
+    var index = Object.create(null);
+    (sessions || []).forEach(function (s) {
+      if (!s || !s.sessionId) return;
+      index[s.sessionId] = { project: s.project };
+    });
+    return index;
+  }
+
+  function savingsSortValue(tip) {
+    if (typeof tip.estimatedSavingsUsd === 'number') return tip.estimatedSavingsUsd;
+    if (typeof tip.estimatedSavingsTokens === 'number') return tip.estimatedSavingsTokens / 1e6;
+    return 0;
+  }
+
+  function renderTipsSummary(tips) {
     if (!tips || tips.length === 0) {
-      tipsPanelEl.innerHTML = '<div class="empty-row">No tips — you\'re efficient.</div>';
+      tipsSummaryEl.textContent = '';
       return;
     }
+    var warnCount = tips.filter(function (t) { return t.severity === 'warn'; }).length;
+    var totalSavings = tips.reduce(function (sum, t) {
+      return sum + (typeof t.estimatedSavingsUsd === 'number' ? t.estimatedSavingsUsd : 0);
+    }, 0);
 
-    var sorted = tips.slice().sort(function (a, b) {
+    var parts = [tips.length + ' tip' + (tips.length === 1 ? '' : 's')];
+    if (warnCount > 0) parts.push(warnCount + ' warning' + (warnCount === 1 ? '' : 's'));
+    var text = parts.join(' · ');
+    if (totalSavings > 0) {
+      text += ' · ~' + formatCost(totalSavings) + ' potential savings';
+    }
+    tipsSummaryEl.textContent = text;
+  }
+
+  // One row per (project, tip category) — collapsed by default so the whole
+  // panel is scannable at a glance instead of a tall stack of near-duplicate
+  // full-message cards. The row always shows project + category + how many
+  // sessions triggered it, so it's unambiguous what the tip is for even
+  // collapsed; expanding a row lists each individual session + its exact
+  // message.
+  function groupTipsByProjectAndCategory(tips, sessionIndex) {
+    var order = [];
+    var groups = Object.create(null);
+
+    tips.forEach(function (tip) {
+      var info = sessionIndex[tip.sessionId];
+      var project = (info && info.project) || 'Unknown project';
+      var kind = tipKind(tip);
+      var key = project + ' ' + kind.label;
+      if (!groups[key]) {
+        groups[key] = { key: key, project: project, kind: kind, tips: [] };
+        order.push(key);
+      }
+      groups[key].tips.push(tip);
+    });
+
+    var result = order.map(function (key) { return groups[key]; });
+
+    result.sort(function (a, b) {
+      var aWarn = a.tips.filter(function (t) { return t.severity === 'warn'; }).length;
+      var bWarn = b.tips.filter(function (t) { return t.severity === 'warn'; }).length;
+      if (aWarn !== bWarn) return bWarn - aWarn;
+      if (tipFilterState.sort === 'savings') {
+        var aSavings = a.tips.reduce(function (s, t) { return s + savingsSortValue(t); }, 0);
+        var bSavings = b.tips.reduce(function (s, t) { return s + savingsSortValue(t); }, 0);
+        return bSavings - aSavings;
+      }
+      return b.tips.length - a.tips.length;
+    });
+
+    return result;
+  }
+
+  function renderTipGroupRow(group) {
+    var isWarn = group.tips.some(function (t) { return t.severity === 'warn'; });
+    var isExpanded = !!expandedTipGroups[group.key];
+    var totalSavingsUsd = group.tips.reduce(function (sum, t) {
+      return sum + (typeof t.estimatedSavingsUsd === 'number' ? t.estimatedSavingsUsd : 0);
+    }, 0);
+    var savingsBadge = totalSavingsUsd > 0
+      ? '<span class="tip-savings">~' + escapeHtml(formatCost(totalSavingsUsd)) + ' saved</span>'
+      : '';
+    var sessionCount = group.tips.length;
+
+    var row =
+      '<div class="tip-row' + (isWarn ? ' warn' : ' info') + '" data-tip-group="' + escapeHtmlAttr(group.key) + '">' +
+        '<span class="tip-caret">' + (isExpanded ? '▾' : '▸') + '</span>' +
+        '<span class="tip-icon">' + group.kind.icon + '</span>' +
+        '<span class="tip-row-body">' +
+          '<span class="tip-category">' + escapeHtml(group.kind.label) + '</span>' +
+          '<span class="tip-row-project" title="' + escapeHtmlAttr(group.project) + '">' + escapeHtml(shortProjectName(group.project)) + '</span>' +
+        '</span>' +
+        '<span class="tip-session-count">' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') + '</span>' +
+        savingsBadge +
+      '</div>';
+
+    if (!isExpanded) return row;
+
+    var sortedTips = group.tips.slice().sort(function (a, b) {
+      if (tipFilterState.sort === 'savings') return savingsSortValue(b) - savingsSortValue(a);
       var aWarn = a.severity === 'warn' ? 0 : 1;
       var bWarn = b.severity === 'warn' ? 0 : 1;
       return aWarn - bWarn;
     });
 
-    tipsPanelEl.innerHTML = sorted.map(function (tip) {
-      var kind = tipKind(tip);
-      var isExpanded = !!expandedTips[tip.id];
-      var isWarn = tip.severity === 'warn';
-      var cls = 'tip' + (isWarn ? ' warn' : ' info') + (isExpanded ? ' expanded' : '');
+    var detailRows = sortedTips.map(function (tip) {
+      var sessionShort = tip.sessionId ? String(tip.sessionId).slice(0, 8) : 'unknown';
       var badgeText = formatSavingsBadge(tip);
-      var badge = badgeText
-        ? '<span class="tip-savings">' + escapeHtml(badgeText) + '</span>'
-        : '';
-
+      var badge = badgeText ? '<span class="tip-detail-savings">' + escapeHtml(badgeText) + '</span>' : '';
       return (
-        '<div class="' + cls + '" data-tip="' + escapeHtmlAttr(tip.id) + '" title="' + (isExpanded ? '' : escapeHtmlAttr(tip.message)) + '">' +
-          '<span class="tip-icon">' + kind.icon + '</span>' +
-          '<div class="tip-body">' +
-            '<div class="tip-headline">' +
-              '<span class="tip-label">' + escapeHtml(kind.label) + '</span>' +
-              badge +
-            '</div>' +
-            (isExpanded ? '<div class="tip-detail">' + escapeHtml(tip.message) + '</div>' : '') +
-          '</div>' +
+        '<div class="tip-detail-row">' +
+          '<span class="tip-detail-session">session ' + escapeHtml(sessionShort) + '</span>' +
+          '<span class="tip-detail-message">' + escapeHtml(tip.message) + '</span>' +
+          badge +
         '</div>'
       );
     }).join('');
 
-    tipsPanelEl.querySelectorAll('.tip').forEach(function (el) {
-      el.addEventListener('click', function () {
-        var id = el.getAttribute('data-tip');
-        expandedTips[id] = !expandedTips[id];
-        if (window.__lastSummary) render(window.__lastSummary);
-      });
-    });
+    return row + '<div class="tip-detail-list">' + detailRows + '</div>';
   }
+
+  function renderTips(tips, sessions) {
+    renderTipsSummary(tips);
+
+    if (!tips || tips.length === 0) {
+      tipsPanelEl.innerHTML = '<div class="empty-row">No tips — you\'re efficient.</div>';
+      return;
+    }
+
+    var filtered = tips.filter(function (t) {
+      return tipFilterState.severity === 'all' || t.severity === tipFilterState.severity;
+    });
+
+    if (filtered.length === 0) {
+      tipsPanelEl.innerHTML = '<div class="empty-row">No tips match this filter.</div>';
+      return;
+    }
+
+    var sessionIndex = buildSessionIndexForTips(sessions);
+    var groups = groupTipsByProjectAndCategory(filtered, sessionIndex);
+
+    tipsPanelEl.innerHTML = groups.map(renderTipGroupRow).join('');
+  }
+
+  // Delegated once at init (not per-render) so re-rendering the tips list on
+  // every ~1.5s SSE tick never stacks up duplicate listeners on repeatedly
+  // replaced row elements.
+  tipsPanelEl.addEventListener('click', function (evt) {
+    var row = evt.target.closest('.tip-row');
+    if (!row) return;
+    var key = row.getAttribute('data-tip-group');
+    expandedTipGroups[key] = !expandedTipGroups[key];
+    if (window.__lastSummary) render(window.__lastSummary);
+  });
 
   function escapeHtml(str) {
     var div = document.createElement('div');

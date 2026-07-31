@@ -1,39 +1,71 @@
-# cc-token-meter
+<div align="center">
+  <img src="docs/screenshot.png" alt="cc-token-meter dashboard" width="100%"/>
+</div>
+
+<br/>
+
+<div align="center">
 
 [![Tests](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg)](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](package.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-e8650a.svg?style=flat-square)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-2e2e2e?style=flat-square)](package.json)
 
-> **100% local. No data ever leaves your machine.** No telemetry, no
-> analytics, no network calls except reading files already on your disk.
-> Works fully offline.
+</div>
 
-A local-only CLI + web dashboard that parses Claude Code's own session
-transcript files (already written to disk by Claude Code itself) to show
-token usage, cost estimates, and actionable tips for reducing token waste.
-No Anthropic API calls, no API keys required, works retroactively on your
-existing history.
+<br/>
 
-![cc-token-meter dashboard](docs/screenshot.png)
+**cc-token-meter** is a local-only CLI + web dashboard that reads Claude
+Code's own session transcript files and gives you a live terminal-style
+view of token usage, cost estimates, and actionable tips — entirely
+offline, zero telemetry, no API keys.
 
 *(Screenshot uses synthetic demo data — no real project names or usage
 data are shown.)*
 
-## Quickstart
+<br/>
+
+## Features
+
+**Usage & Cost**
+- Today's tokens, all-time totals, session count, estimated cost — always
+  at a glance, with a live gauge if you've set a daily cap
+- Burn-rate forecasting — projected cost for the rest of the month based
+  on your recent daily average, with an over-budget warning
+- Per-project and per-git-branch cost/token breakdown (click a row to
+  expand its sessions)
+
+**Insights & Tips**
+- Actionable tips flagged by five independent heuristics — repeated file
+  reads, cache-reuse drop-off, long uncompacted sessions, unusually large
+  sessions, large tool-result spikes
+- Tips are grouped by project and always show their full message plus the
+  exact session they came from, with an estimated $/token savings badge
+  where computable
+- Per-session burn timeline (SVG bar chart + cumulative-burn line + tool
+  event markers)
+
+**Dashboard**
+- Model and date-range filters (Today / 7d / 30d / All time), computed
+  client-side with no extra network calls
+- Daily token usage chart (input/output bars + cost overlay line)
+- Live updates via Server-Sent Events — no manual refresh needed
+
+## Install
 
 ```bash
 npx cc-token-meter
 ```
 
-This starts a local web server (default port `4317`, or the next free port)
-and opens a dashboard in your browser showing:
+This starts a local web server (default port `4317`, or the next free
+port) and opens the dashboard in your browser.
 
-- Today's token usage (with a live gauge, if you've set a daily cap)
-- All-time totals and estimated cost
-- A per-project breakdown (click a project row to expand its sessions)
-- Actionable tips flagged by built-in heuristics (repeated file reads,
-  cache-reuse drop-off, long uncompacted sessions, unusually large
-  sessions, large tool-result spikes)
+## Requirements
+
+- Node.js 18+
+- [Claude Code](https://claude.ai/code) installed and used at least once
+
+`cc-token-meter` scans `~/.claude/projects/**/*.jsonl` — the same session
+files Claude Code writes locally. No data ever leaves your machine.
 
 ## What data it reads
 

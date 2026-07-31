@@ -10,88 +10,158 @@
 <link rel="stylesheet" href="/dashboard.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
+  <div class="app-shell">
+    <header class="sidebar">
+      <div class="traffic-lights" aria-hidden="true">
+        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      </div>
+
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 0 L14.2 9.8 L24 12 L14.2 14.2 L12 24 L9.8 14.2 L0 12 L9.8 9.8 Z" fill="currentColor"/></svg>
-        </span>
         <div class="brand-text">
-          <span class="brand-name">Token Meter</span>
-          <span class="brand-sub">for Claude Code</span>
+          <span class="brand-name">TOKEN<span class="accent-part">METER</span></span>
         </div>
       </div>
+
+      <nav class="side-nav" id="tabs">
+        <button type="button" class="tab-btn side-nav-item active" data-tab="overview">Overview</button>
+        <button type="button" class="tab-btn side-nav-item" data-tab="graphs">Graphs</button>
+        <button type="button" class="tab-btn side-nav-item" data-tab="tables">Tables</button>
+      </nav>
+
       <div class="local-badge" title="100% local — no data leaves your machine">
-        <span class="dot"></span> 100% local &middot; offline
+        <span class="dot"></span> Local &middot; Offline
       </div>
+    </header>
+
+    <div class="main-area">
+      <header class="control-bar">
+        <div class="filter-group">
+          <label for="modelFilter">Model</label>
+          <select id="modelFilter">
+            <option value="all">All models</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="rangeFilter">Range</label>
+          <select id="rangeFilter">
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="all" selected>All time</option>
+          </select>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="tab-panel active" data-tab-panel="overview">
+          <section class="hero-stats">
+            <div class="stat-card gauge-card">
+              <div id="gauge" class="gauge">
+                <div class="gauge-inner">
+                  <div id="gaugeValue" class="gauge-value">—</div>
+                  <div class="gauge-label">tokens today</div>
+                </div>
+              </div>
+              <div id="gaugeSubtext" class="gauge-subtext">No daily cap configured</div>
+            </div>
+
+            <div class="stat-grid">
+              <div class="stat-card metric-sessions">
+                <span class="stat-icon">▤</span>
+                <div class="stat-label">Sessions</div>
+                <div id="statSessions" class="stat-value">0</div>
+              </div>
+              <div class="stat-card metric-input">
+                <span class="stat-icon">↓</span>
+                <div class="stat-label">Input Tokens</div>
+                <div id="statInput" class="stat-value">0</div>
+              </div>
+              <div class="stat-card metric-output">
+                <span class="stat-icon">↑</span>
+                <div class="stat-label">Output Tokens</div>
+                <div id="statOutput" class="stat-value">0</div>
+              </div>
+              <div class="stat-card metric-cache-read">
+                <span class="stat-icon">◐</span>
+                <div class="stat-label">Cache Read</div>
+                <div id="statCacheRead" class="stat-value">0</div>
+              </div>
+              <div class="stat-card metric-cache-write">
+                <span class="stat-icon">◆</span>
+                <div class="stat-label">Cache Creation</div>
+                <div id="statCacheCreation" class="stat-value">0</div>
+              </div>
+              <div class="stat-card metric-cost">
+                <span class="stat-icon">$</span>
+                <div class="stat-label">Est. Cost <span class="est">est.</span></div>
+                <div id="statCost" class="stat-value">$0.00</div>
+              </div>
+            </div>
+          </section>
+
+          <section id="forecastCard" class="forecast-card">
+            <div class="forecast-label">
+              <span class="sparkle">✳</span> Burn-rate forecast
+              <span id="forecastWindow" class="forecast-window"></span>
+            </div>
+            <div id="forecastBody" class="forecast-body"></div>
+          </section>
+
+          <div id="budgetBanner" class="budget-banner hidden"></div>
+
+          <section class="panel">
+            <div class="panel-header-row">
+              <h2><span class="sparkle">✳</span> Tips</h2>
+              <div class="tips-toolbar">
+                <div class="pill-group" id="tipFilterPills">
+                  <button type="button" class="pill active" data-severity="all">All</button>
+                  <button type="button" class="pill" data-severity="warn">Warnings</button>
+                  <button type="button" class="pill" data-severity="info">Suggestions</button>
+                </div>
+                <select id="tipSortSelect">
+                  <option value="severity">Severity first</option>
+                  <option value="savings">Highest savings</option>
+                </select>
+              </div>
+            </div>
+            <div id="tipsSummary" class="tips-summary"></div>
+            <div id="tipsPanel" class="tips-panel">
+              <div class="empty-row">No tips — you're efficient.</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="tab-panel" data-tab-panel="graphs">
+          <section class="panel">
+            <h2><span class="sparkle">✳</span> Daily Token Usage</h2>
+            <div id="dailyChart">
+              <div class="empty-row">Loading…</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="tab-panel" data-tab-panel="tables">
+          <section class="panel">
+            <h2><span class="sparkle">✳</span> Projects</h2>
+            <div id="projectList" class="project-list">
+              <div class="empty-row">Loading…</div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2><span class="sparkle">✳</span> By branch</h2>
+            <div id="branchList" class="project-list">
+              <div class="empty-row">Loading…</div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="footer" title="All data read from ~/.claude/projects/**/*.jsonl on this machine only. No network calls except this local server.">
+        <span class="dot"></span> Local only &middot; no network calls
+      </footer>
     </div>
-  </header>
-
-  <main class="container">
-    <section class="hero-stats">
-      <div class="stat-card gauge-card">
-        <div id="gauge" class="gauge">
-          <div class="gauge-inner">
-            <div id="gaugeValue" class="gauge-value">—</div>
-            <div class="gauge-label">tokens today</div>
-          </div>
-        </div>
-        <div id="gaugeSubtext" class="gauge-subtext">No daily cap configured</div>
-      </div>
-
-      <div class="stat-stack">
-        <div class="stat-card">
-          <div class="stat-label">Today's cost <span class="est">est.</span></div>
-          <div id="todayCost" class="stat-value">$0.00</div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-label">All-time tokens</div>
-          <div id="allTimeTokens" class="stat-value">0</div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-label">All-time cost <span class="est">est.</span></div>
-          <div id="allTimeCost" class="stat-value">$0.00</div>
-        </div>
-      </div>
-    </section>
-
-    <section id="forecastCard" class="forecast-card">
-      <div class="forecast-label">
-        <span class="sparkle">✳</span> Burn-rate forecast
-        <span id="forecastWindow" class="forecast-window"></span>
-      </div>
-      <div id="forecastBody" class="forecast-body"></div>
-    </section>
-
-    <div id="budgetBanner" class="budget-banner hidden"></div>
-
-    <section class="panel">
-      <h2><span class="sparkle">✳</span> Projects</h2>
-      <div id="projectList" class="project-list">
-        <div class="empty-row">Loading…</div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2><span class="sparkle">✳</span> By branch</h2>
-      <div id="branchList" class="project-list">
-        <div class="empty-row">Loading…</div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2><span class="sparkle">✳</span> Tips</h2>
-      <div id="tipsPanel" class="tips-panel">
-        <div class="empty-row">No tips — you're efficient.</div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="footer" title="All data read from ~/.claude/projects/**/*.jsonl on this machine only. No network calls except this local server.">
-    <span class="dot"></span> Local only &middot; no network calls
-  </footer>
+  </div>
 
   <script src="/dashboard.js"></script>
 </body>

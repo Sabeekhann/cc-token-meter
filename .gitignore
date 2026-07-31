@@ -17,3 +17,6 @@ npm-debug.log*
 # Env
 .env
 .env.local
+
+# Local dev tooling config
+.claude/
