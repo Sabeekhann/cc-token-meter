@@ -30,6 +30,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --allowedTools "Write(.claude-review-verdict)"
           prompt: |
             You are reviewing this pull request against the base branch, acting
             ONLY as an architect-level reviewer. You are NOT reviewing for
@@ -121,6 +123,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --allowedTools "Write(.claude-review-verdict)"
           prompt: |
             You are reviewing this pull request against the base branch, acting
             ONLY as an architect-level reviewer. You are NOT reviewing for
