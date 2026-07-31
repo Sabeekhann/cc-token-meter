@@ -54,6 +54,17 @@
     return '$' + n.toFixed(2);
   }
 
+  function formatSavingsBadge(tip) {
+    var usd = tip.estimatedSavingsUsd;
+    var tokens = tip.estimatedSavingsTokens;
+    if (usd === null || usd === undefined) {
+      if (tokens === null || tokens === undefined) return null;
+      return '~' + formatCompact(tokens) + ' tok';
+    }
+    var usdText = usd < 0.01 && usd > 0 ? '<$0.01' : formatCost(usd);
+    return '~' + usdText + ' saved';
+  }
+
   function shortProjectName(path) {
     var parts = String(path || '').split('/').filter(Boolean);
     if (parts.length <= 2) return '/' + parts.join('/');
@@ -380,15 +391,32 @@
       return;
     }
 
-    tipsPanelEl.innerHTML = tips.map(function (tip) {
+    var sorted = tips.slice().sort(function (a, b) {
+      var aWarn = a.severity === 'warn' ? 0 : 1;
+      var bWarn = b.severity === 'warn' ? 0 : 1;
+      return aWarn - bWarn;
+    });
+
+    tipsPanelEl.innerHTML = sorted.map(function (tip) {
       var kind = tipKind(tip);
       var isExpanded = !!expandedTips[tip.id];
-      var cls = 'tip' + (tip.severity === 'warn' ? ' warn' : '') + (isExpanded ? ' expanded' : '');
-      var text = isExpanded ? tip.message : kind.label;
+      var isWarn = tip.severity === 'warn';
+      var cls = 'tip' + (isWarn ? ' warn' : ' info') + (isExpanded ? ' expanded' : '');
+      var badgeText = formatSavingsBadge(tip);
+      var badge = badgeText
+        ? '<span class="tip-savings">' + escapeHtml(badgeText) + '</span>'
+        : '';
+
       return (
         '<div class="' + cls + '" data-tip="' + escapeHtmlAttr(tip.id) + '" title="' + (isExpanded ? '' : escapeHtmlAttr(tip.message)) + '">' +
           '<span class="tip-icon">' + kind.icon + '</span>' +
-          '<span class="tip-label">' + escapeHtml(text) + '</span>' +
+          '<div class="tip-body">' +
+            '<div class="tip-headline">' +
+              '<span class="tip-label">' + escapeHtml(kind.label) + '</span>' +
+              badge +
+            '</div>' +
+            (isExpanded ? '<div class="tip-detail">' + escapeHtml(tip.message) + '</div>' : '') +
+          '</div>' +
         '</div>'
       );
     }).join('');
