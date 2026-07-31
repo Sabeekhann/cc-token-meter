@@ -1,5 +1,9 @@
 # cc-token-meter
 
+[![Tests](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg)](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](package.json)
+
 > **100% local. No data ever leaves your machine.** No telemetry, no
 > analytics, no network calls except reading files already on your disk.
 > Works fully offline.
@@ -9,6 +13,11 @@ transcript files (already written to disk by Claude Code itself) to show
 token usage, cost estimates, and actionable tips for reducing token waste.
 No Anthropic API calls, no API keys required, works retroactively on your
 existing history.
+
+![cc-token-meter dashboard](docs/screenshot.png)
+
+*(Screenshot uses synthetic demo data — no real project names or usage
+data are shown.)*
 
 ## Quickstart
 
