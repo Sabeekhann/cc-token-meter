@@ -17,7 +17,16 @@ function toolResult(toolUseId, contentByteLength, timestamp) {
 // --- repeatedReads ---
 
 test('repeatedReads: true positive — 3+ reads of same file, no edit in between', () => {
-  const session = { sessionId: 's1' };
+  const session = {
+    sessionId: 's1',
+    models: ['claude-sonnet-5-20260101'],
+    lastTimestamp: '2026-01-01T00:00:03.000Z',
+    usageRecords: [
+      { inputTokens: 1000 },
+      { inputTokens: 2000 },
+      { inputTokens: 3000 },
+    ],
+  };
   const events = [
     toolUse('Read', '/a.js', '2026-01-01T00:00:01.000Z'),
     toolUse('Read', '/a.js', '2026-01-01T00:00:02.000Z'),
@@ -26,6 +35,10 @@ test('repeatedReads: true positive — 3+ reads of same file, no edit in between
   const tips = repeatedReads(session, events);
   assert.equal(tips.length, 1);
   assert.match(tips[0].message, /3 times/);
+  assert.equal(typeof tips[0].estimatedSavingsTokens, 'number');
+  assert.ok(tips[0].estimatedSavingsTokens > 0);
+  assert.equal(typeof tips[0].estimatedSavingsUsd, 'number');
+  assert.ok(tips[0].estimatedSavingsUsd > 0);
 });
 
 test('repeatedReads: true negative — an Edit between reads resets the counter (no tip)', () => {
@@ -65,10 +78,19 @@ test('cacheRatio: true positive — ratio increases 2x+ from first quarter to la
     records.push(makeAssistantMsg(`2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`, 100, 10));
   }
 
-  const session = { sessionId: 's3', usageRecords: records };
+  const session = {
+    sessionId: 's3',
+    usageRecords: records,
+    models: ['claude-sonnet-5-20260101'],
+    lastTimestamp: '2026-01-01T00:00:19.000Z',
+  };
   const tips = cacheRatio(session);
   assert.equal(tips.length, 1);
   assert.match(tips[0].message, /cache writes are outpacing cache reads/);
+  assert.equal(typeof tips[0].estimatedSavingsTokens, 'number');
+  assert.ok(tips[0].estimatedSavingsTokens > 0);
+  assert.equal(typeof tips[0].estimatedSavingsUsd, 'number');
+  assert.ok(tips[0].estimatedSavingsUsd > 0);
 });
 
 test('cacheRatio: true negative — stable ratio throughout, and under 20 messages', () => {
@@ -91,6 +113,8 @@ test('longSessionNoCompact: true positive — 60+ messages, no compact detected'
   const tips = longSessionNoCompact(session, [], [], []);
   assert.equal(tips.length, 1);
   assert.match(tips[0].message, /65 turns/);
+  assert.equal(tips[0].estimatedSavingsTokens, null);
+  assert.equal(tips[0].estimatedSavingsUsd, null);
 });
 
 test('longSessionNoCompact: true negative — 60+ messages but a /compact line is present', () => {
@@ -142,6 +166,8 @@ test('outlierSessionTotal: true positive — session exceeds p90 of 5+ historica
   const tips = outlierSessionTotal(current, [], allSessions);
   assert.equal(tips.length, 1);
   assert.match(tips[0].message, /more than 90% of your past sessions/);
+  assert.equal(tips[0].estimatedSavingsTokens, null);
+  assert.equal(tips[0].estimatedSavingsUsd, null);
 });
 
 test('outlierSessionTotal: true negative — fewer than 5 historical sessions (skip)', () => {
@@ -189,10 +215,19 @@ test('largeToolResultSpike: true positive — large tool_result precedes a top-1
     toolResult('tu-big', 60000, '2026-01-01T00:00:09.200Z'),
   ];
 
-  const session = { sessionId: 's9', usageRecords: records };
+  const session = {
+    sessionId: 's9',
+    usageRecords: records,
+    models: ['claude-sonnet-5-20260101'],
+    lastTimestamp: '2026-01-01T00:00:09.500Z',
+  };
   const tips = largeToolResultSpike(session, events);
   assert.equal(tips.length, 1);
   assert.match(tips[0].message, /58KB|59KB|60KB/); // ~60000 bytes / 1024 ≈ 58.6KB
+  assert.equal(typeof tips[0].estimatedSavingsTokens, 'number');
+  assert.ok(tips[0].estimatedSavingsTokens > 0);
+  assert.equal(typeof tips[0].estimatedSavingsUsd, 'number');
+  assert.ok(tips[0].estimatedSavingsUsd > 0);
 });
 
 test('largeToolResultSpike: true negative — under 10 assistant messages (skip)', () => {
