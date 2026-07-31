@@ -31,6 +31,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
+            --model claude-sonnet-4-6
             --allowedTools "Write(.claude-review-verdict)"
           prompt: |
             You are reviewing this pull request against the base branch, acting
@@ -124,6 +125,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
+            --model claude-sonnet-4-6
             --allowedTools "Write(.claude-review-verdict)"
           prompt: |
             You are reviewing this pull request against the base branch, acting
