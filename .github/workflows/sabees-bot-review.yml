@@ -30,7 +30,6 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          show_full_output: true
           claude_args: |
             --model claude-sonnet-4-6
             --allowedTools "Write(.claude-review-verdict)"
@@ -125,7 +124,6 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          show_full_output: true
           claude_args: |
             --model claude-sonnet-4-6
             --allowedTools "Write(.claude-review-verdict)"
