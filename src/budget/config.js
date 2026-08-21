@@ -13,27 +13,31 @@ const DEFAULT_CONFIG = {
   warnThresholdPct: 80,
 };
 
-function ensureConfigDir() {
-  if (!fs.existsSync(CONFIG_DIR)) {
-    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+function ensureConfigDir(directory = CONFIG_DIR) {
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  }
+  try {
+    fs.chmodSync(directory, 0o700);
+  } catch {
+    // Best effort on filesystems/platforms without POSIX permissions.
   }
 }
 
 /**
- * Read the budget config from ~/.claude-token-meter/config.json, creating
- * the directory (and returning defaults) if it doesn't exist yet. Never
- * throws for a missing file — only for genuinely malformed JSON, in which
- * case we fall back to defaults rather than crashing the CLI/server.
+ * Read the budget config from ~/.claude-token-meter/config.json. Reading is
+ * side-effect free: a fresh install does not create local state until the
+ * user actually saves a budget or the usage index is persisted. Missing or
+ * malformed files return defaults rather than crashing the CLI/server.
  *
  * @returns {{dailyTokenCap: number|null, dailyCostCapUsd: number|null, sessionTokenCap: number|null, sessionCostCapUsd: number|null, warnThresholdPct: number}}
  */
-export function readConfig() {
-  ensureConfigDir();
-  if (!fs.existsSync(CONFIG_FILE)) {
+export function readConfig(filePath = CONFIG_FILE) {
+  if (!fs.existsSync(filePath)) {
     return { ...DEFAULT_CONFIG };
   }
   try {
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
+    const raw = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(raw);
     return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
@@ -47,11 +51,19 @@ export function readConfig() {
  * @param {Partial<typeof DEFAULT_CONFIG>} updates
  * @returns {typeof DEFAULT_CONFIG} the full config after merging
  */
-export function writeConfig(updates) {
-  ensureConfigDir();
-  const current = readConfig();
+export function writeConfig(updates, filePath = CONFIG_FILE) {
+  ensureConfigDir(path.dirname(filePath));
+  const current = readConfig(filePath);
   const next = { ...current, ...updates };
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2), 'utf8');
+  fs.writeFileSync(filePath, JSON.stringify(next, null, 2), {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  try {
+    fs.chmodSync(filePath, 0o600);
+  } catch {
+    // Best effort on filesystems/platforms without POSIX permissions.
+  }
   return next;
 }
 

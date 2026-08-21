@@ -1,10 +1,10 @@
 /**
  * Pricing table for Claude models, used to estimate cost of local token
- * usage. Figures are current as of 2026-07-31, sourced from
+ * usage. Figures are current as of 2026-08-21, sourced from
  * https://platform.claude.com/docs (pricing pages) — re-verify against that
  * source before any future release if this table has gone stale, since
- * Anthropic revises pricing periodically (see the Sonnet 5 2026-09-01 change
- * below for a concrete example already baked into this table).
+ * Anthropic revises pricing periodically. Anthropic made Sonnet 5's launch
+ * rate permanent and cancelled the previously announced 2026-09-01 increase.
  *
  * All figures are USD per million tokens (MTok), base input/output rates
  * only. Cache pricing is NOT hardcoded per row — it's derived from these
@@ -27,6 +27,7 @@
 export const CACHE_WRITE_5M_MULTIPLIER = 1.25;
 export const CACHE_WRITE_1H_MULTIPLIER = 2.0;
 export const CACHE_READ_MULTIPLIER = 0.1;
+export const PRICING_VERIFIED_ON = '2026-08-21';
 
 /**
  * Order matters only in that more specific rows should be listed before
@@ -55,22 +56,14 @@ export const PRICING_TABLE = [
     effectiveFrom: null,
     effectiveUntil: null,
   },
-  // Sonnet 5, effective through 2026-08-31 (inclusive)
+  // Sonnet 5 launch pricing is now the standard rate; the previously
+  // scheduled 2026-09-01 increase was cancelled by Anthropic.
   {
-    id: 'sonnet-5-pre-price-change',
+    id: 'sonnet-5',
     matchSubstrings: ['sonnet-5', 'sonnet5'],
     inputPerMTok: 2.0,
     outputPerMTok: 10.0,
     effectiveFrom: null,
-    effectiveUntil: '2026-09-01T00:00:00.000Z',
-  },
-  // Sonnet 5, effective from 2026-09-01 onward
-  {
-    id: 'sonnet-5-post-price-change',
-    matchSubstrings: ['sonnet-5', 'sonnet5'],
-    inputPerMTok: 3.0,
-    outputPerMTok: 15.0,
-    effectiveFrom: '2026-09-01T00:00:00.000Z',
     effectiveUntil: null,
   },
   // Sonnet 4.6 / 4.5 (no scheduled change baked in — same rate throughout)
@@ -103,7 +96,7 @@ export const PRICING_TABLE = [
 
 /**
  * Fallback row used when no table entry matches `message.model` by
- * substring. Chosen as the (pre-price-change) Sonnet rate since Sonnet is
+ * substring. Chosen as a conservative Sonnet-tier rate since Sonnet is
  * the most commonly used tier. Any cost computed via this fallback should
  * be flagged with `estimated: true` / `usedFallback: true` by the caller.
  */

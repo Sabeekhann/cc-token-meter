@@ -2,27 +2,34 @@ name: Sabee's Bot
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
 permissions:
   contents: read
   pull-requests: write
-  id-token: write
+
+concurrency:
+  group: sabees-bot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   # Same-repo PRs: no fork, so pull_request_target carries no extra risk
   # (head branch is already trusted, same as pull_request would have been).
   # Runs immediately, no manual gate.
   review-internal:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Remove any head-provided verdict file
+        run: rm -f -- .claude-review-verdict
 
       - name: Run Sabee's Bot (architect-level Claude review)
         id: claude
@@ -32,8 +39,13 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
-            --model claude-sonnet-4-6
+            --model claude-sonnet-5
+            --bare
+            --tools "Read,Glob,Grep,Write"
             --allowedTools "Write(.claude-review-verdict)"
+            --disallowedTools "Bash,Edit,NotebookEdit,mcp__*"
+            --max-turns 8
+            --max-budget-usd 2
           prompt: |
             You are reviewing this pull request against the base branch, acting
             ONLY as an architect-level reviewer. You are NOT reviewing for
@@ -52,9 +64,10 @@ jobs:
               `open`). Flag any new dependency added without clear, stated
               justification.
             - Pure-function boundary. `src/heuristics/*`, `src/pricing/*`,
-              `src/budget/alerts.js`, and `src/ingest/aggregate.js` must stay
-              free of `fs`/`http`/network I/O — data in, data out only. Flag
-              any I/O creeping into those modules.
+              `src/analytics/*`, `src/budget/alerts.js`, and
+              `src/ingest/aggregate.js` must stay free of
+              `fs`/`http`/network I/O — data in, data out only. Flag any I/O
+              creeping into those modules.
             - New heuristics must be one pure function per file in
               `src/heuristics/`, with signature
               `(sessionRecord, toolEvents, allSessionsHistory) => Tip[]`,
@@ -62,9 +75,18 @@ jobs:
               true/false-case fixture tests in `test/heuristics.test.js`.
             - Duplication/reuse: flag logic copy-pasted across modules that
               should instead be a shared, imported function.
-            - File placement: flag new files landing outside the existing
-              `bin/`, `src/`, `public/`, `test/` structure without a stated
-              reason.
+            - File placement: product/runtime code belongs in `bin/`, `src/`,
+              or `public/`; tests belong in `test/`; documentation belongs in
+              `docs/`; repository automation belongs in `.github/`. Flag new
+              top-level directories or misplaced runtime code without a
+              stated reason.
+            - Local-only invariant: flag telemetry, analytics SDKs, remote
+              browser assets, non-loopback server binding, transcript writes,
+              or any outbound transfer of prompt/tool-result/session data.
+            - CI changes must use least-privilege permissions. A
+              `pull_request_target` job must never execute fork head code; an
+              intentional read-only fork checkout must be isolated behind the
+              `external-pr-review` environment.
 
             Post your findings as normal PR review comments (specific,
             file:line references, no vague generalities). Then, as your final
@@ -108,15 +130,24 @@ jobs:
   # runs. No fork code executes (no npm ci/install/test/scripts); the Claude
   # step only reads files as text for review, never executes them.
   review-fork:
-    if: github.event.pull_request.head.repo.full_name != github.repository
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: external-pr-review
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+          # This job is manually approved through the environment and does
+          # not execute repository code. checkout v7 requires an explicit
+          # acknowledgement before reading a fork head in pull_request_target.
+          allow-unsafe-pr-checkout: true
+
+      - name: Remove any head-provided verdict file
+        run: rm -f -- .claude-review-verdict
 
       - name: Run Sabee's Bot (architect-level Claude review)
         id: claude
@@ -126,8 +157,13 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
-            --model claude-sonnet-4-6
+            --model claude-sonnet-5
+            --bare
+            --tools "Read,Glob,Grep,Write"
             --allowedTools "Write(.claude-review-verdict)"
+            --disallowedTools "Bash,Edit,NotebookEdit,mcp__*"
+            --max-turns 8
+            --max-budget-usd 2
           prompt: |
             You are reviewing this pull request against the base branch, acting
             ONLY as an architect-level reviewer. You are NOT reviewing for
@@ -146,9 +182,10 @@ jobs:
               `open`). Flag any new dependency added without clear, stated
               justification.
             - Pure-function boundary. `src/heuristics/*`, `src/pricing/*`,
-              `src/budget/alerts.js`, and `src/ingest/aggregate.js` must stay
-              free of `fs`/`http`/network I/O — data in, data out only. Flag
-              any I/O creeping into those modules.
+              `src/analytics/*`, `src/budget/alerts.js`, and
+              `src/ingest/aggregate.js` must stay free of
+              `fs`/`http`/network I/O — data in, data out only. Flag any I/O
+              creeping into those modules.
             - New heuristics must be one pure function per file in
               `src/heuristics/`, with signature
               `(sessionRecord, toolEvents, allSessionsHistory) => Tip[]`,
@@ -156,9 +193,18 @@ jobs:
               true/false-case fixture tests in `test/heuristics.test.js`.
             - Duplication/reuse: flag logic copy-pasted across modules that
               should instead be a shared, imported function.
-            - File placement: flag new files landing outside the existing
-              `bin/`, `src/`, `public/`, `test/` structure without a stated
-              reason.
+            - File placement: product/runtime code belongs in `bin/`, `src/`,
+              or `public/`; tests belong in `test/`; documentation belongs in
+              `docs/`; repository automation belongs in `.github/`. Flag new
+              top-level directories or misplaced runtime code without a
+              stated reason.
+            - Local-only invariant: flag telemetry, analytics SDKs, remote
+              browser assets, non-loopback server binding, transcript writes,
+              or any outbound transfer of prompt/tool-result/session data.
+            - CI changes must use least-privilege permissions. A
+              `pull_request_target` job must never execute fork head code; an
+              intentional read-only fork checkout must be isolated behind the
+              `external-pr-review` environment.
 
             Post your findings as normal PR review comments (specific,
             file:line references, no vague generalities). Then, as your final

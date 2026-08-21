@@ -2,22 +2,45 @@
 
 [![Tests](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg)](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](package.json)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 
-> **100% local. No data ever leaves your machine.** No telemetry, no
-> analytics, no network calls except reading files already on your disk.
-> Works fully offline.
+> **A private, local usage cockpit for Claude Code.** Understand live token
+> burn, estimated cost, cache efficiency, project/branch drivers, and the next
+> action worth taking—without sending your transcripts anywhere.
 
-A local-only CLI + web dashboard that parses Claude Code's own session
-transcript files (already written to disk by Claude Code itself) to show
-token usage, cost estimates, and actionable tips for reducing token waste.
-No Anthropic API calls, no API keys required, works retroactively on your
-existing history.
+A local-only CLI and web dashboard that turns Claude Code's existing session
+transcripts into useful operational intelligence. It requires no API key,
+makes no Anthropic API call, works retroactively, and keeps the original
+transcripts strictly read-only.
 
-![cc-token-meter dashboard](docs/screenshot.png)
+## What makes it useful
 
-*(Screenshot uses synthetic demo data — no real project names or usage
-data are shown.)*
+- **See what is active now.** Track active sessions, recent tokens/minute,
+  estimated cost/hour, models, branches, and message-level burn.
+- **Understand the drivers.** Compare projects and branches using exact
+  per-message token and estimated-cost attribution.
+- **Measure cache effectiveness.** See cache reuse and the estimated input
+  cost avoided through cache reads.
+- **Act on evidence.** Review ranked recommendations for repeated reads,
+  cache degradation, large tool output, long context, and outlier sessions.
+- **Stay ahead of budgets.** Configure daily/session guardrails and see a
+  rolling 30-day forecast.
+- **Start quickly.** A private versioned index restores unchanged history
+  without parsing every transcript again.
+
+## Dashboard
+
+The v2 interface is organized around five jobs:
+
+| View | What it answers |
+| --- | --- |
+| Overview | What happened today, what is active, and what needs attention? |
+| Live session | Where is the current session burning tokens and estimated cost? |
+| Projects | Which projects, branches, and sessions drive usage? |
+| Insights | What action could reduce waste, and what evidence supports it? |
+| Settings | What budgets and local privacy controls are configured? |
+
+The detailed UX specification is in [`docs/UI_PLAN.md`](docs/UI_PLAN.md).
 
 ## Quickstart
 
@@ -25,15 +48,9 @@ data are shown.)*
 npx cc-token-meter
 ```
 
-This starts a local web server (default port `4317`, or the next free port)
-and opens a dashboard in your browser showing:
-
-- Today's token usage (with a live gauge, if you've set a daily cap)
-- All-time totals and estimated cost
-- A per-project breakdown (click a project row to expand its sessions)
-- Actionable tips flagged by built-in heuristics (repeated file reads,
-  cache-reuse drop-off, long uncompacted sessions, unusually large
-  sessions, large tool-result spikes)
+This starts a loopback-only web server (default port `4317`, or the next free
+port), indexes local history, and opens the dashboard. Live updates arrive
+through Server-Sent Events while Claude Code is running.
 
 ## What data it reads
 
@@ -46,24 +63,33 @@ and opens a dashboard in your browser showing:
 These files are already written to disk by Claude Code during normal use —
 this tool does not modify Claude Code's behavior in any way. Access is
 **strictly read-only**: `cc-token-meter` never writes back to those
-transcript files. The only file it writes is its own local config, at:
+transcript files. It writes only its own files under:
 
 ```
 ~/.claude-token-meter/config.json
+~/.claude-token-meter/usage-index-v2.json
 ```
 
-which stores your optional budget cap settings (see below).
+The config stores optional budget caps. The versioned usage index makes warm
+starts fast by caching normalized counters, timestamps, model/branch/project
+metadata, and tool names/local file paths needed by the heuristics. It never
+stores prompt text or tool-result content. The index is written atomically and
+uses owner-only file permissions where supported. Pass `--no-cache` to avoid
+reading or writing it; deleting the index is also safe because it is rebuilt
+from the original read-only transcripts.
 
 No transcript content, file paths, prompts, or any other data is ever sent
-anywhere — there is no server-side component, no analytics SDK, and no
-outbound network requests other than loading fonts/assets already bundled
-locally with the dashboard itself.
+anywhere — there is no remote component, analytics SDK, CDN asset, or outbound
+network request. The dashboard server listens on `127.0.0.1` only.
 
 ## CLI reference
 
 ```
 cc-token-meter                          Start the dashboard server (default)
-cc-token-meter --json                   Cold-scan history, print JSON summary, exit
+cc-token-meter --summary                Print a compact local usage summary, exit
+cc-token-meter --json                   Load/index history, print JSON summary, exit
+cc-token-meter --csv <path|->           Export filtered usage as CSV, exit
+cc-token-meter --doctor                 Diagnose local setup and private state, exit
 cc-token-meter --set-budget-usd <n>          Set daily cost cap (USD) and exit
 cc-token-meter --set-budget-tokens <n>       Set daily token cap and exit
 cc-token-meter --set-session-budget-usd <n>  Set per-session cost cap (USD) and exit
@@ -71,11 +97,16 @@ cc-token-meter --help                   Show help
 cc-token-meter --version                Show version
 ```
 
-Options for the default (start) command:
+Options:
 
 ```
 --port <n>       Port to listen on (default: 4317, or next free port)
 --no-open        Don't automatically open a browser window
+--no-cache       Don't read or write the private local usage index
+--from <date>    Include usage on/after local date YYYY-MM-DD (summary/JSON/CSV)
+--to <date>      Include usage on/before local date YYYY-MM-DD (summary/JSON/CSV)
+--project <text> Filter project paths by case-insensitive substring (summary/JSON/CSV)
+--group-by <n>   CSV rows: day, project, branch, or session (default: day)
 ```
 
 Examples:
@@ -83,15 +114,31 @@ Examples:
 ```bash
 npx cc-token-meter
 npx cc-token-meter --port 5000 --no-open
+npx cc-token-meter --summary
+npx cc-token-meter --summary --from 2026-08-01 --project my-app
 npx cc-token-meter --json
+npx cc-token-meter --json --from 2026-08-01 --project my-app
+npx cc-token-meter --csv usage.csv --group-by project
+npx cc-token-meter --csv - --from 2026-08-01 --to 2026-08-31 --group-by day
+npx cc-token-meter --doctor
+npx cc-token-meter --doctor --json
+npx cc-token-meter --no-cache
 npx cc-token-meter --set-budget-usd 20
 ```
 
-The `--json` mode is useful for scripting or CI-adjacent local checks — it
-performs a full cold scan of your transcript history and prints a JSON
-summary (today's totals, all-time totals, per-project/per-session
-breakdowns, and active tips) to stdout, then exits without starting a
-server.
+The `--summary` mode is the fastest terminal view: it reports selected and
+today totals, active burn rate, cache reuse, top project, recommendation
+count, and pricing-match quality. The `--json` mode is useful for scripting or
+CI-adjacent local checks—it loads the local index, tails changed transcripts,
+and prints a JSON summary
+(today's totals, all-time totals, per-project/per-session breakdowns,
+intelligence, and active tips) to stdout, then exits without starting a
+server. Pass `--no-cache` when you specifically want an uncached full scan.
+Date filters are inclusive local calendar dates. CSV exports are written
+atomically with owner-only permissions where supported; use `--csv -` to
+write CSV to stdout. `--doctor` checks the Node runtime, transcript access,
+index/config health, and local-state permissions without changing transcript
+files.
 
 ## Pricing disclaimer
 
@@ -104,19 +151,16 @@ authoritative pricing, see:
 https://platform.claude.com/docs/en/about-claude/pricing
 
 If a model isn't recognized by the local pricing table, `cc-token-meter`
-falls back to a default (Sonnet-tier) rate and marks the result as
-estimated in the underlying data (surfaced as `estimated: true` /
-`usedFallback` in the JSON output) — the dashboard doesn't currently
-render this flag visually per-row, so treat any unfamiliar model name in
-your usage as a signal to double check the pricing table.
+falls back to a default Sonnet-tier rate and marks the message/session as
+estimated. The Live Session view surfaces whether fallback pricing was used;
+the JSON summary exposes `estimatedCostUsed` for programmatic checks.
 
 ## Known limitations
 
-- **Cold-scan cost scales with total transcript history volume.** The
-  first time `cc-token-meter` runs against a project directory with a lot
-  of accumulated session history, the initial full parse of every
-  `.jsonl` file can take noticeably longer than subsequent incremental
-  polls (which only tail files that changed).
+- **The first uncached scan scales with transcript history volume.** Later
+  starts restore the private local index and tail only changed files. Using
+  `--no-cache`, deleting the index, changing its schema version, or recovering
+  from corruption intentionally performs a full rebuild.
 - **Project-path reconstruction is lossy for paths containing literal
   hyphens.** Claude Code sanitizes the absolute project path into a
   directory name by replacing `/` with `-`, which cannot be perfectly
@@ -140,8 +184,11 @@ your usage as a signal to double check the pricing table.
 - `src/ingest/parser.js` stream-parses each file line-by-line (never
   loading a whole file into memory), tolerating malformed lines and
   in-progress trailing writes from live sessions.
-- `src/ingest/store.js` maintains an in-memory aggregate per session and
-  polls for new/changed files roughly every 1.5 seconds.
+- `src/ingest/store.js` maintains a per-session aggregate, restores a private
+  versioned local index, and polls for new/changed files roughly every 1.5
+  seconds.
+- `src/analytics/overview.js` produces active-session, recent velocity, cache
+  health, model mix, and data-quality intelligence from normalized records.
 - `src/pricing/` computes estimated cost per message using a versioned,
   date-aware pricing table.
 - `src/heuristics/` runs five independent, pure-function checks against
@@ -154,12 +201,47 @@ your usage as a signal to double check the pricing table.
 
 ```bash
 npm install
-npm test
+npm run ci
 node bin/cc-token-meter.js --json
+npm run preview:dashboard
 ```
+
+`npm run ci` runs both the repository's product-policy checks and all unit/
+contract tests. The policy gate verifies JavaScript syntax, the dependency
+footprint, pure analytics boundaries, loopback-only serving, browser security
+headers, and the dashboard's no-remote-assets/no-remote-requests promise.
+
+`npm run preview:dashboard` starts a development server at
+`http://127.0.0.1:4318` backed by clearly synthetic fixture data. It never
+reads personal Claude Code transcripts and exists for UI development and
+screenshot capture.
 
 See `CONTRIBUTING.md` for details on updating pricing, running tests, and
 adding new heuristics.
+
+The product roadmap and UI specification are documented in
+[`docs/V2_PLAN.md`](docs/V2_PLAN.md) and [`docs/UI_PLAN.md`](docs/UI_PLAN.md).
+
+## Repository automation
+
+The GitHub workflow is deliberately product-specific rather than a generic
+collection of badges:
+
+- **CI** runs the project policy, package dry-run, and test suite on supported
+  Node versions across Linux, macOS, and Windows.
+- **PR Governance** validates Conventional Commit titles and the PR template,
+  applies area/size/readiness labels, and keeps one actionable bot comment up
+  to date.
+- **Security** runs a production dependency audit, CodeQL, and a
+  checksum-verified gitleaks scan on PRs, `main`, and a weekly schedule.
+- **Merge Conflicts** rejects accidentally committed conflict markers.
+- **Dependabot** opens weekly npm and GitHub Actions update PRs.
+- **Sabee's Bot** provides an optional, narrow AI architecture review after a
+  PR leaves draft status; human review still owns correctness, security, test
+  adequacy, and UX.
+
+Repository-owner setup, required-check recommendations, permissions, and the
+fork-safety model are documented in [`docs/CI.md`](docs/CI.md).
 
 ## License
 

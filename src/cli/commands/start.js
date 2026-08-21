@@ -4,10 +4,10 @@ import { startServer } from '../../server/index.js';
  * Default command: start the local dashboard server and open the browser
  * (unless --no-open was passed).
  *
- * @param {{port: number, open: boolean}} opts
+ * @param {{port: number, open: boolean, cache: boolean}} opts
  */
-export async function startCommand({ port, open }) {
-  const { port: actualPort, stop } = await startServer({ port });
+export async function startCommand({ port, open, cache }) {
+  const { port: actualPort, stop } = await startServer({ port, cache });
   const url = `http://localhost:${actualPort}`;
 
   console.log(`cc-token-meter dashboard running at ${url}`);

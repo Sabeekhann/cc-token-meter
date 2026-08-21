@@ -34,6 +34,7 @@ test('parses a well-formed session file, ignoring unknown line types', async () 
   assert.equal(first.outputTokens, 200);
   assert.equal(first.cacheWrite1h, 500);
   assert.equal(first.projectCwd, '/Users/dev/project-a');
+  assert.equal(first.gitBranch, 'main');
 });
 
 test('skips malformed non-trailing lines and continues parsing', async () => {

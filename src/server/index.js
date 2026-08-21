@@ -26,11 +26,11 @@ const MIME_TYPES = {
  * loop calling store.ingestNewData(), serves static files from public/,
  * and wires up API routes.
  *
- * @param {{port?: number}} [opts]
+ * @param {{port?: number, cache?: boolean}} [opts]
  * @returns {Promise<{server: import('node:http').Server, port: number, store: object, stop: () => void}>}
  */
-export async function startServer({ port = 4317 } = {}) {
-  const store = createStore();
+export async function startServer({ port = 4317, cache = true } = {}) {
+  const store = createStore({ persistIndex: cache });
 
   // Kick off an initial cold scan before accepting requests, so the first
   // page load isn't empty.
@@ -115,7 +115,12 @@ function serveStatic(pathname, res) {
 
     const ext = path.extname(filePath);
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': contentType });
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
+    });
     res.end(data);
   });
 }
@@ -137,7 +142,9 @@ function listenOnFreePort(server, startPort, maxAttempts = 20) {
       };
 
       server.once('error', onError);
-      server.listen(port, () => {
+      // The dashboard handles local transcript metadata and is deliberately
+      // inaccessible from other machines on the network.
+      server.listen(port, '127.0.0.1', () => {
         server.removeListener('error', onError);
         resolve(port);
       });

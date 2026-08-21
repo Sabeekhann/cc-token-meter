@@ -6,7 +6,7 @@
   "license": "MIT",
   "private": false,
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "bin": {
     "cc-token-meter": "./bin/cc-token-meter.js"
@@ -19,7 +19,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "check": "node .github/scripts/project-policy.mjs",
+    "ci": "npm run check && npm test",
+    "test": "node --test test/*.test.js",
+    "preview:dashboard": "node test/dashboard-demo-server.js"
   },
   "keywords": [
     "claude-code",
