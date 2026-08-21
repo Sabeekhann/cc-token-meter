@@ -16,7 +16,24 @@ function escapeRegex(value) {
 }
 
 function stripComments(value) {
-  return String(value || '').replace(/<!--[\s\S]*?-->/g, '').trim();
+  const source = String(value || '');
+  const visible = [];
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const start = source.indexOf('<!--', cursor);
+    if (start === -1) {
+      visible.push(source.slice(cursor));
+      break;
+    }
+
+    visible.push(source.slice(cursor, start));
+    const end = source.indexOf('-->', start + 4);
+    if (end === -1) break;
+    cursor = end + 3;
+  }
+
+  return visible.join('').trim();
 }
 
 function section(body, heading) {

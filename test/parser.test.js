@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { parseSessionFile } from '../src/ingest/parser.js';
 
@@ -78,6 +79,35 @@ test('supports incremental tailing via startOffset', async () => {
   const secondHalf = await parseSessionFile(filePath, { startOffset: firstHalf.newOffset });
   assert.equal(secondHalf.usageRecords.length, 0);
   assert.equal(secondHalf.newOffset, firstHalf.newOffset);
+});
+
+test('tracks exact byte offsets for CRLF-authored JSONL', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-crlf-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const filePath = path.join(dir, 'session.jsonl');
+  const source = fs.readFileSync(path.join(FIXTURES_DIR, 'simple-session.jsonl'), 'utf8');
+  const crlfSource = source.replace(/\r?\n/g, '\r\n');
+  fs.writeFileSync(filePath, crlfSource, 'utf8');
+
+  const first = await parseSessionFile(filePath);
+  assert.equal(first.usageRecords.length, 3);
+  assert.equal(first.newOffset, Buffer.byteLength(crlfSource, 'utf8'));
+
+  const second = await parseSessionFile(filePath, { startOffset: first.newOffset });
+  assert.equal(second.usageRecords.length, 0);
+  assert.equal(second.newOffset, first.newOffset);
+});
+
+test('consumes a valid final JSONL record without inventing a newline byte', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-no-eol-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const filePath = path.join(dir, 'session.jsonl');
+  const source = fs.readFileSync(path.join(FIXTURES_DIR, 'simple-session.jsonl'), 'utf8').trimEnd();
+  fs.writeFileSync(filePath, source, 'utf8');
+
+  const result = await parseSessionFile(filePath);
+  assert.equal(result.usageRecords.length, 3);
+  assert.equal(result.newOffset, Buffer.byteLength(source, 'utf8'));
 });
 
 test('handles multi-model session file correctly', async () => {

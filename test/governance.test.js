@@ -147,6 +147,10 @@ test('file and size labels are deterministic and project-specific', () => {
 
 test('governance extracts the final section and builds one stable bot comment', () => {
   assert.match(section('## Testing\n\nNot run: docs-only change.', 'Testing'), /docs-only/);
+  assert.equal(
+    section('## Description\nVisible<!-- hidden <!-- nested --> text', 'Description'),
+    'Visible text',
+  );
 
   const validation = { valid: false, errors: ['Add testing evidence.'], warnings: [] };
   const comment = buildComment({ validation, labels: ['status: needs author action'], draft: false, automation: false });

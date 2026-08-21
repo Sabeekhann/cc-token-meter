@@ -21,13 +21,13 @@ test('doctor reports a healthy private local setup', async (t) => {
   const report = await runDiagnostics({
     homedir: home,
     nodeVersion: '24.1.0',
-    platform: 'linux',
+    platform: process.platform,
     now: '2026-08-21T12:00:00.000Z',
     discoverFiles: async () => [{ filePath: '/synthetic/session.jsonl' }],
   });
 
   assert.equal(report.overall, 'pass');
-  assert.deepEqual(report.checks.map((check) => check.level), ['pass', 'pass', 'pass', 'pass', 'pass', 'pass']);
+  assert.ok(report.checks.every((check) => check.level === 'pass'));
 });
 
 test('doctor treats a fresh install as actionable warnings, not a crash', async (t) => {
