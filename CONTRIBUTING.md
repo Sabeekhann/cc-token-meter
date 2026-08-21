@@ -1,129 +1,295 @@
-# Contributing to cc-token-meter
+# Contributing to Claude Code Token Meter
 
-Thanks for considering a contribution. This project is intentionally small,
-dependency-light, and has no build step — please keep contributions in that
-spirit.
+Thank you for helping make Claude Code Token Meter more useful, trustworthy, and easy to use. Contributions are welcome from first-time contributors and experienced maintainers alike.
 
-## Philosophy
+This guide is the contract for changes in this repository. The short version is: keep the product **local-only**, protect user data, prefer focused changes, and include real evidence that the change works.
 
-- **No framework, no build step.** The CLI is plain Node.js (ESM), the
-  server is Node's built-in `http` module with a tiny manual router, and
-  the dashboard is vanilla HTML/CSS/JS served as static files. Please
-  don't introduce a bundler, a frontend framework, or a web framework
-  (Express, Fastify, etc.) — the route surface is intentionally tiny and
-  doesn't need one.
-- **Dependency-light.** Current runtime dependencies are `glob` (for
-  cross-Node-version-safe file globbing) and `open` (for cross-platform
-  browser launching). Think hard before adding a new one — if a feature
-  can be done in ~20 lines of vanilla Node, prefer that over a dependency.
-- **100% local, always.** This tool must never make an outbound network
-  call other than what's needed to serve its own local dashboard. Don't
-  add analytics, telemetry, or "phone home" update checks.
-- **Pure functions where possible.** `src/analytics/`, `src/heuristics/`, `src/pricing/`,
-  `src/budget/alerts.js`, and `src/ingest/aggregate.js` are all pure
-  functions with no I/O — this makes them trivially testable and easy to
-  reason about. New logic in these areas should follow the same pattern:
-  take plain data in, return plain data out, no `fs`/`http` calls inside.
+## Contents
 
-## Running tests
+- [Ways to contribute](#ways-to-contribute)
+- [Before you start](#before-you-start)
+- [Project principles](#project-principles)
+- [Development setup](#development-setup)
+- [Project structure](#project-structure)
+- [Making a change](#making-a-change)
+- [Contribution guides](#contribution-guides)
+- [Testing](#testing)
+- [Pull requests](#pull-requests)
+- [Privacy and security](#privacy-and-security)
+- [Review process](#review-process)
+
+## Ways to contribute
+
+Useful contributions include:
+
+- reproducible bug reports and focused fixes;
+- tests for uncovered parser, pricing, analytics, and heuristic behavior;
+- verified Anthropic pricing-table updates;
+- new evidence-backed waste-reduction heuristics;
+- accessibility, responsiveness, and dashboard usability improvements;
+- performance work for large transcript histories;
+- clearer documentation and examples;
+- security hardening that preserves the local-only architecture.
+
+If you are new to the project, a documentation fix, targeted regression test, or small UI accessibility improvement is a good place to begin.
+
+## Before you start
+
+Use this guide to avoid spending time on a change that does not fit the project.
+
+| Change | Start coding? |
+| --- | --- |
+| Typo or small documentation correction | Yes. |
+| Reproducible bug fix with a focused scope | Yes; link an issue when one exists. |
+| Regression or coverage test | Yes. |
+| Verified update to existing pricing data | Yes; cite the official source in the PR. |
+| New heuristic or substantial UI behavior | Open a feature issue first. |
+| New dependency, architecture change, data-retention change, or workflow permission change | Get maintainer agreement in an issue before implementation. |
+
+Search [existing issues](https://github.com/Sabeekhann/cc-token-meter/issues) before opening a new one. For substantial work, describe the user problem, proposed behavior, privacy impact, alternatives, and testing plan.
+
+## Project principles
+
+Every contribution must preserve these boundaries:
+
+### Local and private
+
+- Never upload transcripts, prompts, tool output, project paths, or usage data.
+- Never add telemetry, analytics, remote fonts, CDN assets, update checks, or a cloud dependency.
+- Keep the dashboard bound to loopback (`127.0.0.1`) only.
+- Treat Claude Code transcript files as read-only.
+
+### Small and dependency-light
+
+- The CLI uses plain Node.js ESM.
+- The server uses Node's built-in `http` module and a small router.
+- The dashboard is vanilla HTML, CSS, and JavaScript with no build step.
+- Do not add a frontend framework, bundler, or server framework.
+- Propose any new runtime dependency before adding it. Prefer a clear small implementation using the platform.
+
+### Pure logic where possible
+
+Code in `src/analytics/`, `src/heuristics/`, `src/pricing/`, `src/budget/alerts.js`, and `src/ingest/aggregate.js` should remain deterministic and free of I/O. Pass plain data in and return plain data out.
+
+### Evidence over claims
+
+- Add regression tests for bugs.
+- Add true-positive and true-negative tests for heuristics.
+- Use synthetic data in tests, screenshots, and PR evidence.
+- Do not mark a check complete unless you actually ran it.
+
+## Development setup
+
+Requirements:
+
+- Node.js 20 or newer;
+- npm;
+- Git.
 
 ```bash
+git clone https://github.com/Sabeekhann/cc-token-meter.git
+cd cc-token-meter
 npm ci
 npm run ci
 ```
 
-`npm run ci` runs `npm run check` followed by `npm test`. The policy command
-checks every JavaScript file for syntax errors and protects the project's
-local-only, loopback, pure-module, and dependency-light boundaries. Run the
-full command before requesting review.
+Run the synthetic dashboard during UI work:
 
-Tests use Node's built-in `node:test` + `node:assert` — no test framework
-dependency. Fixtures live in `test/fixtures/*.jsonl` and are hand-written
-to exercise specific parser/heuristic behaviors (malformed lines, partial
-trailing writes, multi-model sessions, etc.) — see the comments at the top
-of each fixture-consuming test file for what each fixture is meant to
-cover.
+```bash
+npm run preview:dashboard
+```
 
-## Updating pricing (`src/pricing/models.js`)
+Then open `http://127.0.0.1:4318`. The preview does not read your personal Claude Code history.
 
-This is the most likely contribution, since Anthropic updates model
-pricing periodically. To update:
+To exercise the CLI against your own local data:
 
-1. Verify the new pricing at
-   https://platform.claude.com/docs/en/about-claude/pricing — don't trust
-   third-party summaries.
-2. If a price change for an *existing* model is confirmed on the official
-   pricing page with a known effective date, don't just overwrite the row —
-   add a **new row** with the new price and an `effectiveFrom` date, and set
-   the old row's `effectiveUntil` to that same date. This preserves accurate
-   historical cost calculations. Do not encode announced future pricing
-   blindly: Anthropic cancelled Sonnet 5's previously planned 2026-09-01
-   increase and made its launch rate permanent.
-3. Cache pricing is derived from the base input rate via fixed
-   multipliers (`CACHE_WRITE_5M_MULTIPLIER`, `CACHE_WRITE_1H_MULTIPLIER`,
-   `CACHE_READ_MULTIPLIER`) rather than hardcoded per row. Only add a
-   per-row override if you confirm a specific model actually breaks this
-   pattern (none currently do).
-4. Model matching is by **substring**, not exact string equality (real
-   model id strings carry dates/minor versions that change over time).
-   Keep `matchSubstrings` specific enough to avoid collisions with other
-   rows (e.g. `'opus-4.5'` not just `'opus-4'` if there's also an
-   `'opus-4.1'` row).
-5. Update `test/cost.test.js` only if you're testing new *logic* (e.g. a
-   new multiplier rule) — the existing tests intentionally use a
-   fake/injected pricing table with round numbers so they don't need to
-   change when real prices change. Don't hardcode real dollar amounts into
-   test assertions.
-6. Bump the "current as of" date in the comment at the top of
-   `src/pricing/models.js`.
+```bash
+node bin/cc-token-meter.js --doctor
+node bin/cc-token-meter.js --summary
+node bin/cc-token-meter.js --json
+```
 
-## Adding a new heuristic
+Do not paste real transcript content into issues, tests, or pull requests.
 
-Heuristics live in `src/heuristics/`, one pure function per file, following
-this signature:
+## Project structure
+
+| Path | Responsibility |
+| --- | --- |
+| `bin/` | CLI entry point and argument handling. |
+| `src/ingest/` | Transcript discovery, streaming parsing, aggregation, and private index management. |
+| `src/pricing/` | Date-aware model matching and estimated-cost calculation. |
+| `src/analytics/` | Usage, activity, cache, project, and forecast intelligence. |
+| `src/heuristics/` | Independent evidence-backed recommendation rules. |
+| `src/budget/` | Budget configuration and alerts. |
+| `src/server/` | Loopback HTTP API, SSE updates, and static dashboard serving. |
+| `public/` | Framework-free dashboard HTML, CSS, and JavaScript. |
+| `test/` | Node test suites and synthetic fixtures. |
+| `.github/` | Issue forms, PR template, policy scripts, and automation. |
+| `docs/` | Product, UI, and CI documentation and project assets. |
+
+## Making a change
+
+1. Fork the repository and create a focused branch from the latest `main`.
+2. Use a descriptive branch name such as `fix/parser-trailing-line`, `feat/cache-insight`, or `docs/quick-start`.
+3. Keep the diff limited to one problem or feature.
+4. Add or update tests and documentation with the code.
+5. Run the relevant checks locally.
+6. Review the complete diff for sensitive data and unrelated files.
+7. Open a draft pull request early for substantial work; mark it ready only when the evidence is complete.
+
+## Contribution guides
+
+### Fixing a bug
+
+- Start with the smallest synthetic reproduction.
+- Add a regression test that fails before the fix.
+- Correct the root cause without weakening privacy or policy checks.
+- Describe the previous behavior, expected behavior, and observed result in the PR.
+
+### Updating pricing
+
+Pricing lives in `src/pricing/models.js`.
+
+1. Verify the change in [Anthropic's official pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing). Do not rely on third-party summaries.
+2. Preserve historical accuracy. For a dated change to an existing model, add a new row with `effectiveFrom` and close the old row with the matching `effectiveUntil` instead of overwriting history.
+3. Keep `matchSubstrings` specific enough to avoid collisions between model families and versions.
+4. Use the existing cache-price multipliers unless the official source confirms a model-specific exception.
+5. Update the pricing table's “current as of” comment.
+6. Include the official source URL and verification date in the PR.
+
+Real pricing values do not belong in unit assertions. Pricing-logic tests use injected round-number tables so official price changes do not create unrelated failures.
+
+### Adding a heuristic
+
+Each heuristic is an independent pure function in `src/heuristics/`:
 
 ```js
 export function myHeuristic(sessionRecord, toolEvents, allSessionsHistory) {
-  // return an array of Tip objects, or [] if nothing to flag
   return [];
 }
 ```
 
-where a `Tip` is `{ id, sessionId, severity, message }`. Steps to add one:
+The result is an array of tip objects shaped like `{ id, sessionId, severity, message }`.
 
-1. Create `src/heuristics/myHeuristic.js` with a pure function — no `fs`,
-   no `http`, just take the session/tool-event data already assembled by
-   `src/ingest/store.js` and return tips.
-2. Register it in `src/heuristics/index.js`'s `runHeuristics()` alongside
-   the existing five.
-3. Add a fixture-based test in `test/heuristics.test.js` with **at least
-   one true-positive and one true-negative case** — synthetic tool-event
-   or usage-record sequences are usually enough; you generally don't need
-   a new `.jsonl` fixture file unless you're testing something about raw
-   line parsing specifically.
-4. Keep the message template plain-language and actionable — say what
-   happened, with real numbers, and suggest one concrete thing to try.
+1. Add one focused heuristic file with no file-system or network I/O.
+2. Register it in `src/heuristics/index.js`.
+3. Add at least one true-positive and one true-negative case in `test/heuristics.test.js`.
+4. Use an ID that is stable and deterministic.
+5. Make the message plain-language, numerical where useful, and actionable.
+6. Explain false-positive risks and thresholds in the PR.
 
-## Code style
+### Changing the dashboard
 
-- ESM (`"type": "module"` in `package.json`) — use `import`/`export`, not
-  `require`.
-- No TypeScript, no JSDoc-to-types build step — plain JSDoc comments for
-  documentation purposes only are welcome and encouraged, especially on
-  exported functions.
-- Prefer explicit, readable code over cleverness — this is a small,
-  single-maintainer-friendly codebase.
+- Preserve the no-build-step, vanilla HTML/CSS/JavaScript architecture.
+- Test with `npm run preview:dashboard`, which uses synthetic data.
+- Keep every workflow usable with a keyboard and visible focus styles.
+- Use semantic HTML, useful labels, sufficient contrast, and reduced-motion support where animation exists.
+- Check narrow and wide layouts.
+- Avoid remote fonts, images, scripts, CSS, analytics, and network requests.
+- Update `docs/UI_PLAN.md` when navigation, information architecture, or product behavior changes.
+
+### Changing ingestion or the private index
+
+- Continue streaming JSONL input; do not load large histories fully into memory.
+- Tolerate malformed lines and incomplete trailing writes from active sessions.
+- Keep transcript access read-only.
+- Treat index-schema changes as migrations: bump the version or provide an explicit compatibility path.
+- Never store prompt text or tool-result content in the index.
+- Test cold scans, warm restores, changed-file tails, truncation, and corruption recovery when applicable.
+
+### Changing GitHub automation
+
+- Use least-privilege workflow permissions.
+- Pin third-party actions to immutable commit SHAs when required by project policy.
+- Do not expose secrets to fork-authored code.
+- Keep checks specific to this repository and document user-visible behavior in `docs/CI.md`.
+- Test workflow scripts directly where possible before relying on a hosted run.
+
+## Testing
+
+The project uses Node's built-in `node:test` and `node:assert`.
+
+Run the complete local gate:
+
+```bash
+npm run ci
+```
+
+Useful focused checks:
+
+```bash
+npm run check
+npm test
+node --test test/parser.test.js
+node bin/cc-token-meter.js --doctor
+npm run preview:dashboard
+```
+
+`npm run check` protects syntax, the dependency footprint, pure analytics boundaries, loopback-only serving, browser security headers, and the no-remote-assets/no-remote-requests promise.
+
+For tests and fixtures:
+
+- use synthetic values and paths;
+- cover edge cases as well as the happy path;
+- keep time-dependent tests deterministic;
+- avoid platform-specific path assumptions unless the test covers them explicitly;
+- never commit raw personal Claude Code transcripts.
 
 ## Pull requests
 
-- Use a Conventional Commit PR title such as
-  `feat(dashboard): add cache health detail` or
-  `fix(ingest): rebuild a truncated session`.
-- Fill in the pull request template with the problem, concrete changes, and
-  real testing evidence. Draft PRs may leave the two Review Readiness boxes
-  unchecked; check them before requesting human review.
-- Never attach raw Claude Code transcripts, prompts, tool results, API keys,
-  or private project paths to an issue or PR. Use synthetic fixtures or
-  carefully redacted evidence.
-- The PR Governance workflow applies area, size, and readiness labels and
-  updates one bot comment. See `docs/CI.md` for all automated checks.
+Use a Conventional Commit title, for example:
+
+- `feat(dashboard): add cache health details`
+- `fix(ingest): rebuild a truncated session`
+- `docs(contributing): clarify pricing verification`
+- `test(heuristics): cover repeated-read threshold`
+
+Complete the pull request template with:
+
+- the problem and why it matters;
+- the exact changes;
+- related issue(s);
+- real commands and output from testing;
+- runtime or UI proof where applicable;
+- privacy, rollout, and rollback considerations;
+- any checklist item that is intentionally not applicable.
+
+Draft pull requests may leave the Review Readiness boxes unchecked. Before requesting human review:
+
+- perform a self-review;
+- remove debugging code and unrelated changes;
+- confirm the branch contains no sensitive data;
+- run `npm run ci`;
+- check **This PR is ready for human review** in the PR body.
+
+## Privacy and security
+
+Never submit any of the following in a public issue, pull request, fixture, screenshot, or CI log:
+
+- raw Claude Code transcripts;
+- prompts or model responses;
+- tool inputs or outputs;
+- API keys, tokens, cookies, credentials, or environment dumps;
+- private repository names, file paths, branch names, or client data.
+
+Use synthetic replacements such as `/Users/example/projects/demo-app`, `feature/example`, and clearly fake token counts. If a screenshot is necessary, use the synthetic preview and inspect every visible field before uploading it.
+
+If a proposed feature needs outbound networking, telemetry, transcript mutation, or remote storage, it does not fit the current product architecture and requires an explicit public design decision before code is written.
+
+## Review process
+
+Automated checks validate product policy, tests, packaging, PR metadata, security, and merge safety. The workflows can label a PR and leave guidance, but they do not replace human review.
+
+Maintainers review for:
+
+- correctness and regression coverage;
+- privacy and local-only guarantees;
+- usability and accessibility;
+- performance on large histories;
+- dependency and maintenance cost;
+- documentation accuracy;
+- focused scope and a safe rollback path.
+
+Reviews may request changes. Address each thread with a code change, evidence, or a concise technical explanation. Once checks pass and feedback is resolved, a maintainer decides whether and when to merge.
+
+Thank you for contributing responsibly.
