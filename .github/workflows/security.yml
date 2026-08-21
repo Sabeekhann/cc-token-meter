@@ -3,8 +3,6 @@ name: Security
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
@@ -74,11 +72,5 @@ jobs:
           sudo install /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version
       - name: Scan commits for credentials
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [ -n "$BASE_SHA" ]; then
-            gitleaks git --redact --no-banner --log-opts="${BASE_SHA}..HEAD" .
-          else
-            gitleaks git --redact --no-banner .
-          fi
+          gitleaks git --redact --no-banner .

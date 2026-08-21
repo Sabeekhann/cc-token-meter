@@ -278,7 +278,13 @@ If a proposed feature needs outbound networking, telemetry, transcript mutation,
 
 ## Review process
 
-Automated checks validate product policy, tests, packaging, PR metadata, security, and merge safety. The workflows can label a PR and leave guidance, but they do not replace human review.
+Every pull request receives one required CI result covering product policy,
+tests, production dependency audit, packaging, CLI smoke behavior, and merge
+markers. PR Governance separately validates metadata and maintains labels.
+Cross-platform compatibility, CodeQL, and full secret scanning run after merge,
+on schedule, or manually so contributor feedback stays fast. The optional AI
+architecture review runs only when a maintainer applies the `ai-review` label.
+These workflows do not replace human review.
 
 Maintainers review for:
 
@@ -290,6 +296,9 @@ Maintainers review for:
 - documentation accuracy;
 - focused scope and a safe rollback path.
 
-Reviews may request changes. Address each thread with a code change, evidence, or a concise technical explanation. Once checks pass and feedback is resolved, a maintainer decides whether and when to merge.
+Reviews may request changes. Address each thread with a code change, evidence,
+or a concise technical explanation. `main` is maintainer-owned through
+`.github/CODEOWNERS`; once checks pass and feedback is resolved, only a
+maintainer decides whether and when to merge.
 
 Thank you for contributing responsibly.

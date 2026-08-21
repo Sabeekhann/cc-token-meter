@@ -2,7 +2,7 @@ name: Sabee's Bot
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled]
     branches: [main]
 
 permissions:
@@ -14,11 +14,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Same-repo PRs: no fork, so pull_request_target carries no extra risk
-  # (head branch is already trusted, same as pull_request would have been).
-  # Runs immediately, no manual gate.
+  # AI review is opt-in to keep normal pull requests fast and inexpensive.
+  # A maintainer starts it by applying the `ai-review` label.
   review-internal:
-    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.label.name == 'ai-review' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -130,7 +129,7 @@ jobs:
   # runs. No fork code executes (no npm ci/install/test/scripts); the Claude
   # step only reads files as text for review, never executes them.
   review-fork:
-    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name != github.repository
+    if: github.event.label.name == 'ai-review' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: external-pr-review

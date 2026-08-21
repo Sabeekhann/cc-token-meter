@@ -118,10 +118,12 @@ and offline run are covered by automated checks.
   Projects, Insights, and Settings views, including project search, filters,
   session navigation, local budget saving, responsive layouts, and explicit
   loading/empty/connection states.
-- Phase 5 now has product-specific CI policy enforcement, Node 20/22/24 and
-  Linux/macOS/Windows test coverage, package validation, PR governance,
-  dependency/security scans, merge-marker protection, issue/PR templates, and
-  Dependabot maintenance. It also includes `doctor`, inclusive date/project
+- Phase 5 now has a single required PR gate for product policy, tests,
+  dependency audit, package validation, CLI smoke behavior, and merge-marker
+  protection. Node 20/22/24 and Linux/macOS/Windows compatibility checks run
+  after merge or manually; CodeQL and secret scans run on `main`, weekly, or
+  manually. It also includes PR governance, maintainer ownership, issue/PR
+  templates, Dependabot maintenance, `doctor`, inclusive date/project
   filters, pricing-freshness diagnostics, a compact terminal summary,
   machine-readable JSON diagnostics, and private CSV exports grouped by day,
   project, branch, or session.

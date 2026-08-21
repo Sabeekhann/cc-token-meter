@@ -177,12 +177,14 @@ npm run preview:dashboard
 
 The repository also includes:
 
-- multi-platform CI on supported Node versions;
+- one fast required PR gate for policy, tests, audit, packaging, CLI smoke
+  checks, and conflict markers;
+- multi-platform compatibility checks after merge and on manual runs;
 - Conventional Commit PR-title and template checks;
 - automated area, size, and readiness labels;
-- dependency auditing, CodeQL, and secret scanning;
-- conflict-marker detection and Dependabot updates;
-- an optional narrow AI architecture review after a PR leaves draft status.
+- scheduled/main-branch CodeQL and secret scanning;
+- Dependabot updates and repository-wide maintainer ownership;
+- an optional narrow AI architecture review started with the `ai-review` label.
 
 See [`docs/CI.md`](docs/CI.md) for the exact checks and permissions.
 

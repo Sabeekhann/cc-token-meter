@@ -15,10 +15,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  project-policy:
-    name: Project policy
+  required:
+    name: Required
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,60 +32,21 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Enforce local-only architecture and syntax
         run: npm run check
-      - name: Verify publishable package contents
-        run: npm pack --dry-run
-
-  test:
-    name: Tests (${{ matrix.os }}, Node ${{ matrix.node-version }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            node-version: 20.x
-          - os: ubuntu-latest
-            node-version: 22.x
-          - os: ubuntu-latest
-            node-version: 24.x
-          - os: macos-latest
-            node-version: 24.x
-          - os: windows-latest
-            node-version: 24.x
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-          package-manager-cache: true
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts
       - name: Run unit and contract tests
         run: npm test
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Verify publishable package contents
+        run: npm pack --dry-run
       - name: Smoke-test CLI entry points
         run: |
           node bin/cc-token-meter.js --help
           node bin/cc-token-meter.js --version
           node bin/cc-token-meter.js --summary --no-cache
-
-  required:
-    name: Required CI
-    if: ${{ always() }}
-    needs: [project-policy, test]
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - name: Verify required jobs
-        env:
-          POLICY_RESULT: ${{ needs.project-policy.result }}
-          TEST_RESULT: ${{ needs.test.result }}
+      - name: Reject unresolved merge-conflict markers
         run: |
-          if [ "$POLICY_RESULT" != "success" ] || [ "$TEST_RESULT" != "success" ]; then
-            echo "::error::Required CI did not pass (policy=${POLICY_RESULT}, tests=${TEST_RESULT})."
+          if git grep -nI -E '^(<{7}|>{7}|\|{7})( |$)|^={7}$' -- .; then
+            echo "::error::Unresolved Git merge-conflict markers were committed."
             exit 1
           fi
-          echo "All required CI jobs passed."
+          echo "No unresolved merge-conflict markers found."
