@@ -1,0 +1,4 @@
+# The maintainer owns every path. Combined with a protected `main` branch and
+# required Code Owner approval, contributor pull requests cannot merge without
+# maintainer review.
+* @Sabeekhann

@@ -10,11 +10,11 @@ that do not fit this small Node.js CLI.
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| CI | PRs, pushes to `main`, manual | Project policy, package dry-run, Node 20/22/24 tests on Linux, plus Node 24 tests on macOS and Windows |
+| CI / Required | PRs, pushes to `main`, manual | One Ubuntu/Node 24 gate: project policy, tests, production audit, package dry-run, CLI smoke tests, and conflict-marker detection |
+| Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it has no pull-request trigger |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
-| Security | PRs, pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and gitleaks |
-| Merge Conflicts | PRs and pushes to `main` | Reject committed conflict markers even in docs-only changes |
-| Sabee's Bot | Non-draft PRs | Narrow AI review for architecture and repository-boundary violations |
+| Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
+| Sabee's Bot | Non-draft PRs labeled `ai-review` | Opt-in AI review for architecture and repository-boundary violations |
 | Dependabot | Weekly | npm and GitHub Actions update PRs |
 
 Verified GitHub-maintained actions are pinned to immutable release commit
@@ -51,9 +51,9 @@ ANTHROPIC_API_KEY
 ```
 
 Only `sabees-bot-review.yml` uses this secret. All CI, governance, dependency,
-and security checks work without it. The AI workflow starts only after a PR is
-not a draft, which avoids spending review tokens on incomplete pushes.
-Each review is capped at eight turns and an estimated USD 2 client-side budget.
+and security checks work without it. The AI workflow starts only when a
+maintainer applies the `ai-review` label to a non-draft PR. Each review is
+capped at eight turns and a USD 2 client-side budget.
 
 ### 3. Fork-review environment
 
@@ -75,29 +75,43 @@ uses GitHub API metadata for the PR title, body, and changed-file list.
 
 ### 4. Branch protection
 
-Protect `main`, require a pull request, and require these stable checks:
+`.github/CODEOWNERS` assigns the entire repository to `@Sabeekhann`. The file
+requests the right reviewer, but GitHub does not enforce that ownership until
+`main` has a protection rule or branch ruleset with code-owner review enabled.
+
+In **Settings → Rules → Rulesets**, create an active branch ruleset targeting
+the default branch. Configure it as follows:
+
+- require a pull request before merging;
+- require one approval and approval from Code Owners;
+- dismiss stale approvals when new commits are pushed;
+- require all review conversations to be resolved;
+- require the single stable status check below;
+- block force pushes and branch deletion;
+- do not grant write access to contributors who should not be able to merge.
 
 ```text
-CI / Required CI
-Merge Conflicts / Merge conflict markers
-PR Governance / Template and labels
-Security / Dependency audit
-Security / Secret scan (gitleaks)
+CI / Required
 ```
 
-Also require CodeQL if code scanning is enabled for the repository. Keep
-Sabee's Bot advisory: fork reviews intentionally wait for environment approval,
-and an unavailable Anthropic API should not block a safe human-reviewed fix.
+Keep PR Governance and Sabee's Bot advisory. Security and compatibility checks
+run outside the pull-request path, so they cannot leave contributor PRs waiting
+on macOS, Windows, CodeQL, gitleaks downloads, or AI service availability.
+
+For this personal-account repository, collaborators have write access and can
+merge pull requests. To make merging maintainer-only, keep the collaborator
+list limited to people who are maintainers; outside contributors can submit
+fork pull requests without collaborator access. Repository settings—not a
+workflow file—are the enforcement boundary for merge permission.
 
 ### 5. Recommended GitHub settings
 
 - Enable private vulnerability reporting and Dependabot alerts.
 - Enable secret scanning and push protection when available.
-- Require conversations to be resolved before merge.
 - Prefer squash merge so the Conventional Commit PR title becomes the clean
   commit/release-history entry.
-- Do not enable automatic Dependabot merging until branch protection and the
-  security checks have demonstrated stable behavior.
+- Leave automatic Dependabot merging disabled; the maintainer reviews and
+  merges dependency changes.
 
 ## Project policy gate
 
@@ -134,3 +148,12 @@ tests
 It never removes unrelated maintainer labels. Its comment includes a stable
 HTML marker, so edits update one existing comment instead of creating bot
 noise on every push.
+
+## Why the PR path stays small
+
+The required job intentionally runs on one Linux runner. It covers behavior,
+policy, package contents, the two production dependencies, command entry
+points, and committed conflict markers in one result. The slower platform and
+security jobs still run on every update to `main`, and can be started manually
+before a high-risk merge. This keeps the normal contributor loop short without
+removing post-merge compatibility or scheduled security coverage.
