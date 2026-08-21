@@ -14,7 +14,6 @@ that do not fit this small Node.js CLI.
 | Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it has no pull-request trigger |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
-| Sabee's Bot | Non-draft PRs labeled `ai-review` | Opt-in AI review for architecture and repository-boundary violations |
 | Dependabot | Weekly | npm and GitHub Actions update PRs |
 
 Verified GitHub-maintained actions are pinned to immutable release commit
@@ -38,42 +37,12 @@ npm pack --dry-run
 In **Settings → Actions → General → Workflow permissions**, allow read and
 write permissions. The workflow files still declare least-privilege job
 permissions; this repository setting only lets PR Governance create labels and
-maintain its single comment. Also enable **Allow GitHub Actions to create and
-approve pull requests** if Sabee's Bot should submit formal approve/request-
-changes verdicts instead of only its inline review comments.
+maintain its single comment.
 
-### 2. AI reviewer secret
-
-In **Settings → Secrets and variables → Actions**, add:
-
-```text
-ANTHROPIC_API_KEY
-```
-
-Only `sabees-bot-review.yml` uses this secret. All CI, governance, dependency,
-and security checks work without it. The AI workflow starts only when a
-maintainer applies the `ai-review` label to a non-draft PR. Each review is
-capped at eight turns and a USD 2 client-side budget.
-
-### 3. Fork-review environment
-
-Create an environment named exactly:
-
-```text
-external-pr-review
-```
-
-Add the maintainer as a required reviewer. Fork PR code is never executed by
-the AI job: after manual approval, checkout reads the fork at a fixed commit,
-the Claude action reviews it as text, and the only allowed repository write is
-the review verdict file. Claude runs in bare mode with Bash, project hooks,
-plugins, MCP servers, skills, and project instructions disabled. No `npm
-install`, tests, or repository scripts run in that privileged job.
-
-PR Governance is safer still: it checks out only the trusted base commit and
+PR Governance checks out only the trusted base commit and
 uses GitHub API metadata for the PR title, body, and changed-file list.
 
-### 4. Branch protection
+### 2. Branch protection
 
 `.github/CODEOWNERS` assigns the entire repository to `@Sabeekhann`. The file
 requests the right reviewer, but GitHub does not enforce that ownership until
@@ -94,9 +63,9 @@ the default branch. Configure it as follows:
 CI / Required
 ```
 
-Keep PR Governance and Sabee's Bot advisory. Security and compatibility checks
-run outside the pull-request path, so they cannot leave contributor PRs waiting
-on macOS, Windows, CodeQL, gitleaks downloads, or AI service availability.
+Keep PR Governance advisory. Security and compatibility checks run outside the
+pull-request path, so they cannot leave contributor PRs waiting on macOS,
+Windows, CodeQL, or gitleaks downloads.
 
 For this personal-account repository, collaborators have write access and can
 merge pull requests. To make merging maintainer-only, keep the collaborator
@@ -104,7 +73,7 @@ list limited to people who are maintainers; outside contributors can submit
 fork pull requests without collaborator access. Repository settings—not a
 workflow file—are the enforcement boundary for merge permission.
 
-### 5. Recommended GitHub settings
+### 3. Recommended GitHub settings
 
 - Enable private vulnerability reporting and Dependabot alerts.
 - Enable secret scanning and push protection when available.

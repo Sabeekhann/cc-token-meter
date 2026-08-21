@@ -86,7 +86,6 @@ jobs:
               'status: automation': ['ededed', 'Pull request was opened by an automation account'],
               'status: needs author action': ['d93f0b', 'PR metadata or readiness needs author updates'],
               'status: ready for review': ['0e8a16', 'PR metadata is complete and ready for human review'],
-              'ai-review': ['5319e7', "Run Sabee's optional AI architecture review"],
             };
 
             for (const [name, [color, description]] of Object.entries(labelDefinitions)) {

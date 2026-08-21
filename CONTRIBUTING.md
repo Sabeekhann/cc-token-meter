@@ -282,9 +282,8 @@ Every pull request receives one required CI result covering product policy,
 tests, production dependency audit, packaging, CLI smoke behavior, and merge
 markers. PR Governance separately validates metadata and maintains labels.
 Cross-platform compatibility, CodeQL, and full secret scanning run after merge,
-on schedule, or manually so contributor feedback stays fast. The optional AI
-architecture review runs only when a maintainer applies the `ai-review` label.
-These workflows do not replace human review.
+on schedule, or manually so contributor feedback stays fast. These workflows
+do not replace human review.
 
 Maintainers review for:
 

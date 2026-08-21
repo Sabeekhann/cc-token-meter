@@ -183,8 +183,7 @@ The repository also includes:
 - Conventional Commit PR-title and template checks;
 - automated area, size, and readiness labels;
 - scheduled/main-branch CodeQL and secret scanning;
-- Dependabot updates and repository-wide maintainer ownership;
-- an optional narrow AI architecture review started with the `ai-review` label.
+- Dependabot updates and repository-wide maintainer ownership.
 
 See [`docs/CI.md`](docs/CI.md) for the exact checks and permissions.
 
