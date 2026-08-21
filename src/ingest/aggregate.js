@@ -64,31 +64,111 @@ export function aggregateByBranch(sessions) {
   const byBranch = new Map();
 
   for (const s of sessions) {
-    const branch = s.gitBranch || '(no branch)';
-    let bucket = byBranch.get(branch);
-    if (!bucket) {
-      bucket = {
-        branch,
-        sessions: [],
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheCreationInputTokens: 0,
-        cacheReadInputTokens: 0,
-        costUsd: 0,
-        tokenTotal: 0,
-      };
-      byBranch.set(branch, bucket);
+    const records = Array.isArray(s.usageRecords) ? s.usageRecords : [];
+
+    if (records.length === 0) {
+      addSessionToBranch(byBranch, s.gitBranch || '(no branch)', s);
+      continue;
     }
-    bucket.sessions.push(s);
-    bucket.inputTokens += s.inputTokens || 0;
-    bucket.outputTokens += s.outputTokens || 0;
-    bucket.cacheCreationInputTokens += s.cacheCreationInputTokens || 0;
-    bucket.cacheReadInputTokens += s.cacheReadInputTokens || 0;
-    bucket.costUsd += s.costUsd || 0;
-    bucket.tokenTotal += tokenTotal(s);
+
+    // Claude Code records gitBranch on every assistant message. Attribute
+    // each message to its own branch so sessions that switch branches are
+    // no longer charged entirely to the last branch seen in the session.
+    const sessionTokenTotal = records.reduce((sum, record) => sum + tokenTotal(record), 0);
+    const partials = new Map();
+
+    for (const record of records) {
+      const branch = record.gitBranch || s.gitBranch || '(no branch)';
+      let partial = partials.get(branch);
+      if (!partial) {
+        partial = emptySessionProjection(s);
+        partial.gitBranch = branch === '(no branch)' ? null : branch;
+        partials.set(branch, partial);
+      }
+
+      addRecordToProjection(partial, record, s, sessionTokenTotal);
+    }
+
+    for (const [branch, partial] of partials.entries()) {
+      addSessionToBranch(byBranch, branch, partial);
+    }
   }
 
   return Array.from(byBranch.values()).sort((a, b) => b.tokenTotal - a.tokenTotal);
+}
+
+function ensureBranchBucket(byBranch, branch) {
+  let bucket = byBranch.get(branch);
+  if (!bucket) {
+    bucket = {
+      branch,
+      sessions: [],
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+      costUsd: 0,
+      tokenTotal: 0,
+    };
+    byBranch.set(branch, bucket);
+  }
+  return bucket;
+}
+
+function addSessionToBranch(byBranch, branch, session) {
+  const bucket = ensureBranchBucket(byBranch, branch);
+  bucket.sessions.push(session);
+  bucket.inputTokens += session.inputTokens || 0;
+  bucket.outputTokens += session.outputTokens || 0;
+  bucket.cacheCreationInputTokens += session.cacheCreationInputTokens || 0;
+  bucket.cacheReadInputTokens += session.cacheReadInputTokens || 0;
+  bucket.costUsd += session.costUsd || 0;
+  bucket.tokenTotal += tokenTotal(session);
+}
+
+function emptySessionProjection(session) {
+  return {
+    sessionId: session.sessionId,
+    projectCwd: session.projectCwd,
+    projectDirNameFallback: session.projectDirNameFallback,
+    firstTimestamp: null,
+    lastTimestamp: null,
+    messageCount: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+    costUsd: 0,
+    estimatedCostUsed: false,
+  };
+}
+
+function addRecordToProjection(projection, record, session, sessionTokenTotal) {
+  projection.messageCount += 1;
+  projection.inputTokens += record.inputTokens || 0;
+  projection.outputTokens += record.outputTokens || 0;
+  projection.cacheCreationInputTokens += record.cacheCreationInputTokens || 0;
+  projection.cacheReadInputTokens += record.cacheReadInputTokens || 0;
+  projection.estimatedCostUsed ||= record.estimatedCostUsed === true;
+
+  if (record.timestamp) {
+    if (!projection.firstTimestamp || record.timestamp < projection.firstTimestamp) {
+      projection.firstTimestamp = record.timestamp;
+    }
+    if (!projection.lastTimestamp || record.timestamp > projection.lastTimestamp) {
+      projection.lastTimestamp = record.timestamp;
+    }
+  }
+
+  if (Number.isFinite(record.costUsd)) {
+    projection.costUsd += record.costUsd;
+  } else {
+    // Compatibility path for callers/tests that construct older records
+    // without per-message cost. Weight by tokens rather than message count,
+    // which is a closer approximation for single-model sessions.
+    const share = sessionTokenTotal > 0 ? tokenTotal(record) / sessionTokenTotal : 0;
+    projection.costUsd += (session.costUsd || 0) * share;
+  }
 }
 
 /**
@@ -150,11 +230,14 @@ export function aggregateByDay(sessions) {
         bucket.cacheReadInputTokens += record.cacheReadInputTokens || 0;
         bucket.tokenTotal += tokenTotal(record);
         bucket.messageCount += 1;
-        // Cost per-message isn't stored on the record itself in the store,
-        // so approximate proportionally: session cost / session message
-        // count. This keeps day totals consistent with session totals.
-        const perMessageCost = s.messageCount > 0 ? s.costUsd / s.messageCount : 0;
-        bucket.costUsd += perMessageCost;
+        if (Number.isFinite(record.costUsd)) {
+          bucket.costUsd += record.costUsd;
+        } else {
+          // Compatibility path for snapshots produced before per-message
+          // cost was added. New store records always take the exact path.
+          const perMessageCost = s.messageCount > 0 ? s.costUsd / s.messageCount : 0;
+          bucket.costUsd += perMessageCost;
+        }
       }
     } else if (s.lastTimestamp) {
       const date = localDateKey(s.lastTimestamp);
@@ -300,6 +383,9 @@ export function buildTimeline(session) {
     outputTokens: r.outputTokens || 0,
     cacheCreationInputTokens: r.cacheCreationInputTokens || 0,
     cacheReadInputTokens: r.cacheReadInputTokens || 0,
+    costUsd: Number.isFinite(r.costUsd) ? r.costUsd : null,
+    estimatedCostUsed: r.estimatedCostUsed === true,
+    gitBranch: r.gitBranch ?? null,
     tokenTotal: tokenTotal(r),
   }));
 

@@ -1,0 +1,55 @@
+name: Feature request
+description: Propose a focused improvement to local usage intelligence.
+title: 'feat: '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or decision this should improve
+      description: Explain the job a user cannot do well today.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the useful answer or action, not only a UI component.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and example
+      description: Include a synthetic example that shows why this matters.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Overview
+        - Live Session
+        - Projects
+        - Insights
+        - Settings
+        - CLI or export
+        - Ingestion or pricing
+        - Developer workflow
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Local-only and privacy considerations
+      description: Explain how this can work without telemetry or outbound data.
+    validations:
+      required: true
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Product principles
+      options:
+        - label: This can remain local-only and read-only toward Claude Code transcripts.
+          required: true
+        - label: This produces a concrete user decision or action, not only another metric.
+          required: true

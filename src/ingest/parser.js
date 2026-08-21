@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import readline from 'node:readline';
 
 const TOOL_NAMES_WITH_FILE_PATH = new Set(['Read', 'Edit', 'Write', 'MultiEdit']);
 
@@ -44,72 +43,54 @@ export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
     return { usageRecords, toolUseEvents, toolResultEvents, newOffset: startOffset };
   }
 
-  const stream = fs.createReadStream(filePath, {
-    start: effectiveStartOffset,
-    encoding: 'utf8',
-  });
-
-  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-
+  const stream = fs.createReadStream(filePath, { start: effectiveStartOffset });
   let offset = effectiveStartOffset;
-  let pendingLineBytes = 0; // bytes (incl. newline) of the line currently being processed
-  let sawTrailingIncomplete = false;
+  let pending = Buffer.alloc(0);
+  const events = { usageRecords, toolUseEvents, toolResultEvents };
 
-  // readline strips the newline delimiter; we need to track exact byte
-  // lengths (including the newline) to compute correct offsets.
-  // We buffer raw chunks ourselves is unnecessary — instead we recompute
-  // line byte length via Buffer.byteLength(line, 'utf8') + 1 for '\n'.
-  // This assumes '\n' line endings (standard for JSONL on this platform);
-  // crlfDelay:Infinity in readline handles \r\n input transparently by
-  // treating \r\n as a single line-break event, but the underlying file's
-  // actual byte length per line may include a trailing \r we won't count.
-  // This is an accepted edge case for CRLF-authored files, which JSONL
-  // transcripts on macOS/Linux (the observed environment) do not use.
+  // Split the raw byte stream ourselves instead of relying on readline.
+  // This preserves the exact on-disk delimiter width for both LF and CRLF,
+  // which keeps incremental offsets portable across operating systems.
+  for await (const chunk of stream) {
+    pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
 
-  for await (const line of rl) {
-    const lineByteLength = Buffer.byteLength(line, 'utf8') + 1; // +1 for newline
-
-    if (line.length === 0) {
-      // Blank line — just advance offset, nothing to parse.
-      offset += lineByteLength;
-      continue;
+    let newlineIndex = pending.indexOf(0x0a);
+    while (newlineIndex !== -1) {
+      const serializedLine = withoutTrailingCarriageReturn(pending.subarray(0, newlineIndex));
+      processSerializedLine(serializedLine, events);
+      offset += newlineIndex + 1;
+      pending = pending.subarray(newlineIndex + 1);
+      newlineIndex = pending.indexOf(0x0a);
     }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      // Could be a malformed line in the middle of the file, OR the
-      // trailing half-written line of a live session. We can't know for
-      // certain until the loop ends. Track it as a "pending" possible
-      // trailing-incomplete line; if more valid lines follow, treat this
-      // one as simply malformed-and-skipped (still advance offset past it).
-      // If this is the last line in the file, treat it as an incomplete
-      // trailing write (do NOT advance offset).
-      pendingLineBytes = lineByteLength;
-      sawTrailingIncomplete = true;
-      continue;
-    }
-
-    // A successfully parsed line means any prior "pending incomplete" line
-    // was actually just a malformed line in the middle of the file — advance
-    // past it now that we know it wasn't the true trailing line.
-    if (sawTrailingIncomplete) {
-      offset += pendingLineBytes;
-      pendingLineBytes = 0;
-      sawTrailingIncomplete = false;
-    }
-
-    processLine(parsed, { usageRecords, toolUseEvents, toolResultEvents });
-
-    offset += lineByteLength;
   }
 
-  // If the stream ended while `sawTrailingIncomplete` is still true, that
-  // last line was genuinely incomplete/malformed at EOF — don't advance
-  // offset past it, so it's re-read (and hopefully complete) next time.
+  // A valid final JSON value without a newline is complete and may be
+  // consumed. An invalid final fragment is probably being appended by a
+  // live session, so leave the offset at its first byte for the next poll.
+  if (pending.length > 0 && processSerializedLine(withoutTrailingCarriageReturn(pending), events)) {
+    offset += pending.length;
+  }
 
   return { usageRecords, toolUseEvents, toolResultEvents, newOffset: offset };
+}
+
+function withoutTrailingCarriageReturn(line) {
+  return line.length > 0 && line[line.length - 1] === 0x0d
+    ? line.subarray(0, line.length - 1)
+    : line;
+}
+
+function processSerializedLine(serializedLine, events) {
+  if (serializedLine.length === 0) return true;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(serializedLine.toString('utf8'));
+  } catch {
+    return false;
+  }
+  processLine(parsed, events);
+  return true;
 }
 
 function processLine(obj, { usageRecords, toolUseEvents, toolResultEvents }) {

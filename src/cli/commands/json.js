@@ -2,12 +2,12 @@ import { createStore } from '../../ingest/store.js';
 import { buildSummary } from '../../server/summary.js';
 
 /**
- * Cold-scan all history and print a JSON summary to stdout, then exit.
- * No server is started.
+ * Restore/index history and print a JSON summary to stdout, then exit.
+ * No server is started. Pass cache:false for an uncached full scan.
  */
-export async function jsonCommand() {
-  const store = createStore();
+export async function jsonCommand({ cache = true, filters = {} } = {}) {
+  const store = createStore({ persistIndex: cache });
   await store.ingestNewData();
-  const summary = buildSummary(store);
+  const summary = buildSummary(store, { filters });
   process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
 }

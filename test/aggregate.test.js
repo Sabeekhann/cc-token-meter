@@ -123,6 +123,50 @@ test('aggregateByBranch sorts buckets by tokenTotal descending', () => {
   assert.deepEqual(result.map((b) => b.branch), ['big', 'medium', 'small']);
 });
 
+test('aggregateByBranch splits a branch-switching session using exact message costs', () => {
+  const session = makeSession({
+    sessionId: 'branch-switch',
+    gitBranch: 'feature/new',
+    messageCount: 2,
+    inputTokens: 300,
+    outputTokens: 30,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+    costUsd: 2,
+    usageRecords: [
+      {
+        timestamp: '2026-07-30T10:00:00.000Z',
+        gitBranch: 'main',
+        inputTokens: 100,
+        outputTokens: 10,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        costUsd: 0.25,
+      },
+      {
+        timestamp: '2026-07-30T10:05:00.000Z',
+        gitBranch: 'feature/new',
+        inputTokens: 200,
+        outputTokens: 20,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        costUsd: 1.75,
+      },
+    ],
+  });
+
+  const result = aggregateByBranch([session]);
+  const main = result.find((branch) => branch.branch === 'main');
+  const feature = result.find((branch) => branch.branch === 'feature/new');
+
+  assert.equal(main.inputTokens, 100);
+  assert.equal(main.costUsd, 0.25);
+  assert.equal(main.sessions[0].messageCount, 1);
+  assert.equal(feature.inputTokens, 200);
+  assert.equal(feature.costUsd, 1.75);
+  assert.equal(feature.sessions[0].messageCount, 1);
+});
+
 test('aggregateByDay buckets usageRecords by local calendar date, attributing per-message not per-session', () => {
   // A "session" whose usageRecords span local midnight: one message just
   // before midnight, one just after. Use explicit local-time construction
@@ -183,6 +227,39 @@ test('aggregateByDay falls back to session-level lastTimestamp when usageRecords
   const days = aggregateByDay([session]);
   assert.equal(days.length, 1);
   assert.equal(days[0].inputTokens, 500);
+});
+
+test('aggregateByDay uses exact per-message cost across local calendar days', () => {
+  const beforeMidnight = new Date(2026, 6, 30, 23, 59, 0);
+  const afterMidnight = new Date(2026, 6, 31, 0, 1, 0);
+  const session = makeSession({
+    messageCount: 2,
+    costUsd: 2,
+    usageRecords: [
+      {
+        timestamp: beforeMidnight.toISOString(),
+        inputTokens: 10,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        costUsd: 0.1,
+      },
+      {
+        timestamp: afterMidnight.toISOString(),
+        inputTokens: 20,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        costUsd: 1.9,
+      },
+    ],
+  });
+
+  const days = aggregateByDay([session]);
+
+  assert.equal(days.length, 2);
+  assert.equal(days[0].costUsd, 0.1);
+  assert.equal(days[1].costUsd, 1.9);
 });
 
 test('getTodayTotal returns zeroed bucket when no sessions match today', () => {
@@ -293,10 +370,13 @@ test('buildTimeline maps usageRecords to chronological usage points with correct
       {
         timestamp: '2026-07-30T10:00:00.000Z',
         model: 'claude-sonnet-5-20260101',
+        gitBranch: 'main',
         inputTokens: 100,
         outputTokens: 20,
         cacheCreationInputTokens: 5,
         cacheReadInputTokens: 2,
+        costUsd: 0.12,
+        estimatedCostUsed: false,
       },
       {
         timestamp: '2026-07-30T10:05:00.000Z',
@@ -324,6 +404,9 @@ test('buildTimeline maps usageRecords to chronological usage points with correct
   assert.equal(first.outputTokens, 20);
   assert.equal(first.cacheCreationInputTokens, 5);
   assert.equal(first.cacheReadInputTokens, 2);
+  assert.equal(first.costUsd, 0.12);
+  assert.equal(first.estimatedCostUsed, false);
+  assert.equal(first.gitBranch, 'main');
   assert.equal(first.tokenTotal, 100 + 20 + 5 + 2);
 });
 

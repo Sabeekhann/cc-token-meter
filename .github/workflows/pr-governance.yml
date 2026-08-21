@@ -1,0 +1,142 @@
+name: PR Governance
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review, converted_to_draft]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr-governance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  governance:
+    name: Template and labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # pull_request_target has write permissions, so only trusted base-branch
+      # code is checked out. PR head code is never executed by this workflow.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Validate metadata, sync labels, and update bot comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const {
+              buildComment,
+              desiredLabels,
+              isManagedLabel,
+              validatePullRequest,
+            } = require('./.github/scripts/pr-governance.cjs');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pr = context.payload.pull_request;
+            const issue_number = pr.number;
+            const automation = pr.user?.type === 'Bot' || /\[bot\]$/i.test(pr.user?.login || '');
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: issue_number,
+              per_page: 100,
+            });
+            const changes = files.reduce(
+              (total, file) => total + Number(file.additions || 0) + Number(file.deletions || 0),
+              0,
+            );
+            const validation = validatePullRequest({
+              title: pr.title,
+              body: pr.body || '',
+              draft: pr.draft,
+              automation,
+            });
+            const wantedLabels = desiredLabels({
+              files,
+              changes,
+              draft: pr.draft,
+              valid: validation.valid,
+              automation,
+            });
+
+            const labelDefinitions = {
+              'area: dashboard': ['e99695', 'Dashboard HTML, CSS, or browser behavior'],
+              'area: cli': ['5319e7', 'Command-line behavior'],
+              'area: intelligence': ['0e8a16', 'Ingestion, pricing, analytics, budgets, or heuristics'],
+              'area: server': ['1d76db', 'Local HTTP, API, or SSE server'],
+              'area: ci': ['0052cc', 'Continuous integration and repository automation'],
+              'dependencies': ['0366d6', 'Runtime or lockfile dependency changes'],
+              'documentation': ['0075ca', 'Documentation changes'],
+              'tests': ['bfd4f2', 'Automated test changes'],
+              'size: XS': ['c2e0c6', '10 changed lines or fewer'],
+              'size: S': ['7fdb98', '11–100 changed lines'],
+              'size: M': ['fbca04', '101–500 changed lines'],
+              'size: L': ['f9a825', '501–1000 changed lines'],
+              'size: XL': ['d93f0b', 'More than 1000 changed lines'],
+              'status: draft': ['ededed', 'Work is still in progress'],
+              'status: automation': ['ededed', 'Pull request was opened by an automation account'],
+              'status: needs author action': ['d93f0b', 'PR metadata or readiness needs author updates'],
+              'status: ready for review': ['0e8a16', 'PR metadata is complete and ready for human review'],
+            };
+
+            for (const [name, [color, description]] of Object.entries(labelDefinitions)) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({ owner, repo, name, color, description });
+              }
+            }
+
+            const currentLabels = new Set((pr.labels || []).map((label) => label.name));
+            if (wantedLabels.length > 0) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: wantedLabels });
+            }
+            for (const label of currentLabels) {
+              if (isManagedLabel(label) && !wantedLabels.includes(label)) {
+                try {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
+                } catch (error) {
+                  if (error.status !== 404) throw error;
+                }
+              }
+            }
+
+            const comment = buildComment({
+              validation,
+              labels: wantedLabels,
+              draft: pr.draft,
+              automation,
+            });
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find(
+              (item) => item.user?.type === 'Bot' && item.body?.includes(comment.marker),
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: comment.body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: comment.body });
+            }
+
+            await core.summary
+              .addHeading('CC Token Meter PR governance')
+              .addRaw(comment.body.replace(comment.marker, '').trim())
+              .write();
+
+            if (!pr.draft && !automation && !validation.valid) {
+              core.setFailed('Complete the PR template and readiness checklist before human review.');
+            }

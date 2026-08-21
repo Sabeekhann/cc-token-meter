@@ -1,6 +1,11 @@
 import { discoverSessionFiles, deriveProjectPath } from './discover.js';
 import { parseSessionFile } from './parser.js';
 import { computeCost } from '../pricing/cost.js';
+import {
+  DEFAULT_INDEX_FILE,
+  readLocalIndex,
+  writeLocalIndex,
+} from './localIndex.js';
 
 const REGLOB_INTERVAL_MS = 5000;
 const TOOL_EVENT_RING_SIZE = 200;
@@ -10,7 +15,12 @@ const TOOL_EVENT_RING_SIZE = 200;
  * object — no module-level singletons, so multiple stores (e.g. in tests)
  * don't collide.
  */
-export function createStore() {
+export function createStore({
+  persistIndex = true,
+  indexPath = DEFAULT_INDEX_FILE,
+  discoverFiles = discoverSessionFiles,
+  parseFile = parseSessionFile,
+} = {}) {
   /** @type {Map<string, SessionAggregate>} */
   const sessions = new Map();
 
@@ -20,6 +30,53 @@ export function createStore() {
   let lastRegLobTime = 0;
   let hasColdScanned = false;
   let totalIngestedMessages = 0; // cheap change-detection counter for SSE
+
+  restoreIndex();
+
+  function restoreIndex() {
+    if (!persistIndex || !indexPath) return;
+    const index = readLocalIndex(indexPath);
+    if (!index) return;
+
+    for (const raw of index.sessions) {
+      if (!raw || typeof raw.sessionId !== 'string') continue;
+      sessions.set(raw.sessionId, {
+        ...raw,
+        models: new Set(Array.isArray(raw.models) ? raw.models : []),
+        toolEvents: Array.isArray(raw.toolEvents) ? raw.toolEvents : [],
+        usageRecords: Array.isArray(raw.usageRecords) ? raw.usageRecords : [],
+      });
+    }
+
+    for (const raw of index.files) {
+      if (!raw || typeof raw.filePath !== 'string') continue;
+      const { filePath, ...state } = raw;
+      fileState.set(filePath, {
+        ...state,
+        sessionIds: Array.isArray(state.sessionIds) ? state.sessionIds : [],
+      });
+    }
+
+    totalIngestedMessages = index.totalIngestedMessages;
+  }
+
+  function persistCurrentIndex() {
+    if (!persistIndex || !indexPath) return;
+    writeLocalIndex(
+      {
+        totalIngestedMessages,
+        sessions: Array.from(sessions.values()).map((session) => ({
+          ...session,
+          models: Array.from(session.models),
+        })),
+        files: Array.from(fileState.entries()).map(([filePath, state]) => ({
+          filePath,
+          ...state,
+        })),
+      },
+      indexPath
+    );
+  }
 
   function getOrCreateSession(sessionId) {
     let agg = sessions.get(sessionId);
@@ -63,9 +120,11 @@ export function createStore() {
 
   function applyParsedResults(filePath, projectDirName, result) {
     const { usageRecords, toolUseEvents, toolResultEvents } = result;
+    const touchedSessionIds = new Set();
 
     for (const record of usageRecords) {
       const sessionId = record.sessionId || inferSessionIdFromFile(filePath);
+      touchedSessionIds.add(sessionId);
       const agg = getOrCreateSession(sessionId);
 
       agg.projectCwd = record.projectCwd || agg.projectCwd;
@@ -97,12 +156,28 @@ export function createStore() {
       agg.costUsd += cost.totalCost;
       if (cost.estimated) agg.estimatedCostUsed = true;
 
-      agg.usageRecords.push(record);
+      // Keep the exact, per-message accounting alongside the normalized
+      // usage record. Downstream day/branch/model analytics can then
+      // attribute cost correctly instead of spreading a session total
+      // evenly across messages (which is wrong for mixed-model sessions).
+      agg.usageRecords.push({
+        ...record,
+        costUsd: cost.totalCost,
+        estimatedCostUsed: cost.estimated,
+        costBreakdown: {
+          inputCost: cost.inputCost,
+          outputCost: cost.outputCost,
+          cacheWrite5mCost: cost.cacheWrite5mCost,
+          cacheWrite1hCost: cost.cacheWrite1hCost,
+          cacheReadCost: cost.cacheReadCost,
+        },
+      });
       totalIngestedMessages += 1;
     }
 
     for (const evt of toolUseEvents) {
       const sessionId = evt.sessionId || inferSessionIdFromFile(filePath);
+      touchedSessionIds.add(sessionId);
       const agg = getOrCreateSession(sessionId);
       pushToolEvent(agg, { kind: 'tool_use', ...evt });
     }
@@ -116,9 +191,12 @@ export function createStore() {
       // (which receive the full toolEvents ring buffer already merged
       // per-session here).
       const sessionId = inferSessionIdFromFile(filePath);
+      touchedSessionIds.add(sessionId);
       const agg = getOrCreateSession(sessionId);
       pushToolEvent(agg, { kind: 'tool_result', ...evt });
     }
+
+    return touchedSessionIds;
   }
 
   function inferSessionIdFromFile(filePath) {
@@ -132,17 +210,30 @@ export function createStore() {
    */
   async function ingestNewData() {
     const now = Date.now();
+    let changed = false;
+    let didDiscover = false;
 
     let discovered;
     if (!hasColdScanned || now - lastRegLobTime > REGLOB_INTERVAL_MS) {
-      discovered = await discoverSessionFiles();
+      discovered = await discoverFiles();
       lastRegLobTime = now;
+      didDiscover = true;
     } else {
       // Reuse previously discovered files (from fileState) without re-globbing.
       discovered = Array.from(fileState.keys()).map((filePath) => ({
         filePath,
         projectDirName: fileState.get(filePath).projectDirName,
       }));
+    }
+
+    if (didDiscover) {
+      const discoveredPaths = new Set(discovered.map((item) => item.filePath));
+      for (const [cachedPath, cachedState] of fileState.entries()) {
+        if (discoveredPaths.has(cachedPath)) continue;
+        removeSessionsForFile(cachedPath, cachedState);
+        fileState.delete(cachedPath);
+        changed = true;
+      }
     }
 
     for (const fileInfo of discovered) {
@@ -162,32 +253,80 @@ export function createStore() {
       if (!prev) {
         // New file — cold scan it fully from offset 0.
         projectDirName = projectDirName || fileInfo.projectDirName;
-        const result = await parseSessionFile(filePath, { startOffset: 0 });
-        applyParsedResults(filePath, projectDirName, result);
+        const result = await parseFile(filePath, { startOffset: 0 });
+        const sessionIds = applyParsedResults(filePath, projectDirName, result);
         fileState.set(filePath, {
           offset: result.newOffset,
           mtimeMs: stat.mtimeMs,
           size: stat.size,
           projectDirName,
+          sessionIds: Array.from(sessionIds),
+          ...fileIdentity(stat),
         });
+        changed = true;
         continue;
       }
 
       // Existing file — only tail if it changed since last check.
-      if (stat.mtimeMs !== prev.mtimeMs || stat.size !== prev.size) {
-        const result = await parseSessionFile(filePath, { startOffset: prev.offset });
-        applyParsedResults(filePath, prev.projectDirName, result);
+      if (
+        stat.mtimeMs !== prev.mtimeMs ||
+        stat.size !== prev.size ||
+        fileIdentityChanged(prev, stat)
+      ) {
+        const replacedOrTruncated = stat.size < prev.offset || fileIdentityChanged(prev, stat);
+        if (replacedOrTruncated) {
+          removeSessionsForFile(filePath, prev);
+        }
+
+        const result = await parseFile(filePath, {
+          startOffset: replacedOrTruncated ? 0 : prev.offset,
+        });
+        const touchedSessionIds = applyParsedResults(filePath, prev.projectDirName, result);
+        const sessionIds = replacedOrTruncated
+          ? touchedSessionIds
+          : new Set([...(prev.sessionIds || []), ...touchedSessionIds]);
         fileState.set(filePath, {
           offset: result.newOffset,
           mtimeMs: stat.mtimeMs,
           size: stat.size,
           projectDirName: prev.projectDirName,
+          sessionIds: Array.from(sessionIds),
+          ...fileIdentity(stat),
         });
+        changed = true;
       }
     }
 
     hasColdScanned = true;
+    if (changed) persistCurrentIndex();
     return { totalIngestedMessages };
+  }
+
+  function removeSessionsForFile(filePath, state) {
+    const sessionIds =
+      Array.isArray(state && state.sessionIds) && state.sessionIds.length > 0
+        ? state.sessionIds
+        : [inferSessionIdFromFile(filePath)];
+    for (const sessionId of sessionIds) sessions.delete(sessionId);
+  }
+
+  function fileIdentity(stat) {
+    return {
+      dev: Number.isFinite(stat.dev) ? stat.dev : null,
+      ino: Number.isFinite(stat.ino) ? stat.ino : null,
+      birthtimeMs: Number.isFinite(stat.birthtimeMs) ? stat.birthtimeMs : null,
+    };
+  }
+
+  function fileIdentityChanged(previous, stat) {
+    const current = fileIdentity(stat);
+    if (previous.dev != null && current.dev != null && previous.dev !== current.dev) return true;
+    if (previous.ino != null && current.ino != null && previous.ino !== current.ino) return true;
+    return (
+      previous.birthtimeMs != null &&
+      current.birthtimeMs != null &&
+      previous.birthtimeMs !== current.birthtimeMs
+    );
   }
 
   function getSnapshot() {

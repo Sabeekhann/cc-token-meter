@@ -10,6 +10,9 @@ import {
 import { computeAlerts } from '../budget/alerts.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
+import { buildUsageIntelligence } from '../analytics/overview.js';
+import { filterSessions, normalizeSummaryFilters } from '../analytics/filters.js';
+import { PRICING_VERIFIED_ON } from '../pricing/models.js';
 
 /**
  * Build the full summary object served by GET /api/summary and streamed by
@@ -17,13 +20,16 @@ import { runHeuristics } from '../heuristics/index.js';
  * shape is identical between the CLI and the dashboard.
  *
  * @param {ReturnType<import('../ingest/store.js').createStore>} store
+ * @param {{filters?: {from?: string|null, to?: string|null, project?: string|null}, config?: object}} [options]
  * @returns {object}
  */
-export function buildSummary(store) {
+export function buildSummary(store, options = {}) {
   const snapshot = store.getSnapshot();
-  const sessions = snapshot.sessions;
+  const filters = normalizeSummaryFilters(options.filters);
+  const sessions = filterSessions(snapshot.sessions, filters);
+  const generatedAt = new Date().toISOString();
 
-  const config = readConfig();
+  const config = options.config ?? readConfig();
 
   const todayTotal = getTodayTotal(sessions);
   const byProject = aggregateByProject(sessions);
@@ -89,6 +95,7 @@ export function buildSummary(store) {
     activeSessionTotals,
     config
   );
+  const intelligence = buildUsageIntelligence(sessions, { now: generatedAt });
 
   const tips = [];
   for (const s of sessions) {
@@ -97,7 +104,9 @@ export function buildSummary(store) {
   }
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt,
+    filters,
+    pricing: { verifiedOn: PRICING_VERIFIED_ON },
     today: todayTotal,
     allTime: allTimeTotals,
     byProject: byProject.map((p) => ({
@@ -134,10 +143,14 @@ export function buildSummary(store) {
     })),
     byDay,
     forecast,
+    intelligence,
     sessions: sessionSummaries,
     tips,
     alerts,
     config,
-    totalIngestedMessages: snapshot.totalIngestedMessages,
+    totalIngestedMessages:
+      filters.from || filters.to || filters.project
+        ? sessions.reduce((sum, session) => sum + (session.messageCount || 0), 0)
+        : snapshot.totalIngestedMessages,
   };
 }

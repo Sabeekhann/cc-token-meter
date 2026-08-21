@@ -10,8 +10,8 @@ spirit.
   server is Node's built-in `http` module with a tiny manual router, and
   the dashboard is vanilla HTML/CSS/JS served as static files. Please
   don't introduce a bundler, a frontend framework, or a web framework
-  (Express, Fastify, etc.) — the route surface is intentionally tiny (4
-  endpoints) and doesn't need one.
+  (Express, Fastify, etc.) — the route surface is intentionally tiny and
+  doesn't need one.
 - **Dependency-light.** Current runtime dependencies are `glob` (for
   cross-Node-version-safe file globbing) and `open` (for cross-platform
   browser launching). Think hard before adding a new one — if a feature
@@ -19,7 +19,7 @@ spirit.
 - **100% local, always.** This tool must never make an outbound network
   call other than what's needed to serve its own local dashboard. Don't
   add analytics, telemetry, or "phone home" update checks.
-- **Pure functions where possible.** `src/heuristics/`, `src/pricing/`,
+- **Pure functions where possible.** `src/analytics/`, `src/heuristics/`, `src/pricing/`,
   `src/budget/alerts.js`, and `src/ingest/aggregate.js` are all pure
   functions with no I/O — this makes them trivially testable and easy to
   reason about. New logic in these areas should follow the same pattern:
@@ -28,9 +28,14 @@ spirit.
 ## Running tests
 
 ```bash
-npm install
-npm test
+npm ci
+npm run ci
 ```
+
+`npm run ci` runs `npm run check` followed by `npm test`. The policy command
+checks every JavaScript file for syntax errors and protects the project's
+local-only, loopback, pure-module, and dependency-light boundaries. Run the
+full command before requesting review.
 
 Tests use Node's built-in `node:test` + `node:assert` — no test framework
 dependency. Fixtures live in `test/fixtures/*.jsonl` and are hand-written
@@ -47,12 +52,13 @@ pricing periodically. To update:
 1. Verify the new pricing at
    https://platform.claude.com/docs/en/about-claude/pricing — don't trust
    third-party summaries.
-2. If a price is changing for an *existing* model on a known future date,
-   don't just overwrite the row — add a **new row** with the new price and
-   an `effectiveFrom` date, and set the old row's `effectiveUntil` to that
-   same date. This preserves accurate historical cost calculations for
-   already-recorded sessions. See the Sonnet 5 2026-09-01 price change in
-   the current table for a worked example of this pattern.
+2. If a price change for an *existing* model is confirmed on the official
+   pricing page with a known effective date, don't just overwrite the row —
+   add a **new row** with the new price and an `effectiveFrom` date, and set
+   the old row's `effectiveUntil` to that same date. This preserves accurate
+   historical cost calculations. Do not encode announced future pricing
+   blindly: Anthropic cancelled Sonnet 5's previously planned 2026-09-01
+   increase and made its launch rate permanent.
 3. Cache pricing is derived from the base input rate via fixed
    multipliers (`CACHE_WRITE_5M_MULTIPLIER`, `CACHE_WRITE_1H_MULTIPLIER`,
    `CACHE_READ_MULTIPLIER`) rather than hardcoded per row. Only add a
@@ -107,3 +113,17 @@ where a `Tip` is `{ id, sessionId, severity, message }`. Steps to add one:
   exported functions.
 - Prefer explicit, readable code over cleverness — this is a small,
   single-maintainer-friendly codebase.
+
+## Pull requests
+
+- Use a Conventional Commit PR title such as
+  `feat(dashboard): add cache health detail` or
+  `fix(ingest): rebuild a truncated session`.
+- Fill in the pull request template with the problem, concrete changes, and
+  real testing evidence. Draft PRs may leave the two Review Readiness boxes
+  unchecked; check them before requesting human review.
+- Never attach raw Claude Code transcripts, prompts, tool results, API keys,
+  or private project paths to an issue or PR. Use synthetic fixtures or
+  carefully redacted evidence.
+- The PR Governance workflow applies area, size, and readiness labels and
+  updates one bot comment. See `docs/CI.md` for all automated checks.

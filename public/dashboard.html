@@ -1,98 +1,334 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Token Meter — for Claude Code</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/dashboard.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <title>Token Meter — Local Claude Code Intelligence</title>
+  <link rel="stylesheet" href="/dashboard.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#overview" data-nav-view="overview" aria-label="Token Meter overview">
         <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 0 L14.2 9.8 L24 12 L14.2 14.2 L12 24 L9.8 14.2 L0 12 L9.8 9.8 Z" fill="currentColor"/></svg>
+          <svg viewBox="0 0 28 28" role="img">
+            <path d="M14 2.5a11.5 11.5 0 1 0 0 23 11.5 11.5 0 0 0 0-23Zm0 5.1a6.4 6.4 0 1 1 0 12.8 6.4 6.4 0 0 1 0-12.8Z" />
+            <path class="brand-spark" d="m20.8 3.6.8 2.8 2.8.8-2.8.8-.8 2.8-.8-2.8-2.8-.8 2.8-.8.8-2.8Z" />
+          </svg>
         </span>
-        <div class="brand-text">
-          <span class="brand-name">Token Meter</span>
-          <span class="brand-sub">for Claude Code</span>
+        <span>
+          <strong>Token Meter</strong>
+          <small>Claude Code intelligence</small>
+        </span>
+      </a>
+
+      <nav class="nav-list" aria-label="Dashboard views">
+        <button class="nav-item active" type="button" data-view="overview" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z" /></svg>
+          <span>Overview</span>
+        </button>
+        <button class="nav-item" type="button" data-view="live">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3l2.2-5.3L12 17l2.4-6H21" /></svg>
+          <span>Live session</span>
+          <span id="liveNavDot" class="nav-live-dot" aria-hidden="true"></span>
+        </button>
+        <button class="nav-item" type="button" data-view="projects">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17v-12Z" /></svg>
+          <span>Projects</span>
+        </button>
+        <button class="nav-item" type="button" data-view="insights">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M8.2 14.5A7 7 0 1 1 15.8 14c-1 .8-1.3 1.5-1.3 2.5h-5c0-1-.3-1.5-1.3-2Z" /></svg>
+          <span>Insights</span>
+          <span id="insightNavCount" class="nav-count hidden">0</span>
+        </button>
+        <button class="nav-item" type="button" data-view="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Zm8-3.2-2.1-1.1.1-2.4-2.4-2.4-2.4.1L12 4 10.9 6.2l-2.4-.1-2.4 2.4.1 2.4L4 12l2.2 1.1-.1 2.4 2.4 2.4 2.4-.1L12 20l1.1-2.2 2.4.1 2.4-2.4-.1-2.4L20 12Z" /></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <div class="privacy-card">
+        <div class="privacy-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3 5.5 5.6v5.7c0 4.2 2.7 8 6.5 9.7 3.8-1.7 6.5-5.5 6.5-9.7V5.6L12 3Zm-1 12.1-2.5-2.5 1.2-1.2 1.3 1.3 3.4-3.4 1.2 1.2-4.6 4.6Z" /></svg>
+        </div>
+        <div>
+          <strong>Private by design</strong>
+          <span>Localhost only. No telemetry.</span>
         </div>
       </div>
-      <div class="local-badge" title="100% local — no data leaves your machine">
-        <span class="dot"></span> 100% local &middot; offline
-      </div>
-    </div>
-  </header>
+    </aside>
 
-  <main class="container">
-    <section class="hero-stats">
-      <div class="stat-card gauge-card">
-        <div id="gauge" class="gauge">
-          <div class="gauge-inner">
-            <div id="gaugeValue" class="gauge-value">—</div>
-            <div class="gauge-label">tokens today</div>
+    <div class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">LOCAL USAGE INTELLIGENCE</p>
+          <h1 id="viewTitle">Overview</h1>
+        </div>
+        <div class="topbar-actions">
+          <div id="connectionStatus" class="connection-pill connecting" role="status">
+            <span class="status-dot"></span>
+            <span class="connection-copy">Connecting</span>
+          </div>
+          <div class="updated-copy">
+            <span>Last updated</span>
+            <strong id="lastUpdated">—</strong>
           </div>
         </div>
-        <div id="gaugeSubtext" class="gauge-subtext">No daily cap configured</div>
-      </div>
+      </header>
 
-      <div class="stat-stack">
-        <div class="stat-card">
-          <div class="stat-label">Today's cost <span class="est">est.</span></div>
-          <div id="todayCost" class="stat-value">$0.00</div>
-        </div>
+      <main class="main-content">
+        <section id="view-overview" class="view active" data-view-panel="overview" aria-labelledby="viewTitle">
+          <div class="welcome-row">
+            <div>
+              <p id="overviewKicker" class="section-kicker">YOUR CLAUDE CODE WORKSPACE</p>
+              <h2>Know where every token goes.</h2>
+              <p id="overviewSummary" class="welcome-copy">Loading your local usage history…</p>
+            </div>
+            <button class="secondary-button" type="button" data-go-view="insights">
+              Review opportunities
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
+            </button>
+          </div>
 
-        <div class="stat-card">
-          <div class="stat-label">All-time tokens</div>
-          <div id="allTimeTokens" class="stat-value">0</div>
-        </div>
+          <div class="metric-grid">
+            <article class="metric-card accent-card">
+              <div class="metric-topline">
+                <span>Tokens today</span>
+                <span class="metric-icon token-icon">T</span>
+              </div>
+              <strong id="todayTokens" class="metric-value">—</strong>
+              <div id="todayTokensMeta" class="metric-meta">Waiting for local data</div>
+              <div class="metric-progress"><span id="tokenBudgetBar"></span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-topline">
+                <span>Estimated cost today</span>
+                <span class="metric-icon cost-icon">$</span>
+              </div>
+              <strong id="todayCost" class="metric-value">—</strong>
+              <div id="todayCostMeta" class="metric-meta">Local pricing estimate</div>
+              <div class="metric-progress"><span id="costBudgetBar"></span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-topline">
+                <span>Cache reuse</span>
+                <span class="metric-icon cache-icon">
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.8 6.3A7 7 0 1 0 17 12h-2a5 5 0 1 1-.9-2.8L11 12h6V6l-1.2.3Z" /></svg>
+                </span>
+              </div>
+              <strong id="cacheReuse" class="metric-value">—</strong>
+              <div id="cacheReuseMeta" class="metric-meta">Measuring cache effectiveness</div>
+              <div class="metric-progress healthy"><span id="cacheReuseBar"></span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-topline">
+                <span>Active now</span>
+                <span class="metric-icon live-icon"><span></span></span>
+              </div>
+              <strong id="activeSessions" class="metric-value">—</strong>
+              <div id="activeSessionsMeta" class="metric-meta">Checking recent sessions</div>
+              <button class="metric-link" type="button" data-go-view="live">Open live view →</button>
+            </article>
+          </div>
 
-        <div class="stat-card">
-          <div class="stat-label">All-time cost <span class="est">est.</span></div>
-          <div id="allTimeCost" class="stat-value">$0.00</div>
-        </div>
-      </div>
-    </section>
+          <div class="overview-grid">
+            <article class="panel burn-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">BURN HISTORY</p>
+                  <h3>Usage over the last 14 days</h3>
+                </div>
+                <div class="chart-legend">
+                  <span><i class="legend-bar"></i> Tokens</span>
+                  <span><i class="legend-line"></i> Cost</span>
+                </div>
+              </div>
+              <div id="burnChart" class="burn-chart loading-block" aria-label="Token and cost history chart"></div>
+            </article>
 
-    <section id="forecastCard" class="forecast-card">
-      <div class="forecast-label">
-        <span class="sparkle">✳</span> Burn-rate forecast
-        <span id="forecastWindow" class="forecast-window"></span>
-      </div>
-      <div id="forecastBody" class="forecast-body"></div>
-    </section>
+            <article class="panel forecast-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">30-DAY OUTLOOK</p>
+                  <h3>Burn forecast</h3>
+                </div>
+                <span id="forecastBadge" class="soft-badge">Learning</span>
+              </div>
+              <div class="forecast-main">
+                <span>Projected estimated cost</span>
+                <strong id="projectedCost">—</strong>
+                <small id="forecastBasis">Waiting for enough usage history</small>
+              </div>
+              <div class="forecast-stats">
+                <div><span>Daily average</span><strong id="averageDailyCost">—</strong></div>
+                <div><span>Projected tokens</span><strong id="projectedTokens">—</strong></div>
+              </div>
+              <div id="forecastMessage" class="forecast-message neutral">Forecast updates from your local history.</div>
+            </article>
+          </div>
 
-    <div id="budgetBanner" class="budget-banner hidden"></div>
+          <div class="overview-grid lower-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">COST DRIVERS</p>
+                  <h3>Token composition</h3>
+                </div>
+                <span id="allTimeCost" class="panel-total">— all time</span>
+              </div>
+              <div id="tokenMix" class="token-mix"></div>
+            </article>
 
-    <section class="panel">
-      <h2><span class="sparkle">✳</span> Projects</h2>
-      <div id="projectList" class="project-list">
-        <div class="empty-row">Loading…</div>
-      </div>
-    </section>
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">TOP PROJECTS</p>
+                  <h3>Where usage is going</h3>
+                </div>
+                <button class="text-button" type="button" data-go-view="projects">View all</button>
+              </div>
+              <div id="topProjects" class="rank-list"><div class="empty-state compact">Loading projects…</div></div>
+            </article>
+          </div>
 
-    <section class="panel">
-      <h2><span class="sparkle">✳</span> By branch</h2>
-      <div id="branchList" class="project-list">
-        <div class="empty-row">Loading…</div>
-      </div>
-    </section>
+          <article class="panel action-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">NEXT BEST ACTIONS</p>
+                <h3>Highest-value opportunities</h3>
+              </div>
+              <button class="text-button" type="button" data-go-view="insights">See every insight</button>
+            </div>
+            <div id="topInsights" class="action-list"><div class="empty-state compact">Analyzing local sessions…</div></div>
+          </article>
+        </section>
 
-    <section class="panel">
-      <h2><span class="sparkle">✳</span> Tips</h2>
-      <div id="tipsPanel" class="tips-panel">
-        <div class="empty-row">No tips — you're efficient.</div>
-      </div>
-    </section>
-  </main>
+        <section id="view-live" class="view" data-view-panel="live" aria-labelledby="viewTitle">
+          <div id="liveSessionContent"></div>
+        </section>
 
-  <footer class="footer" title="All data read from ~/.claude/projects/**/*.jsonl on this machine only. No network calls except this local server.">
-    <span class="dot"></span> Local only &middot; no network calls
-  </footer>
+        <section id="view-projects" class="view" data-view-panel="projects" aria-labelledby="viewTitle">
+          <div class="page-heading-row">
+            <div>
+              <p class="section-kicker">PROJECT & BRANCH ATTRIBUTION</p>
+              <h2>Compare the work that drives usage.</h2>
+              <p>Costs and tokens are calculated locally from message-level records.</p>
+            </div>
+            <label class="search-field">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg>
+              <span class="sr-only">Search projects</span>
+              <input id="projectSearch" type="search" placeholder="Search projects…" autocomplete="off" />
+            </label>
+          </div>
+          <article class="panel table-panel">
+            <div id="projectsTable" class="data-table"></div>
+          </article>
+          <article class="panel branch-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">BRANCHES</p>
+                <h3>Exact message-level attribution</h3>
+              </div>
+            </div>
+            <div id="branchBreakdown" class="branch-grid"></div>
+          </article>
+        </section>
 
+        <section id="view-insights" class="view" data-view-panel="insights" aria-labelledby="viewTitle">
+          <div class="insight-hero">
+            <div>
+              <p class="section-kicker">ACTION QUEUE</p>
+              <h2>Reduce waste with evidence.</h2>
+              <p>Recommendations are generated locally from measurable session behavior.</p>
+            </div>
+            <div class="savings-card">
+              <span>Calculable opportunity</span>
+              <strong id="totalSavings">—</strong>
+              <small id="totalSavingsTokens">Across active recommendations</small>
+            </div>
+          </div>
+          <div class="filter-row" role="group" aria-label="Insight filters">
+            <button class="filter-button active" type="button" data-insight-filter="all">All <span id="filterAllCount">0</span></button>
+            <button class="filter-button" type="button" data-insight-filter="warn">Needs attention <span id="filterWarnCount">0</span></button>
+            <button class="filter-button" type="button" data-insight-filter="info">Optimizations <span id="filterInfoCount">0</span></button>
+          </div>
+          <div id="insightsList" class="insights-list"></div>
+        </section>
+
+        <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="viewTitle">
+          <div class="page-heading-row settings-heading">
+            <div>
+              <p class="section-kicker">LOCAL PREFERENCES</p>
+              <h2>Budgets, warnings, and privacy.</h2>
+              <p>Settings are stored only in your local cc-token-meter directory.</p>
+            </div>
+          </div>
+          <div class="settings-grid">
+            <form id="budgetForm" class="panel settings-form">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">BUDGETS</p>
+                  <h3>Usage guardrails</h3>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>
+                  <span>Daily token cap</span>
+                  <input id="dailyTokenCap" name="dailyTokenCap" type="number" min="0" step="1000" placeholder="e.g. 500000" />
+                  <small>Leave empty for no token cap.</small>
+                </label>
+                <label>
+                  <span>Daily cost cap (USD)</span>
+                  <input id="dailyCostCapUsd" name="dailyCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 20.00" />
+                  <small>Estimated cost warning for each day.</small>
+                </label>
+                <label>
+                  <span>Session cost cap (USD)</span>
+                  <input id="sessionCostCapUsd" name="sessionCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 5.00" />
+                  <small>Warn when one session becomes expensive.</small>
+                </label>
+                <label>
+                  <span>Warning threshold (%)</span>
+                  <input id="warnThresholdPct" name="warnThresholdPct" type="number" min="1" max="100" step="1" placeholder="80" />
+                  <small>Warn before a configured cap is reached.</small>
+                </label>
+              </div>
+              <div class="form-actions">
+                <span id="budgetFormStatus" role="status"></span>
+                <button class="primary-button" type="submit">Save local settings</button>
+              </div>
+            </form>
+
+            <div class="settings-side">
+              <article class="panel trust-panel">
+                <div class="trust-mark">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5.5 5.6v5.7c0 4.2 2.7 8 6.5 9.7 3.8-1.7 6.5-5.5 6.5-9.7V5.6L12 3Zm-1 12.1-2.5-2.5 1.2-1.2 1.3 1.3 3.4-3.4 1.2 1.2-4.6 4.6Z" /></svg>
+                </div>
+                <div>
+                  <p class="panel-kicker">PRIVACY</p>
+                  <h3>Your data stays here.</h3>
+                  <p>Transcripts are read locally and never modified. The dashboard binds only to <code>127.0.0.1</code>.</p>
+                </div>
+              </article>
+              <article class="panel local-files-panel">
+                <p class="panel-kicker">LOCAL FILES</p>
+                <h3>Transparent storage</h3>
+                <dl>
+                  <div><dt>Source</dt><dd><code>~/.claude/projects/**/*.jsonl</code></dd></div>
+                  <div><dt>Settings</dt><dd><code>~/.claude-token-meter/config.json</code></dd></div>
+                  <div><dt>Private index</dt><dd><code>~/.claude-token-meter/usage-index-v2.json</code></dd></div>
+                  <div><dt>Pricing verified</dt><dd id="pricingVerifiedOn">—</dd></div>
+                </dl>
+              </article>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/dashboard.js"></script>
 </body>
 </html>
