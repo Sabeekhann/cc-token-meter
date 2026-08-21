@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">Claude Code Token Meter dashboard overview</title>
+  <desc id="desc">Synthetic preview showing tokens, estimated cost, cache reuse, active sessions, burn history, forecast, projects, and recommendations.</desc>
+  <defs>
+    <linearGradient id="navGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#18233d" />
+      <stop offset="0.55" stop-color="#0c1220" />
+      <stop offset="1" stop-color="#090e19" />
+    </linearGradient>
+    <linearGradient id="coralCard" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8f5" />
+      <stop offset="1" stop-color="#ffffff" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="13" flood-color="#0c1220" flood-opacity="0.07" />
+    </filter>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .caps { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; fill: #919bad; }
+      .muted { fill: #657087; }
+      .navText { fill: #8f9ab0; font-size: 14px; font-weight: 600; }
+      .label { fill: #657087; font-size: 13px; font-weight: 600; }
+      .value { fill: #0c1220; font-size: 32px; font-weight: 760; }
+      .small { fill: #657087; font-size: 12px; }
+      .panelTitle { fill: #182033; font-size: 17px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" rx="22" fill="#f4f6f9" />
+  <rect width="248" height="900" rx="22" fill="url(#navGlow)" />
+  <rect x="226" width="22" height="900" fill="#0c1220" />
+
+  <g transform="translate(28 28)">
+    <circle cx="20" cy="20" r="18" fill="#ef7659" />
+    <circle cx="20" cy="20" r="9" fill="#0c1220" />
+    <path d="M31 4l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" fill="#ffd1c6" />
+    <text x="52" y="16" fill="#ffffff" font-size="16" font-weight="720">Token Meter</text>
+    <text x="52" y="34" fill="#8490a7" font-size="11">Claude Code intelligence</text>
+  </g>
+
+  <g transform="translate(18 105)">
+    <rect width="212" height="48" rx="12" fill="#151d2d" stroke="#263048" />
+    <rect x="15" y="14" width="18" height="18" rx="4" fill="#ef7659" opacity="0.92" />
+    <text x="49" y="30" fill="#ffffff" font-size="14" font-weight="650">Overview</text>
+  </g>
+  <g transform="translate(33 176)">
+    <circle cx="9" cy="9" r="8" fill="none" stroke="#8f9ab0" stroke-width="2" />
+    <path d="M0 9h5l3-6 3 12 3-6h5" fill="none" stroke="#8f9ab0" stroke-width="1.5" />
+    <text x="34" y="14" class="navText">Live session</text>
+    <circle cx="184" cy="9" r="4" fill="#44d6af" />
+  </g>
+  <g transform="translate(33 229)">
+    <path d="M0 3h9l3 4h9v13H0z" fill="none" stroke="#8f9ab0" stroke-width="1.7" />
+    <text x="34" y="16" class="navText">Projects</text>
+  </g>
+  <g transform="translate(33 282)">
+    <circle cx="10" cy="8" r="7" fill="none" stroke="#8f9ab0" stroke-width="1.7" />
+    <path d="M6 18h8M8 22h4" stroke="#8f9ab0" stroke-width="1.7" />
+    <text x="34" y="15" class="navText">Insights</text>
+    <rect x="171" y="-2" width="26" height="20" rx="10" fill="#ef7659" opacity="0.18" />
+    <text x="184" y="12" fill="#ff9d87" font-size="10" text-anchor="middle">3</text>
+  </g>
+  <g transform="translate(33 336)">
+    <circle cx="10" cy="10" r="4" fill="none" stroke="#8f9ab0" stroke-width="1.7" />
+    <circle cx="10" cy="10" r="9" fill="none" stroke="#8f9ab0" stroke-width="1.7" stroke-dasharray="4 3" />
+    <text x="34" y="15" class="navText">Settings</text>
+  </g>
+
+  <g transform="translate(18 807)">
+    <rect width="212" height="68" rx="14" fill="#0e2a2b" stroke="#174640" />
+    <rect x="13" y="14" width="32" height="32" rx="9" fill="#164d45" />
+    <path d="M29 20l9 4v8c0 6-4 10-9 12-5-2-9-6-9-12v-8z" fill="none" stroke="#58d9b8" stroke-width="1.7" />
+    <path d="M25 32l3 3 6-7" fill="none" stroke="#58d9b8" stroke-width="1.7" />
+    <text x="56" y="28" fill="#dff9f2" font-size="12" font-weight="700">Private by design</text>
+    <text x="56" y="45" fill="#789c94" font-size="10">Localhost only · No telemetry</text>
+  </g>
+
+  <line x1="248" y1="77" x2="1440" y2="77" stroke="#d8dee8" />
+  <g transform="translate(282 19)">
+    <text y="12" class="caps">LOCAL USAGE INTELLIGENCE</text>
+    <text y="39" fill="#0c1220" font-size="22" font-weight="740">Overview</text>
+  </g>
+  <g transform="translate(1190 23)">
+    <rect width="90" height="32" rx="16" fill="#e7f8f4" />
+    <circle cx="17" cy="16" r="4" fill="#22a88a" />
+    <text x="29" y="20" fill="#3b7568" font-size="12" font-weight="650">Live</text>
+    <text x="106" y="12" class="small">Updated</text>
+    <text x="106" y="30" fill="#182033" font-size="12" font-weight="700">just now</text>
+  </g>
+
+  <g transform="translate(282 110)">
+    <text y="12" class="caps">YOUR CLAUDE CODE WORKSPACE</text>
+    <text y="49" fill="#0c1220" font-size="30" font-weight="760">Know where every token goes.</text>
+    <text y="76" class="muted" font-size="14">Two active sessions · 428.6K tokens today · cache reuse is healthy.</text>
+    <rect x="955" y="11" width="166" height="42" rx="11" fill="#ffffff" stroke="#d8dee8" />
+    <text x="1038" y="37" fill="#182033" font-size="13" font-weight="650" text-anchor="middle">Review opportunities →</text>
+  </g>
+
+  <g transform="translate(282 209)" filter="url(#shadow)">
+    <rect width="264" height="141" rx="17" fill="url(#coralCard)" stroke="#f3d8d1" />
+    <text x="20" y="31" class="label">Tokens today</text>
+    <circle cx="230" cy="27" r="15" fill="#fff0ec" />
+    <text x="230" y="32" fill="#d95d42" font-size="13" font-weight="750" text-anchor="middle">T</text>
+    <text x="20" y="77" class="value">428.6K</text>
+    <text x="20" y="103" class="small">71% of 600K daily budget</text>
+    <rect x="20" y="118" width="224" height="6" rx="3" fill="#f4e6e1" />
+    <rect x="20" y="118" width="159" height="6" rx="3" fill="#ef7659" />
+  </g>
+  <g transform="translate(565 209)" filter="url(#shadow)">
+    <rect width="264" height="141" rx="17" fill="#ffffff" stroke="#e4e8ef" />
+    <text x="20" y="31" class="label">Estimated cost today</text>
+    <circle cx="230" cy="27" r="15" fill="#edf1ff" />
+    <text x="230" y="32" fill="#5d7cf5" font-size="14" font-weight="750" text-anchor="middle">$</text>
+    <text x="20" y="77" class="value">$6.84</text>
+    <text x="20" y="103" class="small">68% of $10 daily budget</text>
+    <rect x="20" y="118" width="224" height="6" rx="3" fill="#edf1ff" />
+    <rect x="20" y="118" width="152" height="6" rx="3" fill="#5d7cf5" />
+  </g>
+  <g transform="translate(848 209)" filter="url(#shadow)">
+    <rect width="264" height="141" rx="17" fill="#ffffff" stroke="#e4e8ef" />
+    <text x="20" y="31" class="label">Cache reuse</text>
+    <circle cx="230" cy="27" r="15" fill="#e7f8f4" />
+    <path d="M223 27a7 7 0 1 0 2-5" fill="none" stroke="#22a88a" stroke-width="2" />
+    <text x="20" y="77" class="value">72%</text>
+    <text x="20" y="103" class="small">Est. $52.40 input cost avoided</text>
+    <rect x="20" y="118" width="224" height="6" rx="3" fill="#e7f8f4" />
+    <rect x="20" y="118" width="161" height="6" rx="3" fill="#22a88a" />
+  </g>
+  <g transform="translate(1131 209)" filter="url(#shadow)">
+    <rect width="264" height="141" rx="17" fill="#ffffff" stroke="#e4e8ef" />
+    <text x="20" y="31" class="label">Active now</text>
+    <circle cx="230" cy="27" r="15" fill="#e7f8f4" />
+    <circle cx="230" cy="27" r="5" fill="#22a88a" />
+    <text x="20" y="77" class="value">2</text>
+    <text x="20" y="103" class="small">18.4K tokens/minute</text>
+    <text x="20" y="124" fill="#22a88a" font-size="12" font-weight="650">Open live view →</text>
+  </g>
+
+  <g transform="translate(282 375)" filter="url(#shadow)">
+    <rect width="741" height="300" rx="17" fill="#ffffff" stroke="#e4e8ef" />
+    <text x="22" y="28" class="caps">BURN HISTORY</text>
+    <text x="22" y="54" class="panelTitle">Usage over the last 14 days</text>
+    <text x="600" y="35" class="small">■ Tokens</text>
+    <text x="667" y="35" fill="#ef7659" font-size="12">— Cost</text>
+    <line x1="50" y1="238" x2="700" y2="238" stroke="#e4e8ef" />
+    <line x1="50" y1="187" x2="700" y2="187" stroke="#eef1f5" />
+    <line x1="50" y1="136" x2="700" y2="136" stroke="#eef1f5" />
+    <g fill="#dfe5ee">
+      <rect x="65" y="189" width="25" height="49" rx="4" /><rect x="111" y="172" width="25" height="66" rx="4" />
+      <rect x="157" y="201" width="25" height="37" rx="4" /><rect x="203" y="150" width="25" height="88" rx="4" />
+      <rect x="249" y="164" width="25" height="74" rx="4" /><rect x="295" y="121" width="25" height="117" rx="4" />
+      <rect x="341" y="136" width="25" height="102" rx="4" /><rect x="387" y="105" width="25" height="133" rx="4" />
+      <rect x="433" y="145" width="25" height="93" rx="4" /><rect x="479" y="126" width="25" height="112" rx="4" />
+      <rect x="525" y="93" width="25" height="145" rx="4" /><rect x="571" y="118" width="25" height="120" rx="4" />
+      <rect x="617" y="83" width="25" height="155" rx="4" /><rect x="663" y="111" width="25" height="127" rx="4" fill="#ef7659" />
+    </g>
+    <polyline points="77,198 123,183 169,205 215,160 261,169 307,129 353,141 399,114 445,151 491,132 537,101 583,123 629,92 675,117" fill="none" stroke="#ef7659" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <g class="small" text-anchor="middle">
+      <text x="77" y="266">Aug 8</text><text x="215" y="266">Aug 11</text><text x="353" y="266">Aug 14</text><text x="491" y="266">Aug 17</text><text x="629" y="266">Aug 20</text>
+    </g>
+  </g>
+
+  <g transform="translate(1042 375)" filter="url(#shadow)">
+    <rect width="353" height="300" rx="17" fill="#ffffff" stroke="#e4e8ef" />
+    <text x="22" y="28" class="caps">30-DAY OUTLOOK</text>
+    <text x="22" y="54" class="panelTitle">Burn forecast</text>
+    <rect x="271" y="20" width="60" height="24" rx="12" fill="#e7f8f4" />
+    <text x="301" y="36" fill="#3b7568" font-size="11" font-weight="650" text-anchor="middle">On track</text>
+    <text x="22" y="99" class="small">Projected estimated cost</text>
+    <text x="22" y="143" fill="#0c1220" font-size="39" font-weight="760">$198.90</text>
+    <text x="22" y="168" class="small">Based on 7 days of local history</text>
+    <line x1="22" y1="190" x2="331" y2="190" stroke="#e4e8ef" />
+    <text x="22" y="220" class="small">Daily average</text>
+    <text x="22" y="244" fill="#182033" font-size="17" font-weight="700">$6.63</text>
+    <text x="181" y="220" class="small">Projected tokens</text>
+    <text x="181" y="244" fill="#182033" font-size="17" font-weight="700">14.6M</text>
+    <rect x="22" y="262" width="309" height="24" rx="8" fill="#e7f8f4" />
+    <text x="176" y="278" fill="#3b7568" font-size="11" text-anchor="middle">Within current daily guardrails</text>
+  </g>
+
+  <g transform="translate(282 696)" filter="url(#shadow)">
+    <rect width="548" height="168" rx="17" fill="#ffffff" stroke="#e4e8ef" />
+    <text x="22" y="28" class="caps">TOP PROJECTS</text>
+    <text x="22" y="54" class="panelTitle">Where usage is going</text>
+    <text x="22" y="91" fill="#182033" font-size="13" font-weight="650">synthetic-project-alpha</text>
+    <rect x="255" y="80" width="210" height="8" rx="4" fill="#fff0ec" /><rect x="255" y="80" width="178" height="8" rx="4" fill="#ef7659" />
+    <text x="502" y="90" class="small" text-anchor="end">5.8M</text>
+    <text x="22" y="125" fill="#182033" font-size="13" font-weight="650">synthetic-project-beta</text>
+    <rect x="255" y="114" width="210" height="8" rx="4" fill="#edf1ff" /><rect x="255" y="114" width="121" height="8" rx="4" fill="#5d7cf5" />
+    <text x="502" y="124" class="small" text-anchor="end">3.9M</text>
+    <text x="22" y="151" fill="#22a88a" font-size="12" font-weight="650">View all projects →</text>
+  </g>
+
+  <g transform="translate(849 696)" filter="url(#shadow)">
+    <rect width="546" height="168" rx="17" fill="#ffffff" stroke="#e4e8ef" />
+    <text x="22" y="28" class="caps">NEXT BEST ACTION</text>
+    <text x="22" y="54" class="panelTitle">Compact the long active session</text>
+    <rect x="22" y="73" width="60" height="23" rx="11" fill="#fff6df" />
+    <text x="52" y="89" fill="#a46c12" font-size="10" font-weight="700" text-anchor="middle">WARNING</text>
+    <text x="22" y="120" class="small">148 turns without /compact. Context and cache-write cost are growing.</text>
+    <text x="22" y="148" fill="#ef7659" font-size="12" font-weight="650">Review evidence →</text>
+  </g>
+</svg>

@@ -1,248 +1,201 @@
-# cc-token-meter
+<div align="center">
+  <img src="docs/cc-token-meter-mascot.png" alt="Claude Code Token Meter mascot" width="220" />
 
-[![Tests](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg)](https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
+  <h1>Claude Code Token Meter</h1>
 
-> **A private, local usage cockpit for Claude Code.** Understand live token
-> burn, estimated cost, cache efficiency, project/branch drivers, and the next
-> action worth taking—without sending your transcripts anywhere.
+  <p><strong>Your private, local usage cockpit for Claude Code.</strong></p>
+  <p>Live token usage, cost estimates, cache intelligence, budgets, and practical recommendations—without sending your transcripts anywhere.</p>
 
-A local-only CLI and web dashboard that turns Claude Code's existing session
-transcripts into useful operational intelligence. It requires no API key,
-makes no Anthropic API call, works retroactively, and keeps the original
-transcripts strictly read-only.
+  <p>
+    <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg" /></a>
+    <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
+    <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
+    <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-f3b33d" /></a>
+    <img alt="Local only" src="https://img.shields.io/badge/privacy-local--only-0f766e" />
+  </p>
 
-## What makes it useful
+  <p>
+    <a href="#quick-start">Quick start</a> ·
+    <a href="#what-you-get">Features</a> ·
+    <a href="#cli-reference">CLI</a> ·
+    <a href="CONTRIBUTING.md">Contribute</a>
+  </p>
+</div>
 
-- **See what is active now.** Track active sessions, recent tokens/minute,
-  estimated cost/hour, models, branches, and message-level burn.
-- **Understand the drivers.** Compare projects and branches using exact
-  per-message token and estimated-cost attribution.
-- **Measure cache effectiveness.** See cache reuse and the estimated input
-  cost avoided through cache reads.
-- **Act on evidence.** Review ranked recommendations for repeated reads,
-  cache degradation, large tool output, long context, and outlier sessions.
-- **Stay ahead of budgets.** Configure daily/session guardrails and see a
-  rolling 30-day forecast.
-- **Start quickly.** A private versioned index restores unchanged history
-  without parsing every transcript again.
+---
 
-## Dashboard
+Claude Code Token Meter turns the session data already on your machine into a useful operating view. It helps answer four questions quickly:
 
-The v2 interface is organized around five jobs:
+1. **What is using tokens right now?**
+2. **Which projects, branches, sessions, and models drive the cost?**
+3. **Is prompt caching helping?**
+4. **What should I change next?**
 
-| View | What it answers |
+It requires no API key, makes no Anthropic API call, works retroactively, and treats Claude Code transcripts as read-only input.
+
+> [!IMPORTANT]
+> Dollar values are local estimates, not an Anthropic bill. Pricing rules can change; verify important decisions against [Anthropic's official pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing).
+
+## What you get
+
+| Capability | What it gives you |
 | --- | --- |
-| Overview | What happened today, what is active, and what needs attention? |
-| Live session | Where is the current session burning tokens and estimated cost? |
-| Projects | Which projects, branches, and sessions drive usage? |
-| Insights | What action could reduce waste, and what evidence supports it? |
-| Settings | What budgets and local privacy controls are configured? |
+| **Overview** | Today's tokens and estimated cost, cache reuse, active sessions, a 14-day history, and a 30-day forecast. |
+| **Live Session** | Recent tokens/minute, estimated cost/hour, models, branches, and message-level burn while Claude Code is running. |
+| **Projects** | Exact per-message attribution across projects, branches, and sessions. |
+| **Insights** | Ranked, evidence-backed recommendations for repeated reads, cache degradation, large tool output, long context, and outlier sessions. |
+| **Budgets** | Daily token, daily cost, and per-session cost guardrails stored locally. |
+| **Exports** | Human-readable terminal summaries plus JSON and CSV for your own analysis. |
+| **Doctor** | Checks the Node runtime, transcript access, index/config health, and local-state permissions. |
 
-The detailed UX specification is in [`docs/UI_PLAN.md`](docs/UI_PLAN.md).
+The dashboard is organized around five focused views: **Overview**, **Live Session**, **Projects**, **Insights**, and **Settings**. For UI implementation details, see [`docs/UI_PLAN.md`](docs/UI_PLAN.md).
 
-## Quickstart
+## Dashboard preview
+
+![Claude Code Token Meter overview using synthetic data](docs/screenshot.png)
+
+<p align="center"><sub>Synthetic data only. No personal transcript content or private project paths.</sub></p>
+
+## Quick start
+
+### Run from source
+
+Node.js 20 or newer is required.
 
 ```bash
-npx cc-token-meter
+git clone https://github.com/Sabeekhann/cc-token-meter.git
+cd cc-token-meter
+npm ci
+node bin/cc-token-meter.js
 ```
 
-This starts a loopback-only web server (default port `4317`, or the next free
-port), indexes local history, and opens the dashboard. Live updates arrive
-through Server-Sent Events while Claude Code is running.
+The command starts a loopback-only server on `127.0.0.1:4317` (or the next available port), opens the dashboard, indexes local history, and streams updates with Server-Sent Events.
 
-## What data it reads
+### Preview the UI safely
 
-`cc-token-meter` reads Claude Code's own session transcripts from:
-
+```bash
+npm run preview:dashboard
 ```
+
+Open `http://127.0.0.1:4318`. This preview uses clearly synthetic fixture data and never reads personal Claude Code transcripts, so it is the best way to explore or work on the interface.
+
+## Privacy by design
+
+Claude Code Token Meter reads session transcripts from:
+
+```text
 ~/.claude/projects/**/*.jsonl
 ```
 
-These files are already written to disk by Claude Code during normal use —
-this tool does not modify Claude Code's behavior in any way. Access is
-**strictly read-only**: `cc-token-meter` never writes back to those
-transcript files. It writes only its own files under:
+It writes only its own local state under:
 
-```
+```text
 ~/.claude-token-meter/config.json
 ~/.claude-token-meter/usage-index-v2.json
 ```
 
-The config stores optional budget caps. The versioned usage index makes warm
-starts fast by caching normalized counters, timestamps, model/branch/project
-metadata, and tool names/local file paths needed by the heuristics. It never
-stores prompt text or tool-result content. The index is written atomically and
-uses owner-only file permissions where supported. Pass `--no-cache` to avoid
-reading or writing it; deleting the index is also safe because it is rebuilt
-from the original read-only transcripts.
+| Promise | Enforcement |
+| --- | --- |
+| Transcripts stay unchanged | Transcript access is strictly read-only. |
+| The dashboard stays local | The server binds to `127.0.0.1`, not a public interface. |
+| No telemetry | There is no analytics SDK, CDN asset, remote API, or update check. |
+| Sensitive content is minimized | The private index stores normalized counters and metadata, not prompt or tool-result content. |
+| Local state is recoverable | Index writes are atomic; the index can be deleted and rebuilt from the original transcripts. |
 
-No transcript content, file paths, prompts, or any other data is ever sent
-anywhere — there is no remote component, analytics SDK, CDN asset, or outbound
-network request. The dashboard server listens on `127.0.0.1` only.
+Use `--no-cache` to avoid reading or writing the local usage index.
 
 ## CLI reference
 
-```
-cc-token-meter                          Start the dashboard server (default)
-cc-token-meter --summary                Print a compact local usage summary, exit
-cc-token-meter --json                   Load/index history, print JSON summary, exit
-cc-token-meter --csv <path|->           Export filtered usage as CSV, exit
-cc-token-meter --doctor                 Diagnose local setup and private state, exit
-cc-token-meter --set-budget-usd <n>          Set daily cost cap (USD) and exit
-cc-token-meter --set-budget-tokens <n>       Set daily token cap and exit
-cc-token-meter --set-session-budget-usd <n>  Set per-session cost cap (USD) and exit
-cc-token-meter --help                   Show help
-cc-token-meter --version                Show version
-```
+| Command | Purpose |
+| --- | --- |
+| `node bin/cc-token-meter.js` | Start the local dashboard. |
+| `node bin/cc-token-meter.js --summary` | Print a compact usage summary and exit. |
+| `node bin/cc-token-meter.js --json` | Print a machine-readable summary and exit. |
+| `node bin/cc-token-meter.js --csv <path\|->` | Export filtered usage as CSV. Use `-` for stdout. |
+| `node bin/cc-token-meter.js --doctor` | Diagnose the local setup and private state. |
+| `node bin/cc-token-meter.js --set-budget-usd <n>` | Set a daily estimated-cost cap. |
+| `node bin/cc-token-meter.js --set-budget-tokens <n>` | Set a daily token cap. |
+| `node bin/cc-token-meter.js --set-session-budget-usd <n>` | Set a per-session estimated-cost cap. |
+| `node bin/cc-token-meter.js --help` | Show all options. |
 
-Options:
+Common filters:
 
-```
---port <n>       Port to listen on (default: 4317, or next free port)
---no-open        Don't automatically open a browser window
---no-cache       Don't read or write the private local usage index
---from <date>    Include usage on/after local date YYYY-MM-DD (summary/JSON/CSV)
---to <date>      Include usage on/before local date YYYY-MM-DD (summary/JSON/CSV)
---project <text> Filter project paths by case-insensitive substring (summary/JSON/CSV)
---group-by <n>   CSV rows: day, project, branch, or session (default: day)
+```text
+--port <n>       Dashboard port (default: 4317, or the next free port)
+--no-open        Do not open a browser automatically
+--no-cache       Do not read or write the private local usage index
+--from <date>    Include usage on/after local date YYYY-MM-DD
+--to <date>      Include usage on/before local date YYYY-MM-DD
+--project <text> Match project paths by case-insensitive substring
+--group-by <n>   CSV rows: day, project, branch, or session
 ```
 
 Examples:
 
 ```bash
-npx cc-token-meter
-npx cc-token-meter --port 5000 --no-open
-npx cc-token-meter --summary
-npx cc-token-meter --summary --from 2026-08-01 --project my-app
-npx cc-token-meter --json
-npx cc-token-meter --json --from 2026-08-01 --project my-app
-npx cc-token-meter --csv usage.csv --group-by project
-npx cc-token-meter --csv - --from 2026-08-01 --to 2026-08-31 --group-by day
-npx cc-token-meter --doctor
-npx cc-token-meter --doctor --json
-npx cc-token-meter --no-cache
-npx cc-token-meter --set-budget-usd 20
+node bin/cc-token-meter.js --port 5000 --no-open
+node bin/cc-token-meter.js --summary --from 2026-08-01 --project my-app
+node bin/cc-token-meter.js --json --no-cache
+node bin/cc-token-meter.js --csv usage.csv --group-by project
+node bin/cc-token-meter.js --doctor --json
+node bin/cc-token-meter.js --set-budget-usd 20
 ```
 
-The `--summary` mode is the fastest terminal view: it reports selected and
-today totals, active burn rate, cache reuse, top project, recommendation
-count, and pricing-match quality. The `--json` mode is useful for scripting or
-CI-adjacent local checks—it loads the local index, tails changed transcripts,
-and prints a JSON summary
-(today's totals, all-time totals, per-project/per-session breakdowns,
-intelligence, and active tips) to stdout, then exits without starting a
-server. Pass `--no-cache` when you specifically want an uncached full scan.
-Date filters are inclusive local calendar dates. CSV exports are written
-atomically with owner-only permissions where supported; use `--csv -` to
-write CSV to stdout. `--doctor` checks the Node runtime, transcript access,
-index/config health, and local-state permissions without changing transcript
-files.
+## How it works
 
-## Pricing disclaimer
+```mermaid
+flowchart TD
+    A["Claude Code JSONL transcripts"] --> B["Streaming read-only parser"]
+    B --> C["Private versioned local index"]
+    C --> D["Pricing, analytics, and heuristics"]
+    D --> E["CLI and loopback dashboard"]
+```
 
-Cost estimates are based on a locally-maintained pricing table
-(`src/pricing/models.js`) that may lag official Anthropic pricing,
-especially around scheduled price changes. Always treat dollar figures in
-this tool as **estimates**, not authoritative billing data. For current,
-authoritative pricing, see:
+- `src/ingest/` discovers transcripts, stream-parses changed files, and maintains normalized session records.
+- `src/pricing/` applies date-aware local pricing rules and marks fallback estimates.
+- `src/analytics/` computes activity, velocity, cache health, project attribution, and forecasts.
+- `src/heuristics/` runs independent pure-function checks and returns actionable tips.
+- `src/server/` exposes the local JSON/SSE API and serves the static dashboard from `public/`.
 
-https://platform.claude.com/docs/en/about-claude/pricing
+## What it does not do
 
-If a model isn't recognized by the local pricing table, `cc-token-meter`
-falls back to a default Sonnet-tier rate and marks the message/session as
-estimated. The Live Session view surfaces whether fallback pricing was used;
-the JSON summary exposes `estimatedCostUsed` for programmatic checks.
-
-## Known limitations
-
-- **The first uncached scan scales with transcript history volume.** Later
-  starts restore the private local index and tail only changed files. Using
-  `--no-cache`, deleting the index, changing its schema version, or recovering
-  from corruption intentionally performs a full rebuild.
-- **Project-path reconstruction is lossy for paths containing literal
-  hyphens.** Claude Code sanitizes the absolute project path into a
-  directory name by replacing `/` with `-`, which cannot be perfectly
-  reversed if the original path itself contained a hyphen. `cc-token-meter`
-  uses the `cwd` field recorded on parsed transcript lines as the
-  authoritative project label whenever available, and only falls back to
-  reversing the sanitized directory name when no lines have been parsed
-  yet for a given project.
-- **The long-session-without-compact heuristic's compact-detection logic
-  is best-effort and unverified against a real `/compact`-containing
-  transcript.** It checks for a `user`-type line starting with the literal
-  text `/compact` and, as a looser secondary signal, any `system`-type
-  line mentioning "compact" (case-insensitive). If you notice this
-  heuristic firing on sessions where you did run `/compact`, that's a
-  known gap — please file an issue with an anonymized snippet of the
-  relevant transcript lines so the detection logic can be corrected.
-
-## How it works (brief)
-
-- `src/ingest/discover.js` finds all `~/.claude/projects/*/*.jsonl` files.
-- `src/ingest/parser.js` stream-parses each file line-by-line (never
-  loading a whole file into memory), tolerating malformed lines and
-  in-progress trailing writes from live sessions.
-- `src/ingest/store.js` maintains a per-session aggregate, restores a private
-  versioned local index, and polls for new/changed files roughly every 1.5
-  seconds.
-- `src/analytics/overview.js` produces active-session, recent velocity, cache
-  health, model mix, and data-quality intelligence from normalized records.
-- `src/pricing/` computes estimated cost per message using a versioned,
-  date-aware pricing table.
-- `src/heuristics/` runs five independent, pure-function checks against
-  each session's usage and tool-call history to surface actionable tips.
-- `src/server/` serves a small JSON API (`/api/summary`, `/api/stream`
-  via Server-Sent Events, `/api/budget`) plus the static dashboard in
-  `public/`.
+- It does not intercept or modify Claude Code requests.
+- It does not upload transcripts, prompts, tool output, or project paths.
+- It does not replace Anthropic's authoritative billing data.
+- It does not guarantee perfect project-path reconstruction when Claude Code's sanitized directory names are ambiguous.
+- It does not make every heuristic certain; heuristic results are evidence-backed suggestions and should be reviewed in context.
 
 ## Development
 
 ```bash
-npm install
+npm ci
 npm run ci
-node bin/cc-token-meter.js --json
 npm run preview:dashboard
 ```
 
-`npm run ci` runs both the repository's product-policy checks and all unit/
-contract tests. The policy gate verifies JavaScript syntax, the dependency
-footprint, pure analytics boundaries, loopback-only serving, browser security
-headers, and the dashboard's no-remote-assets/no-remote-requests promise.
+`npm run ci` runs the repository policy gate and all tests. The policy gate protects the local-only, loopback-only, dependency-light, pure-analytics, browser-security, and no-remote-assets boundaries.
 
-`npm run preview:dashboard` starts a development server at
-`http://127.0.0.1:4318` backed by clearly synthetic fixture data. It never
-reads personal Claude Code transcripts and exists for UI development and
-screenshot capture.
+The repository also includes:
 
-See `CONTRIBUTING.md` for details on updating pricing, running tests, and
-adding new heuristics.
+- multi-platform CI on supported Node versions;
+- Conventional Commit PR-title and template checks;
+- automated area, size, and readiness labels;
+- dependency auditing, CodeQL, and secret scanning;
+- conflict-marker detection and Dependabot updates;
+- an optional narrow AI architecture review after a PR leaves draft status.
 
-The product roadmap and UI specification are documented in
-[`docs/V2_PLAN.md`](docs/V2_PLAN.md) and [`docs/UI_PLAN.md`](docs/UI_PLAN.md).
+See [`docs/CI.md`](docs/CI.md) for the exact checks and permissions.
 
-## Repository automation
+## Contributing
 
-The GitHub workflow is deliberately product-specific rather than a generic
-collection of badges:
+Bug fixes, tests, documentation, pricing updates, heuristics, and focused UI improvements are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request—especially the privacy rules for fixtures and screenshots.
 
-- **CI** runs the project policy, package dry-run, and test suite on supported
-  Node versions across Linux, macOS, and Windows.
-- **PR Governance** validates Conventional Commit titles and the PR template,
-  applies area/size/readiness labels, and keeps one actionable bot comment up
-  to date.
-- **Security** runs a production dependency audit, CodeQL, and a
-  checksum-verified gitleaks scan on PRs, `main`, and a weekly schedule.
-- **Merge Conflicts** rejects accidentally committed conflict markers.
-- **Dependabot** opens weekly npm and GitHub Actions update PRs.
-- **Sabee's Bot** provides an optional, narrow AI architecture review after a
-  PR leaves draft status; human review still owns correctness, security, test
-  adequacy, and UX.
+- [Open a bug report](https://github.com/Sabeekhann/cc-token-meter/issues/new?template=bug.yml)
+- [Propose a feature](https://github.com/Sabeekhann/cc-token-meter/issues/new?template=feature.yml)
+- [Review the product plan](docs/V2_PLAN.md)
 
-Repository-owner setup, required-check recommendations, permissions, and the
-fork-safety model are documented in [`docs/CI.md`](docs/CI.md).
+## License and trademark note
 
-## License
+Released under the [MIT License](LICENSE).
 
-MIT — see `LICENSE`.
+The mascot in this repository is an original Claude Code Token Meter project asset. Claude and Claude Code are products of Anthropic. This independent project is not affiliated with or endorsed by Anthropic.
