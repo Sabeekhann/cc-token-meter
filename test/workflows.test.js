@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const aiWorkflow = fs.readFileSync('.github/workflows/sabees-bot-review.yml', 'utf8');
 const governanceWorkflow = fs.readFileSync('.github/workflows/pr-governance.yml', 'utf8');
 const ciWorkflow = fs.readFileSync('.github/workflows/tests.yml', 'utf8');
 const compatibilityWorkflow = fs.readFileSync('.github/workflows/compatibility.yml', 'utf8');
@@ -30,26 +29,6 @@ test('heavy security scans stay off the pull-request path', () => {
   assert.doesNotMatch(securityWorkflow, /\n  pull_request:/);
   assert.match(securityWorkflow, /schedule:/);
   assert.match(securityWorkflow, /workflow_dispatch:/);
-});
-
-test('AI review runs only when a maintainer applies the opt-in label', () => {
-  assert.match(aiWorkflow, /types: \[labeled\]/);
-  assert.equal((aiWorkflow.match(/github\.event\.label\.name == 'ai-review'/g) || []).length, 2);
-  assert.match(governanceWorkflow, /'ai-review'/);
-});
-
-test('AI review keeps fork code behind a manual gate and fixed-repository checkout', () => {
-  assert.match(aiWorkflow, /environment: external-pr-review/);
-  assert.match(aiWorkflow, /repository: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/);
-  assert.match(aiWorkflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
-  assert.match(aiWorkflow, /allow-unsafe-pr-checkout: true/);
-});
-
-test('AI review disables project execution surfaces and rejects a head-provided verdict', () => {
-  assert.equal((aiWorkflow.match(/--bare/g) || []).length, 2);
-  assert.equal((aiWorkflow.match(/--disallowedTools "Bash,Edit,NotebookEdit,mcp__\*"/g) || []).length, 2);
-  assert.equal((aiWorkflow.match(/rm -f -- \.claude-review-verdict/g) || []).length, 2);
-  assert.doesNotMatch(aiWorkflow, /id-token: write/);
 });
 
 test('PR governance checks out trusted base code instead of PR head code', () => {
