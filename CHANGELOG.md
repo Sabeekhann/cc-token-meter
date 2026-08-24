@@ -5,6 +5,11 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-08-24
+
+Maintenance and discovery improvements following the first public npm
+release.
+
 ### Changed
 - Made the published npm package the primary quick-start path and documented
   global installation, upgrades, and removal.
@@ -12,6 +17,8 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   asset.
 - Aligned the required GitHub Actions job name with the protected-branch
   ruleset.
+- Updated the `open` browser-launch dependency from 10.2.0 to 11.0.1 while
+  retaining the existing Node.js 20-or-newer requirement.
 
 ## [1.0.1] — 2026-08-24
 
