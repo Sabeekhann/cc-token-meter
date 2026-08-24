@@ -1,3 +1,6 @@
+// Copyright 2026 FiveNodes
+// SPDX-License-Identifier: Apache-2.0
+
 import { buildSummary } from './summary.js';
 import { isAuthorizedRequest } from './auth.js';
 

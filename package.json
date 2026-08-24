@@ -30,7 +30,8 @@
     "public",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "REUSE.toml"
   ],
   "scripts": {
     "check": "node .github/scripts/project-policy.mjs",

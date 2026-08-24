@@ -1,3 +1,6 @@
+// Copyright 2026 FiveNodes
+// SPDX-License-Identifier: Apache-2.0
+
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
