@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="docs/social-preview.png" alt="Claude Code Token Meter — know where every token goes, local-only with no telemetry" width="100%" />
+  <img src="docs/readme-wordmark.svg" alt="CC Token Meter — know where every token goes, local-only with no telemetry" width="100%" />
 
-  <h1>Claude Code Token Meter</h1>
+  <h1>CC Token Meter</h1>
 
   <p><strong>Private, local usage intelligence for Claude Code.</strong></p>
   <p>Live token usage · Cost estimates · Cache intelligence · Budgets · Evidence-backed recommendations</p>
