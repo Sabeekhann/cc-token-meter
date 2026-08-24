@@ -6,6 +6,7 @@ function validPackage(overrides = {}) {
   return {
     version: '1.2.3',
     private: false,
+    license: 'Apache-2.0',
     repository: {
       url: 'https://github.com/Sabeekhann/cc-token-meter.git',
     },
@@ -13,12 +14,12 @@ function validPackage(overrides = {}) {
       access: 'public',
       registry: 'https://registry.npmjs.org',
     },
-    files: ['bin', 'src', 'public', 'README.md', 'LICENSE'],
+    files: ['bin', 'src', 'public', 'README.md', 'LICENSE', 'NOTICE'],
     ...overrides,
   };
 }
 
-test('release policy accepts an exact tag, public metadata, and changelog entry', () => {
+test('release policy accepts an exact tag, public metadata, Apache licensing, and changelog entry', () => {
   const failures = validateRelease({
     tag: 'v1.2.3',
     packageJson: validPackage(),
@@ -33,6 +34,7 @@ test('release policy rejects mismatched tags and unsafe package metadata', () =>
     tag: 'v1.2.4',
     packageJson: validPackage({
       private: true,
+      license: 'MIT',
       repository: { url: 'https://github.com/example/fork.git' },
       publishConfig: { access: 'restricted', registry: 'https://example.invalid' },
       files: ['bin'],
@@ -40,9 +42,11 @@ test('release policy rejects mismatched tags and unsafe package metadata', () =>
     changelog: '# Changelog\n',
   });
 
-  assert.equal(failures.length, 10);
+  assert.equal(failures.length, 12);
   assert.ok(failures.some((failure) => failure.includes('must exactly match v1.2.3')));
   assert.ok(failures.some((failure) => failure.includes('must not mark')));
+  assert.ok(failures.some((failure) => failure.includes('license must equal Apache-2.0')));
   assert.ok(failures.some((failure) => failure.includes('repository.url')));
+  assert.ok(failures.some((failure) => failure.includes('must include NOTICE')));
   assert.ok(failures.some((failure) => failure.includes('CHANGELOG.md')));
 });
