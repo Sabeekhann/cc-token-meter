@@ -4,7 +4,20 @@
   "description": "Local-only CLI + web dashboard for Claude Code token usage, cost estimates, and waste-reduction tips. 100% local, no API calls, no telemetry.",
   "type": "module",
   "license": "MIT",
+  "author": "Sabee Ur Rehman Khan",
+  "homepage": "https://github.com/Sabeekhann/cc-token-meter#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sabeekhann/cc-token-meter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sabeekhann/cc-token-meter/issues"
+  },
   "private": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -31,7 +44,12 @@
     "usage",
     "cost",
     "dashboard",
-    "cli"
+    "cli",
+    "developer-tools",
+    "local-first",
+    "privacy",
+    "token-tracking",
+    "cost-estimation"
   ],
   "dependencies": {
     "glob": "^13.0.6",

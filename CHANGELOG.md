@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Private vulnerability-reporting guidance and a Contributor Covenant code of
+  conduct.
+- A release-only npm publishing workflow using GitHub OIDC trusted publishing.
+- Release tag/package version validation and documented first-release steps.
+- Repository and support metadata for the npm package listing.
+- Cross-platform line-ending rules for source and documentation files.
+
+### Security
+- Pinned CodeQL actions to the immutable v4.37.6 release commit.
+
 ## [1.0.0] — 2026-07-31
 
 Initial public release.

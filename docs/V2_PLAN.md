@@ -127,9 +127,10 @@ and offline run are covered by automated checks.
   filters, pricing-freshness diagnostics, a compact terminal summary,
   machine-readable JSON diagnostics, and private CSV exports grouped by day,
   project, branch, or session.
-- Bounded history compaction, benchmark thresholds, structured insight
-  evidence/confidence, and automated release publishing remain open roadmap
-  work.
+- Bounded history compaction, benchmark thresholds, and structured insight
+  evidence/confidence remain open roadmap work. Automated release publishing
+  is implemented; activating npm trusted publishing remains a one-time
+  repository-owner setup step after the initial package publish.
 
 The detailed dashboard information architecture and interaction requirements
 are maintained in [`UI_PLAN.md`](UI_PLAN.md).

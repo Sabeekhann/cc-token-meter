@@ -183,6 +183,8 @@ The repository also includes:
 - Conventional Commit PR-title and template checks;
 - automated area, size, and readiness labels;
 - scheduled/main-branch CodeQL and secret scanning;
+- release-tag validation and token-free npm publishing through a trusted
+  GitHub Actions publisher;
 - Dependabot updates and repository-wide maintainer ownership.
 
 See [`docs/CI.md`](docs/CI.md) for the exact checks and permissions.
@@ -194,6 +196,8 @@ Bug fixes, tests, documentation, pricing updates, heuristics, and focused UI imp
 - [Open a bug report](https://github.com/Sabeekhann/cc-token-meter/issues/new?template=bug.yml)
 - [Propose a feature](https://github.com/Sabeekhann/cc-token-meter/issues/new?template=feature.yml)
 - [Review the product plan](docs/V2_PLAN.md)
+- [Review the code of conduct](CODE_OF_CONDUCT.md)
+- [Report a vulnerability privately](SECURITY.md)
 
 ## License and trademark note
 
