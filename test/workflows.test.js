@@ -6,6 +6,7 @@ const governanceWorkflow = fs.readFileSync('.github/workflows/pr-governance.yml'
 const ciWorkflow = fs.readFileSync('.github/workflows/tests.yml', 'utf8');
 const compatibilityWorkflow = fs.readFileSync('.github/workflows/compatibility.yml', 'utf8');
 const securityWorkflow = fs.readFileSync('.github/workflows/security.yml', 'utf8');
+const publishWorkflow = fs.readFileSync('.github/workflows/publish.yml', 'utf8');
 
 test('pull requests have one fast required CI job', () => {
   assert.match(ciWorkflow, /required:\n    name: Required/);
@@ -29,9 +30,27 @@ test('heavy security scans stay off the pull-request path', () => {
   assert.doesNotMatch(securityWorkflow, /\n  pull_request:/);
   assert.match(securityWorkflow, /schedule:/);
   assert.match(securityWorkflow, /workflow_dispatch:/);
+  assert.doesNotMatch(securityWorkflow, /github\/codeql-action\/(?:init|analyze)@v\d/);
 });
 
 test('PR governance checks out trusted base code instead of PR head code', () => {
   assert.match(governanceWorkflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   assert.doesNotMatch(governanceWorkflow, /pull_request\.head\.sha/);
+});
+
+test('publishing is isolated to a maintainer-created GitHub release and uses OIDC', () => {
+  assert.match(publishWorkflow, /release:\n    types: \[published\]/);
+  assert.doesNotMatch(publishWorkflow, /\n  pull_request:/);
+  assert.doesNotMatch(publishWorkflow, /workflow_dispatch:/);
+  assert.match(publishWorkflow, /id-token: write/);
+  assert.match(publishWorkflow, /package-manager-cache: false/);
+  assert.match(publishWorkflow, /verify-release\.mjs/);
+  assert.match(publishWorkflow, /npm publish --access public/);
+  assert.doesNotMatch(publishWorkflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
+});
+
+test('community health files cover conduct and private security reporting', () => {
+  assert.equal(fs.existsSync('CODE_OF_CONDUCT.md'), true);
+  assert.equal(fs.existsSync('SECURITY.md'), true);
+  assert.match(fs.readFileSync('SECURITY.md', 'utf8'), /security\/advisories\/new/);
 });

@@ -18,6 +18,10 @@ This guide is the contract for changes in this repository. The short version is:
 - [Privacy and security](#privacy-and-security)
 - [Review process](#review-process)
 
+Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). Report
+security vulnerabilities through the private process in [SECURITY.md](SECURITY.md),
+not through a public issue.
+
 ## Ways to contribute
 
 Useful contributions include:
@@ -284,6 +288,10 @@ markers. PR Governance separately validates metadata and maintains labels.
 Cross-platform compatibility, CodeQL, and full secret scanning run after merge,
 on schedule, or manually so contributor feedback stays fast. These workflows
 do not replace human review.
+
+Publishing is not part of the pull-request path. Only a maintainer-created
+GitHub Release can start the npm publishing workflow, and the release tag must
+exactly match the version in `package.json`.
 
 Maintainers review for:
 

@@ -1,1 +1,5 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Sabeekhann/cc-token-meter/security/advisories/new
+    about: Share security details privately. Do not include transcripts, prompts, credentials, or private paths in a public issue.

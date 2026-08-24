@@ -14,13 +14,13 @@ that do not fit this small Node.js CLI.
 | Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it has no pull-request trigger |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
+| Publish | Published, non-prerelease GitHub Releases | Re-validates the package and publishes to npm through trusted OIDC authentication |
 | Dependabot | Weekly | npm and GitHub Actions update PRs |
 
-Verified GitHub-maintained actions are pinned to immutable release commit
-SHAs. Dependabot proposes updates so reviewers can verify both the release tag
-and replacement commit before merging. Third-party actions that are not yet
-pinned must stay version-tagged, least-privilege, and isolated from untrusted
-code as described below.
+GitHub-maintained actions are pinned to immutable release commit SHAs.
+Dependabot proposes updates so reviewers can verify both the release tag and
+replacement commit before merging. Downloaded release tools are pinned by
+version and checksum and remain isolated from untrusted pull-request code.
 
 Local equivalent:
 
@@ -81,6 +81,24 @@ workflow file—are the enforcement boundary for merge permission.
   commit/release-history entry.
 - Leave automatic Dependabot merging disabled; the maintainer reviews and
   merges dependency changes.
+
+### 4. npm trusted publisher
+
+After the first manual npm publish creates the package, configure its trusted
+publisher with these exact values:
+
+```text
+GitHub owner: Sabeekhann
+Repository: cc-token-meter
+Workflow filename: publish.yml
+Allowed action: npm publish
+```
+
+The publish workflow runs only for a published, non-prerelease GitHub Release,
+requires the release tag to equal `v<package.json version>`, repeats the full
+local gate, and publishes with short-lived OIDC authentication. It contains no
+`NPM_TOKEN` and does not run on pull requests. See
+[`RELEASING.md`](RELEASING.md) for the first-release and rollback procedure.
 
 ## Project policy gate
 
