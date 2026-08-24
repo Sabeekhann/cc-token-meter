@@ -75,9 +75,24 @@ The dashboard is organized around five focused views: **Overview**, **Live Sessi
 
 ## Dashboard preview
 
-![Claude Code Token Meter overview using synthetic data](docs/screenshot.png)
+<a href="docs/media/cc-token-meter-demo.mp4">
+  <img src="docs/media/dashboard-overview.webp" alt="CC Token Meter Overview showing synthetic token usage, estimated cost, cache reuse, active sessions, burn history, and forecast data" width="100%" />
+</a>
 
-<p align="center"><sub>Synthetic data only. No personal transcript content or private project paths.</sub></p>
+<p align="center">
+  <strong><a href="docs/media/cc-token-meter-demo.mp4">Watch the 12-second product tour</a></strong><br />
+  <sub>Synthetic data only. No personal transcript content or private project paths.</sub>
+</p>
+
+<details>
+  <summary><strong>Explore cost insights and project attribution</strong></summary>
+  <br />
+  <img src="docs/media/dashboard-insights.webp" alt="CC Token Meter showing synthetic token composition, top projects, and evidence-backed optimization opportunities" width="100%" />
+  <p align="center"><sub>Token composition, cost drivers, and highest-value opportunities.</sub></p>
+  <br />
+  <img src="docs/media/dashboard-projects.webp" alt="CC Token Meter Projects view showing synthetic project and branch-level token and estimated-cost attribution" width="100%" />
+  <p align="center"><sub>Exact message-level attribution across projects and branches.</sub></p>
+</details>
 
 ## Quick start
 
