@@ -13,6 +13,7 @@
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
+    <img alt="Corgea scanned" src="https://img.shields.io/badge/Corgea-scanned-ff6b2c" />
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-f3b33d" /></a>
     <img alt="Local only" src="https://img.shields.io/badge/privacy-local--only-0f766e" />
@@ -25,6 +26,7 @@
     <a href="#cli-reference">CLI</a> ·
     <a href="#privacy-by-design">Privacy</a> ·
     <a href="#how-it-works">Architecture</a> ·
+    <a href="#security-validation">Security</a> ·
     <a href="#contributing">Contribute</a>
   </p>
 
@@ -50,14 +52,15 @@ It requires no API key, makes no Anthropic API call, works retroactively, and tr
 > [!IMPORTANT]
 > Dollar values are local estimates, not an Anthropic bill. Pricing rules can change; verify important decisions against [Anthropic's official pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing).
 
-## What's new in v1.1.0
+## What's new in v1.1.1
 
-- **Actionable insight contracts:** recommendations now include measured evidence, confidence, affected scope, a concrete next action, and estimated savings when they can be calculated honestly.
-- **Accessible responsive dashboard:** semantic landmarks, keyboard navigation, visible focus, 44-pixel targets, text chart summaries, and layouts covering mobile through desktop.
-- **Bounded private history:** index v3 keeps recent message detail bounded while preserving exact historical totals through compact daily, model, branch, and version rollups.
-- **Safer upgrades and releases:** automatic v2-to-v3 migration plus packed-artifact validation across Node.js 20, 22, and 24 on Linux, macOS, and Windows.
+- **Hardened local dashboard:** packaged assets are served from an explicit allowlist, eliminating request-controlled filesystem paths from the web server.
+- **Authenticated local API:** every dashboard process creates an in-memory random session token; `/api/*` and live SSE updates require its HttpOnly, SameSite=Strict cookie.
+- **Loopback Host validation:** requests must target `127.0.0.1` or `localhost`, adding another boundary against local-browser attacks while the server remains bound to `127.0.0.1`.
+- **Expanded security validation:** regression tests cover traversal attempts, local Host validation, session authorization, and cookie security flags.
+- **Corgea scanning:** Corgea now complements CodeQL, gitleaks, and dependency auditing for repository security review. The post-hardening full scan reported zero active findings.
 
-Read the [v1.1.0 release notes](docs/RELEASE_NOTES_v1.1.0.md) or view the [published GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/tag/v1.1.0).
+Read the [v1.1.1 release notes](docs/RELEASE_NOTES_v1.1.1.md). Scanner results are point-in-time signals, not a guarantee that software is vulnerability-free.
 
 ## What you get
 
@@ -235,6 +238,21 @@ flowchart TD
 - It does not guarantee perfect project-path reconstruction when Claude Code's sanitized directory names are ambiguous.
 - It does not make every heuristic certain; heuristic results are evidence-backed suggestions and should be reviewed in context.
 
+## Security validation
+
+CC Token Meter uses multiple repository-level security checks:
+
+| Check | Role |
+| --- | --- |
+| **CodeQL** | Static analysis for JavaScript/TypeScript security issues. |
+| **gitleaks** | Full-history credential and secret scanning. |
+| **npm audit** | High-severity production dependency vulnerability checks. |
+| **Corgea** | Additional SAST, Logic & Auth, secret, dependency, container, and IaC review of the repository. |
+
+After the v1.1.1 dashboard hardening, a Corgea full scan of `main` reported **0 active findings** across the scanners executed. Corgea is a development/repository scanning service only: it is not a runtime dependency, is not shipped in the npm package, and does not alter CC Token Meter's local-only/no-telemetry runtime model.
+
+See [`SECURITY.md`](SECURITY.md) for vulnerability reporting and [`docs/CI.md`](docs/CI.md) for automated security checks.
+
 ## Development
 
 Run the project from source when contributing:
@@ -256,7 +274,7 @@ The repository also includes:
 - multi-platform compatibility checks after merge and on manual runs;
 - Conventional Commit PR-title and template checks;
 - automated area, size, and readiness labels;
-- scheduled/main-branch CodeQL and secret scanning;
+- scheduled/main-branch CodeQL, gitleaks, and dependency auditing, plus Corgea repository scanning;
 - release-tag validation and token-free npm publishing through a trusted
   GitHub Actions publisher;
 - Dependabot updates and repository-wide maintainer ownership.
