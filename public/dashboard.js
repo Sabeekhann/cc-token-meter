@@ -49,29 +49,36 @@
   }
 
   function bindNavigation() {
-    document.querySelectorAll('[data-view]').forEach(function (button) {
+    var navButtons = Array.from(document.querySelectorAll('[data-view]'));
+    navButtons.forEach(function (button, index) {
       button.addEventListener('click', function () {
-        setView(button.getAttribute('data-view'));
+        setView(button.getAttribute('data-view'), true, true);
+      });
+      button.addEventListener('keydown', function (event) {
+        var targetIndex = keyboardTargetIndex(event.key, index, navButtons.length);
+        if (targetIndex == null) return;
+        event.preventDefault();
+        navButtons[targetIndex].focus();
       });
     });
 
     document.querySelectorAll('[data-go-view]').forEach(function (button) {
       button.addEventListener('click', function () {
-        setView(button.getAttribute('data-go-view'));
+        setView(button.getAttribute('data-go-view'), true, true);
       });
     });
 
     document.querySelectorAll('[data-nav-view]').forEach(function (link) {
       link.addEventListener('click', function (event) {
         event.preventDefault();
-        setView(link.getAttribute('data-nav-view'));
+        setView(link.getAttribute('data-nav-view'), true, true);
       });
     });
 
     window.addEventListener('hashchange', function () {
       var requested = window.location.hash.replace('#', '');
       if (VIEW_TITLES[requested] && requested !== state.view) {
-        setView(requested, false);
+        setView(requested, false, true);
       }
     });
 
@@ -85,15 +92,32 @@
       if (state.view === 'projects') renderProjects();
     });
 
-    document.querySelectorAll('[data-insight-filter]').forEach(function (button) {
+    var filterButtons = Array.from(document.querySelectorAll('[data-insight-filter]'));
+    filterButtons.forEach(function (button, index) {
       button.addEventListener('click', function () {
         state.insightFilter = button.getAttribute('data-insight-filter');
-        document.querySelectorAll('[data-insight-filter]').forEach(function (item) {
+        filterButtons.forEach(function (item) {
           item.classList.toggle('active', item === button);
+          item.setAttribute('aria-pressed', item === button ? 'true' : 'false');
         });
         renderInsights();
       });
+      button.addEventListener('keydown', function (event) {
+        var targetIndex = keyboardTargetIndex(event.key, index, filterButtons.length);
+        if (targetIndex == null) return;
+        event.preventDefault();
+        filterButtons[targetIndex].focus();
+        filterButtons[targetIndex].click();
+      });
     });
+  }
+
+  function keyboardTargetIndex(key, currentIndex, length) {
+    if (key === 'ArrowRight' || key === 'ArrowDown') return (currentIndex + 1) % length;
+    if (key === 'ArrowLeft' || key === 'ArrowUp') return (currentIndex - 1 + length) % length;
+    if (key === 'Home') return 0;
+    if (key === 'End') return length - 1;
+    return null;
   }
 
   function bindSettings() {
@@ -143,7 +167,7 @@
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   }
 
-  function setView(view, updateHash) {
+  function setView(view, updateHash, focusHeading) {
     if (!VIEW_TITLES[view]) return;
     if (updateHash === undefined) updateHash = true;
     state.view = view;
@@ -157,12 +181,15 @@
     });
 
     document.querySelectorAll('[data-view-panel]').forEach(function (panel) {
-      panel.classList.toggle('active', panel.getAttribute('data-view-panel') === view);
+      var active = panel.getAttribute('data-view-panel') === view;
+      panel.classList.toggle('active', active);
+      panel.hidden = !active;
     });
 
     if (updateHash) history.replaceState(null, '', '#' + view);
     renderCurrentView();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (focusHeading) dom.viewTitle.focus({ preventScroll: true });
   }
 
   function receiveSummary(summary) {
@@ -280,6 +307,7 @@
     chart.classList.remove('loading-block');
     if (days.length === 0) {
       chart.innerHTML = '<div class="empty-state compact">Usage history will appear after Claude Code records a session.</div>';
+      byId('burnChartSummary').textContent = 'No usage history is available yet.';
       return;
     }
 
@@ -338,6 +366,12 @@
         '<polygon class="chart-area" points="' + areaPoints + '"></polygon>' +
         bars + '<polyline class="chart-line" points="' + points.join(' ') + '"></polyline>' + dots + labels +
       '</svg>';
+    var totalTokens = days.reduce(function (sum, day) { return sum + finiteOr0(day.tokenTotal); }, 0);
+    var totalCost = days.reduce(function (sum, day) { return sum + finiteOr0(day.costUsd); }, 0);
+    var peak = days.slice().sort(function (a, b) { return finiteOr0(b.tokenTotal) - finiteOr0(a.tokenTotal); })[0];
+    byId('burnChartSummary').textContent = days.length + ' days shown: ' + formatNumber(totalTokens) +
+      ' total tokens and ' + formatCost(totalCost) + ' estimated cost. Peak usage was ' +
+      formatNumber(peak.tokenTotal || 0) + ' tokens on ' + peak.date + '.';
   }
 
   function renderForecast(forecast, config) {
@@ -542,7 +576,8 @@
       return '<line class="tool-tick" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + (height - padBottom + 3) + '" y2="' + (height - 8) + '"><title>' + escapeHtml((tool.name || 'tool') + ' · ' + formatTime(tool.timestamp)) + '</title></line>';
     }).join('');
 
-    return '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Per-message tokens with cumulative burn and tool markers">' +
+    var summary = usage.length + ' messages shown, ' + formatNumber(running) + ' cumulative tokens, and ' + tools.length + ' tool event' + (tools.length === 1 ? '' : 's') + '.';
+    return '<p class="chart-summary">' + escapeHtml(summary) + '</p><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Per-message tokens with cumulative burn and tool markers">' +
       '<line class="chart-grid-line" x1="' + padX + '" y1="' + (padTop + plotH) + '" x2="' + (width - padX) + '" y2="' + (padTop + plotH) + '"></line>' +
       '<line class="chart-grid-line" x1="' + padX + '" y1="' + (padTop + plotH / 2) + '" x2="' + (width - padX) + '" y2="' + (padTop + plotH / 2) + '"></line>' +
       bars + '<polyline class="session-line" points="' + points.join(' ') + '"></polyline>' + ticks +
