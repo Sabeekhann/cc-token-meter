@@ -7,6 +7,8 @@
   <p>Live token usage, cost estimates, cache intelligence, budgets, and practical recommendations—without sending your transcripts anywhere.</p>
 
   <p>
+    <a href="https://www.npmjs.com/package/cc-token-meter"><img alt="npm version" src="https://img.shields.io/npm/v/cc-token-meter?logo=npm&color=cb3837" /></a>
+    <a href="https://www.npmjs.com/package/cc-token-meter"><img alt="npm downloads" src="https://img.shields.io/npm/dm/cc-token-meter?logo=npm&color=0f766e" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
@@ -58,18 +60,34 @@ The dashboard is organized around five focused views: **Overview**, **Live Sessi
 
 ## Quick start
 
-### Run from source
-
 Node.js 20 or newer is required.
 
 ```bash
-git clone https://github.com/Sabeekhann/cc-token-meter.git
-cd cc-token-meter
-npm ci
-node bin/cc-token-meter.js
+npx --yes cc-token-meter@latest
 ```
 
-The command starts a loopback-only server on `127.0.0.1:4317` (or the next available port), opens the dashboard, indexes local history, and streams updates with Server-Sent Events.
+That is the complete install-and-run path. It starts a loopback-only server on
+`127.0.0.1:4317` (or the next available port), opens the dashboard, indexes the
+Claude Code history already stored on your machine, and streams local updates
+with Server-Sent Events.
+
+If the dashboard is empty, use Claude Code for at least one session and run the
+command again. The meter reads existing transcripts from `~/.claude/projects`;
+it does not require an Anthropic API key.
+
+### Install as a reusable command
+
+```bash
+npm install --global cc-token-meter
+cc-token-meter
+```
+
+Upgrade or remove the global command at any time:
+
+```bash
+npm install --global cc-token-meter@latest
+npm uninstall --global cc-token-meter
+```
 
 ### Preview the UI safely
 
@@ -106,17 +124,20 @@ Use `--no-cache` to avoid reading or writing the local usage index.
 
 ## CLI reference
 
+The commands below assume a global install. For one-off use, replace
+`cc-token-meter` with `npx --yes cc-token-meter@latest`.
+
 | Command | Purpose |
 | --- | --- |
-| `node bin/cc-token-meter.js` | Start the local dashboard. |
-| `node bin/cc-token-meter.js --summary` | Print a compact usage summary and exit. |
-| `node bin/cc-token-meter.js --json` | Print a machine-readable summary and exit. |
-| `node bin/cc-token-meter.js --csv <path\|->` | Export filtered usage as CSV. Use `-` for stdout. |
-| `node bin/cc-token-meter.js --doctor` | Diagnose the local setup and private state. |
-| `node bin/cc-token-meter.js --set-budget-usd <n>` | Set a daily estimated-cost cap. |
-| `node bin/cc-token-meter.js --set-budget-tokens <n>` | Set a daily token cap. |
-| `node bin/cc-token-meter.js --set-session-budget-usd <n>` | Set a per-session estimated-cost cap. |
-| `node bin/cc-token-meter.js --help` | Show all options. |
+| `cc-token-meter` | Start the local dashboard. |
+| `cc-token-meter --summary` | Print a compact usage summary and exit. |
+| `cc-token-meter --json` | Print a machine-readable summary and exit. |
+| `cc-token-meter --csv <path\|->` | Export filtered usage as CSV. Use `-` for stdout. |
+| `cc-token-meter --doctor` | Diagnose the local setup and private state. |
+| `cc-token-meter --set-budget-usd <n>` | Set a daily estimated-cost cap. |
+| `cc-token-meter --set-budget-tokens <n>` | Set a daily token cap. |
+| `cc-token-meter --set-session-budget-usd <n>` | Set a per-session estimated-cost cap. |
+| `cc-token-meter --help` | Show all options. |
 
 Common filters:
 
@@ -133,12 +154,12 @@ Common filters:
 Examples:
 
 ```bash
-node bin/cc-token-meter.js --port 5000 --no-open
-node bin/cc-token-meter.js --summary --from 2026-08-01 --project my-app
-node bin/cc-token-meter.js --json --no-cache
-node bin/cc-token-meter.js --csv usage.csv --group-by project
-node bin/cc-token-meter.js --doctor --json
-node bin/cc-token-meter.js --set-budget-usd 20
+cc-token-meter --port 5000 --no-open
+cc-token-meter --summary --from 2026-08-01 --project my-app
+cc-token-meter --json --no-cache
+cc-token-meter --csv usage.csv --group-by project
+cc-token-meter --doctor --json
+cc-token-meter --set-budget-usd 20
 ```
 
 ## How it works
@@ -167,7 +188,11 @@ flowchart TD
 
 ## Development
 
+Run the project from source when contributing:
+
 ```bash
+git clone https://github.com/Sabeekhann/cc-token-meter.git
+cd cc-token-meter
 npm ci
 npm run ci
 npm run preview:dashboard
