@@ -15,11 +15,12 @@ The lifecycle runner:
 5. blocks non-loopback `fetch`, HTTP(S), TCP, and TLS connections at runtime;
 6. verifies `--doctor`, `--summary`, `--json`, CSV export, and the binary
    version from the installed artifact;
-7. reinstalls over a warm v2 index/config and proves both valid files are
+7. reinstalls over a warm v3 index/config and proves both valid files are
    preserved;
-8. proves malformed and unsupported indexes are rebuilt from the synthetic
+8. migrates a warm v2 index to bounded v3 state without changing totals;
+9. proves malformed and unsupported indexes are rebuilt from the synthetic
    transcript; and
-9. starts the installed dashboard, requests its summary over `127.0.0.1`, and
+10. starts the installed dashboard, requests its summary over `127.0.0.1`, and
    verifies the packaged server source binds explicitly to that address.
 
 The test never publishes, calls Anthropic, uses billing data, or reads
