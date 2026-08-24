@@ -5,13 +5,27 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-08-25
+
+Licensing and release-alignment patch for the Apache-2.0 transition.
+
 ### Changed
 - Relicensed CC Token Meter from the MIT License to the Apache License,
-  Version 2.0 for future distributions from this change onward.
+  Version 2.0 for distributions from this release onward.
 - Added a `NOTICE` file and aligned npm package metadata and README licensing
   references with the `Apache-2.0` SPDX identifier.
+- Added explicit `Copyright 2026 FiveNodes` attribution to the applied Apache
+  license notice.
+- Added SPDX headers to key shipped source files and `REUSE.toml` metadata for
+  the remaining distributed project-owned source and dashboard assets.
+- Included `LICENSE`, `NOTICE`, and `REUSE.toml` in the npm package contents.
 - Previously distributed MIT-licensed versions remain available under the
   license terms that accompanied those copies.
+
+### Fixed
+- Updated the packed-release lifecycle test to establish the authenticated
+  local dashboard session before exercising protected API routes, keeping the
+  compatibility matrix aligned with the v1.1.1 security hardening.
 
 ## [1.1.1] — 2026-08-24
 
