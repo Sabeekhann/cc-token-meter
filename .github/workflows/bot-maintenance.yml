@@ -1,0 +1,99 @@
+name: Bot Maintenance Contributor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  contribute:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Create bot maintenance branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="automation/github-actions-maintenance"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p .github/maintenance
+          cat > .github/maintenance/README.md <<'EOF'
+          # Automated maintenance
+
+          This directory records repository-maintenance changes created by
+          GitHub Actions. It intentionally contains no runtime code and does
+          not affect CC Token Meter's local-only behavior.
+          EOF
+
+          git add .github/maintenance/README.md
+          git commit -m "chore: add automated maintenance record"
+          git push --force-with-lease origin "$branch"
+
+      - name: Open maintenance pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr create \
+            --base main \
+            --head automation/github-actions-maintenance \
+            --title "chore: add automated maintenance record" \
+            --body-file - <<'EOF'
+          ## Description
+
+          Add a small repository-maintenance record authored by `github-actions[bot]`.
+
+          ## Type of Change
+
+          - [ ] Bug fix
+          - [ ] New feature
+          - [ ] Performance improvement
+          - [ ] Refactoring (no intended behavior change)
+          - [x] Documentation
+          - [x] Tests or CI only
+
+          ## Changes Made
+
+          - Add `.github/maintenance/README.md` as a bot-authored maintenance record.
+          - No runtime, packaging, privacy, or network behavior changes.
+
+          ## Testing
+
+          - [ ] Project policy passes (`npm run check`)
+          - [ ] Unit and contract tests pass (`npm test`)
+          - [ ] CLI smoke test performed
+          - [ ] Dashboard manually tested with synthetic preview data
+          - [x] Not tested locally; GitHub CI validates this documentation-only change.
+
+          ### Evidence
+
+          ```text
+          Documentation-only file under .github/maintenance; no application code modified.
+          ```
+
+          ## Privacy and Local-Only Safety
+
+          - [x] No transcript content, paths, or usage data is sent off-device
+          - [x] The dashboard still binds only to `127.0.0.1`
+          - [x] No remote browser assets, telemetry, or analytics were introduced
+          - [ ] Not applicable (explain why below)
+
+          ## Review Readiness
+
+          - [x] I have performed a self-review
+          - [x] This PR is ready for human review
+
+          ## Additional Notes
+
+          This PR is intentionally authored by GitHub Actions so the bot is represented as a genuine repository contributor after merge.
+          EOF
