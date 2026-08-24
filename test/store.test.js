@@ -104,6 +104,7 @@ test('store rebuilds a truncated transcript instead of double-counting old recor
 
   await store.ingestNewData();
   assert.equal(store.getSnapshot().sessions[0].messageCount, 2);
+  assert.equal(store.getSnapshot().totalIngestedMessages, 2);
 
   fs.writeFileSync(filePath, `${firstLine}\n`, 'utf8');
   await store.ingestNewData();
@@ -111,4 +112,35 @@ test('store rebuilds a truncated transcript instead of double-counting old recor
   const rebuilt = store.getSnapshot().sessions[0];
   assert.equal(rebuilt.messageCount, 1);
   assert.equal(rebuilt.inputTokens, 100);
+  assert.equal(store.getSnapshot().totalIngestedMessages, 1);
+});
+
+test('store rebuilds a replaced transcript with the same size instead of double-counting', async (t) => {
+  const original = assistantLine({
+    sessionId: 'session-1',
+    timestamp: '2026-08-21T12:00:00.000Z',
+    inputTokens: 100,
+  });
+  const replacement = assistantLine({
+    sessionId: 'session-1',
+    timestamp: '2026-08-21T12:00:00.000Z',
+    inputTokens: 900,
+  });
+  assert.equal(Buffer.byteLength(original), Buffer.byteLength(replacement));
+  const { dir, filePath } = tempSession(t, [original]);
+  const store = createStore({
+    persistIndex: false,
+    discoverFiles: discoverOnly(filePath),
+  });
+
+  await store.ingestNewData();
+  const replacementPath = path.join(dir, 'replacement.jsonl');
+  fs.writeFileSync(replacementPath, `${replacement}\n`, 'utf8');
+  fs.renameSync(replacementPath, filePath);
+  await store.ingestNewData();
+
+  const snapshot = store.getSnapshot();
+  assert.equal(snapshot.totalIngestedMessages, 1);
+  assert.equal(snapshot.sessions[0].messageCount, 1);
+  assert.equal(snapshot.sessions[0].inputTokens, 900);
 });
