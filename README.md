@@ -109,7 +109,7 @@ It writes only its own local state under:
 
 ```text
 ~/.claude-token-meter/config.json
-~/.claude-token-meter/usage-index-v2.json
+~/.claude-token-meter/usage-index-v3.json
 ```
 
 | Promise | Enforcement |
@@ -117,10 +117,13 @@ It writes only its own local state under:
 | Transcripts stay unchanged | Transcript access is strictly read-only. |
 | The dashboard stays local | The server binds to `127.0.0.1`, not a public interface. |
 | No telemetry | There is no analytics SDK, CDN asset, remote API, or update check. |
-| Sensitive content is minimized | The private index stores normalized counters and metadata, not prompt or tool-result content. |
+| Sensitive content is minimized | The private index stores normalized counters and metadata, not prompt or tool-result content. Detailed history is bounded; older counters become exact daily rollups. |
 | Local state is recoverable | Index writes are atomic; the index can be deleted and rebuilt from the original transcripts. |
 
 Use `--no-cache` to avoid reading or writing the local usage index.
+Existing v2 indexes migrate automatically without reparsing unchanged
+transcripts. See [large-history performance and retention](docs/PERFORMANCE.md)
+for the retention contract and reproducible budgets.
 
 ## CLI reference
 

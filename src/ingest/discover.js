@@ -1,7 +1,7 @@
-import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { glob } from 'glob';
+import { resolveProjectsDirectory } from '../paths.js';
 
 /**
  * Discover all Claude Code session transcript files on disk.
@@ -13,7 +13,7 @@ import { glob } from 'glob';
  * @returns {Promise<Array<{sessionId: string, projectDirName: string, filePath: string, mtimeMs: number, size: number}>>}
  */
 export async function discoverSessionFiles() {
-  const projectsRoot = path.join(os.homedir(), '.claude', 'projects');
+  const projectsRoot = resolveProjectsDirectory();
   const pattern = path.join(projectsRoot, '*', '*.jsonl');
 
   let files;

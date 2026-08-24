@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/dashboard.css" />
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to dashboard content</a>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Primary navigation">
       <a class="brand" href="#overview" data-nav-view="overview" aria-label="Token Meter overview">
@@ -63,7 +64,7 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">LOCAL USAGE INTELLIGENCE</p>
-          <h1 id="viewTitle">Overview</h1>
+          <h1 id="viewTitle" tabindex="-1">Overview</h1>
         </div>
         <div class="topbar-actions">
           <div id="connectionStatus" class="connection-pill connecting" role="status">
@@ -77,7 +78,7 @@
         </div>
       </header>
 
-      <main class="main-content">
+      <main id="mainContent" class="main-content">
         <section id="view-overview" class="view active" data-view-panel="overview" aria-labelledby="viewTitle">
           <div class="welcome-row">
             <div>
@@ -137,14 +138,15 @@
               <div class="panel-header">
                 <div>
                   <p class="panel-kicker">BURN HISTORY</p>
-                  <h3>Usage over the last 14 days</h3>
+                  <h3 id="burnChartTitle">Usage over the last 14 days</h3>
                 </div>
                 <div class="chart-legend">
                   <span><i class="legend-bar"></i> Tokens</span>
                   <span><i class="legend-line"></i> Cost</span>
                 </div>
               </div>
-              <div id="burnChart" class="burn-chart loading-block" aria-label="Token and cost history chart"></div>
+              <div id="burnChart" class="burn-chart loading-block" role="group" aria-labelledby="burnChartTitle" aria-describedby="burnChartSummary"></div>
+              <p id="burnChartSummary" class="chart-summary" aria-live="polite">Loading the local 14-day token and estimated cost summary.</p>
             </article>
 
             <article class="panel forecast-panel">
@@ -204,11 +206,11 @@
           </article>
         </section>
 
-        <section id="view-live" class="view" data-view-panel="live" aria-labelledby="viewTitle">
+        <section id="view-live" class="view" data-view-panel="live" aria-labelledby="viewTitle" hidden>
           <div id="liveSessionContent"></div>
         </section>
 
-        <section id="view-projects" class="view" data-view-panel="projects" aria-labelledby="viewTitle">
+        <section id="view-projects" class="view" data-view-panel="projects" aria-labelledby="viewTitle" hidden>
           <div class="page-heading-row">
             <div>
               <p class="section-kicker">PROJECT & BRANCH ATTRIBUTION</p>
@@ -235,7 +237,7 @@
           </article>
         </section>
 
-        <section id="view-insights" class="view" data-view-panel="insights" aria-labelledby="viewTitle">
+        <section id="view-insights" class="view" data-view-panel="insights" aria-labelledby="viewTitle" hidden>
           <div class="insight-hero">
             <div>
               <p class="section-kicker">ACTION QUEUE</p>
@@ -249,14 +251,14 @@
             </div>
           </div>
           <div class="filter-row" role="group" aria-label="Insight filters">
-            <button class="filter-button active" type="button" data-insight-filter="all">All <span id="filterAllCount">0</span></button>
-            <button class="filter-button" type="button" data-insight-filter="warn">Needs attention <span id="filterWarnCount">0</span></button>
-            <button class="filter-button" type="button" data-insight-filter="info">Optimizations <span id="filterInfoCount">0</span></button>
+            <button class="filter-button active" type="button" data-insight-filter="all" aria-pressed="true">All <span id="filterAllCount">0</span></button>
+            <button class="filter-button" type="button" data-insight-filter="warn" aria-pressed="false">Needs attention <span id="filterWarnCount">0</span></button>
+            <button class="filter-button" type="button" data-insight-filter="info" aria-pressed="false">Optimizations <span id="filterInfoCount">0</span></button>
           </div>
           <div id="insightsList" class="insights-list"></div>
         </section>
 
-        <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="viewTitle">
+        <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="viewTitle" hidden>
           <div class="page-heading-row settings-heading">
             <div>
               <p class="section-kicker">LOCAL PREFERENCES</p>
@@ -317,7 +319,7 @@
                 <dl>
                   <div><dt>Source</dt><dd><code>~/.claude/projects/**/*.jsonl</code></dd></div>
                   <div><dt>Settings</dt><dd><code>~/.claude-token-meter/config.json</code></dd></div>
-                  <div><dt>Private index</dt><dd><code>~/.claude-token-meter/usage-index-v2.json</code></dd></div>
+                  <div><dt>Private index</dt><dd><code>~/.claude-token-meter/usage-index-v3.json</code></dd></div>
                   <div><dt>Pricing verified</dt><dd id="pricingVerifiedOn">—</dd></div>
                 </dl>
               </article>

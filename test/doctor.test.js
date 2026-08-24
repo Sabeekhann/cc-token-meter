@@ -11,7 +11,7 @@ test('doctor reports a healthy private local setup', async (t) => {
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const projectsDir = path.join(home, '.claude', 'projects');
   const stateDir = path.join(home, '.claude-token-meter');
-  const indexFile = path.join(stateDir, 'usage-index-v2.json');
+  const indexFile = path.join(stateDir, 'usage-index-v3.json');
   const configFile = path.join(stateDir, 'config.json');
   fs.mkdirSync(projectsDir, { recursive: true });
   writeLocalIndex({ sessions: [], files: [], totalIngestedMessages: 0 }, indexFile);

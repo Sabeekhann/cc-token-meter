@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { resolveStateDirectory } from '../paths.js';
 
-const CONFIG_DIR = path.join(os.homedir(), '.claude-token-meter');
+const CONFIG_DIR = resolveStateDirectory();
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 const DEFAULT_CONFIG = {

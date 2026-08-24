@@ -1,13 +1,12 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { discoverSessionFiles } from '../../ingest/discover.js';
 import {
-  DEFAULT_INDEX_FILE,
   LOCAL_INDEX_VERSION,
   readLocalIndex,
 } from '../../ingest/localIndex.js';
 import { PRICING_VERIFIED_ON } from '../../pricing/models.js';
+import { resolveHomeDirectory } from '../../paths.js';
 
 const PRICING_STALE_AFTER_DAYS = 90;
 
@@ -22,7 +21,7 @@ export async function doctorCommand({ json = false } = {}) {
 }
 
 export async function runDiagnostics(options = {}) {
-  const home = options.homedir || os.homedir();
+  const home = options.homedir || resolveHomeDirectory();
   const platform = options.platform || process.platform;
   const nodeVersion = options.nodeVersion || process.versions.node;
   const discoverFiles = options.discoverFiles || discoverSessionFiles;
@@ -31,11 +30,7 @@ export async function runDiagnostics(options = {}) {
   const projectsDir = options.projectsDir || path.join(home, '.claude', 'projects');
   const stateDir = options.stateDir || path.join(home, '.claude-token-meter');
   const configFile = options.configFile || path.join(stateDir, 'config.json');
-  const indexFile = options.indexFile || (
-    options.homedir
-      ? path.join(stateDir, `usage-index-v${LOCAL_INDEX_VERSION}.json`)
-      : DEFAULT_INDEX_FILE
-  );
+  const indexFile = options.indexFile || path.join(stateDir, `usage-index-v${LOCAL_INDEX_VERSION}.json`);
   const checks = [];
 
   const nodeMajor = Number.parseInt(String(nodeVersion).split('.')[0], 10);
