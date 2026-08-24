@@ -11,7 +11,7 @@ that do not fit this small Node.js CLI.
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
 | CI / Required CI | PRs, pushes to `main`, manual | One Ubuntu/Node 24 gate: project policy, tests, production audit, package dry-run, CLI smoke tests, and conflict-marker detection |
-| Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it runs unit tests plus the packed-artifact lifecycle and has no pull-request trigger |
+| Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it runs unit tests plus the packed-artifact lifecycle, and enforces large-history budgets on Node 20/24; it has no pull-request trigger |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
 | Publish | Published, non-prerelease GitHub Releases | Re-validates the package and publishes to npm through trusted OIDC authentication |
@@ -37,6 +37,8 @@ exact publishable artifact, installs it into a clean project, exercises upgrade
 and recovery paths with synthetic data, blocks non-loopback runtime networking,
 and starts the installed dashboard on `127.0.0.1`. See
 [`RELEASE_LIFECYCLE.md`](RELEASE_LIFECYCLE.md) for the full contract.
+Node 20 and Node 24 jobs also run `npm run benchmark:large`; its deterministic
+fixture and thresholds are documented in [`PERFORMANCE.md`](PERFORMANCE.md).
 
 ## One-time repository-owner setup
 
