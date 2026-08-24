@@ -17,7 +17,8 @@ const guardFile = path.join(temporaryRoot, 'network-guard.cjs');
 const guardLog = path.join(temporaryRoot, 'blocked-network.log');
 const temporaryNpmCache = path.join(temporaryRoot, 'npm cache');
 const stateDirectory = path.join(isolatedHome, '.claude-token-meter');
-const indexFile = path.join(stateDirectory, 'usage-index-v2.json');
+const indexFile = path.join(stateDirectory, 'usage-index-v3.json');
+const legacyIndexFile = path.join(stateDirectory, 'usage-index-v2.json');
 const configFile = path.join(stateDirectory, 'config.json');
 const csvFile = path.join(temporaryRoot, 'exports with spaces', 'usage report.csv');
 
@@ -69,10 +70,19 @@ try {
   assert.equal(fs.readFileSync(indexFile, 'utf8'), warmIndex, 'warm upgrade must preserve a valid index');
   assert.equal(fs.readFileSync(configFile, 'utf8'), warmConfig, 'warm upgrade must preserve valid config');
 
+  const legacyIndex = JSON.parse(warmIndex);
+  legacyIndex.version = 2;
+  for (const session of legacyIndex.sessions) delete session.dailyRollups;
+  fs.writeFileSync(legacyIndexFile, JSON.stringify(legacyIndex), 'utf8');
+  fs.rmSync(indexFile);
+  const migrated = JSON.parse(runCli(binary, ['--json']).stdout);
+  assert.equal(migrated.totalIngestedMessages, 2);
+  assert.equal(JSON.parse(fs.readFileSync(indexFile, 'utf8')).version, 3);
+
   fs.writeFileSync(indexFile, '{broken', 'utf8');
   const recovered = JSON.parse(runCli(binary, ['--json']).stdout);
   assert.equal(recovered.totalIngestedMessages, 2);
-  assert.equal(JSON.parse(fs.readFileSync(indexFile, 'utf8')).version, 2);
+  assert.equal(JSON.parse(fs.readFileSync(indexFile, 'utf8')).version, 3);
 
   fs.writeFileSync(indexFile, JSON.stringify({
     version: 999,
@@ -81,7 +91,7 @@ try {
     totalIngestedMessages: 0,
   }), 'utf8');
   assert.match(runCli(binary, ['--summary']).stdout, /Selected: 2,040 tokens/);
-  assert.equal(JSON.parse(fs.readFileSync(indexFile, 'utf8')).version, 2);
+  assert.equal(JSON.parse(fs.readFileSync(indexFile, 'utf8')).version, 3);
 
   if (process.env.CC_TOKEN_METER_SKIP_LOOPBACK_TEST !== '1') {
     await verifyDashboard(binary);
