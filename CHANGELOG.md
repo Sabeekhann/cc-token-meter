@@ -5,6 +5,14 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Made the published npm package the primary quick-start path and documented
+  global installation, upgrades, and removal.
+- Added npm version/download badges and a reusable repository social-preview
+  asset.
+- Aligned the required GitHub Actions job name with the protected-branch
+  ruleset.
+
 ## [1.0.1] — 2026-08-24
 
 Release hardening for secure, repeatable public npm distribution.

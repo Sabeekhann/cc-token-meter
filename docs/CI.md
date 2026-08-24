@@ -10,7 +10,7 @@ that do not fit this small Node.js CLI.
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| CI / Required | PRs, pushes to `main`, manual | One Ubuntu/Node 24 gate: project policy, tests, production audit, package dry-run, CLI smoke tests, and conflict-marker detection |
+| CI / Required CI | PRs, pushes to `main`, manual | One Ubuntu/Node 24 gate: project policy, tests, production audit, package dry-run, CLI smoke tests, and conflict-marker detection |
 | Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it has no pull-request trigger |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
@@ -60,7 +60,7 @@ the default branch. Configure it as follows:
 - do not grant write access to contributors who should not be able to merge.
 
 ```text
-CI / Required
+Required CI
 ```
 
 Keep PR Governance advisory. Security and compatibility checks run outside the
