@@ -17,7 +17,8 @@ export function normalizeSummaryFilters(filters = {}) {
 /**
  * Return a filtered, re-aggregated session snapshot without mutating the
  * store's canonical sessions. When a date range is active, every session
- * total is rebuilt from the exact per-message records inside that range.
+ * total is rebuilt from exact daily rollups plus recent per-message records
+ * inside that range.
  */
 export function filterSessions(sessions, filters = {}) {
   const normalized = normalizeSummaryFilters(filters);
@@ -33,16 +34,22 @@ export function filterSessions(sessions, filters = {}) {
     const records = Array.isArray(session.usageRecords)
       ? session.usageRecords.filter((record) => dateMatches(record.timestamp, normalized))
       : [];
-    if (records.length === 0) return [];
+    const rollups = Array.isArray(session.dailyRollups)
+      ? session.dailyRollups.filter((rollup) => dateKeyMatches(rollup.date, normalized))
+      : [];
+    if (records.length === 0 && rollups.length === 0) return [];
 
-    return [rebuildSession(session, records, normalized)];
+    return [rebuildSession(session, records, rollups, normalized)];
   });
 }
 
-function rebuildSession(session, records, filters) {
+function rebuildSession(session, records, rollups, filters) {
   const sortedRecords = records.slice().sort(compareRecordTimestamps);
-  const totals = sortedRecords.reduce(
+  const sortedRollups = rollups.slice().sort(compareRollupTimestamps);
+  const units = [...sortedRollups, ...sortedRecords];
+  const totals = units.reduce(
     (acc, record) => {
+      acc.messageCount += Number.isFinite(record.messageCount) ? record.messageCount : 1;
       acc.inputTokens += numberOr0(record.inputTokens);
       acc.outputTokens += numberOr0(record.outputTokens);
       acc.cacheCreationInputTokens += numberOr0(record.cacheCreationInputTokens);
@@ -63,11 +70,27 @@ function rebuildSession(session, records, filters) {
       cacheWrite1h: 0,
       costUsd: 0,
       estimatedCostUsed: false,
+      messageCount: 0,
     },
   );
 
-  const models = [...new Set(sortedRecords.map((record) => record.model).filter(Boolean))];
-  const lastRecord = sortedRecords[sortedRecords.length - 1];
+  const models = [...new Set(units.map((record) => record.model).filter(Boolean))];
+  const timestampedUnits = units
+    .map((unit) => ({
+      ...unit,
+      firstTimestamp: unit.firstTimestamp || unit.timestamp || null,
+      lastTimestamp: unit.lastTimestamp || unit.timestamp || null,
+    }))
+    .filter((unit) => unit.firstTimestamp || unit.lastTimestamp)
+    .sort(compareRollupTimestamps);
+  const firstTimestamp = timestampedUnits.reduce((earliest, unit) => {
+    if (!unit.firstTimestamp) return earliest;
+    if (!earliest || Date.parse(unit.firstTimestamp) < Date.parse(earliest)) {
+      return unit.firstTimestamp;
+    }
+    return earliest;
+  }, null);
+  const lastUnit = timestampedUnits[timestampedUnits.length - 1] || null;
   const toolEvents = Array.isArray(session.toolEvents)
     ? session.toolEvents.filter((event) => dateMatches(event.timestamp, filters))
     : [];
@@ -76,11 +99,11 @@ function rebuildSession(session, records, filters) {
     ...session,
     ...totals,
     models,
-    messageCount: sortedRecords.length,
-    firstTimestamp: sortedRecords[0].timestamp || null,
-    lastTimestamp: lastRecord.timestamp || null,
-    gitBranch: lastRecord.gitBranch || session.gitBranch || null,
-    version: lastRecord.version || session.version || null,
+    firstTimestamp,
+    lastTimestamp: lastUnit?.lastTimestamp || null,
+    gitBranch: lastUnit?.gitBranch || session.gitBranch || null,
+    version: lastUnit?.version || session.version || null,
+    dailyRollups: sortedRollups,
     usageRecords: sortedRecords,
     toolEvents,
   };
@@ -89,9 +112,24 @@ function rebuildSession(session, records, filters) {
 function dateMatches(timestamp, { from, to }) {
   if (!timestamp) return false;
   const date = localDateKey(timestamp);
+  if (!date) return false;
+  return dateKeyMatches(date, { from, to });
+}
+
+function dateKeyMatches(date, { from, to }) {
+  if (!date) return false;
   if (from && date < from) return false;
   if (to && date > to) return false;
   return true;
+}
+
+function compareRollupTimestamps(a, b) {
+  const left = Date.parse(a.lastTimestamp || a.firstTimestamp || a.timestamp || '');
+  const right = Date.parse(b.lastTimestamp || b.firstTimestamp || b.timestamp || '');
+  if (!Number.isFinite(left) && !Number.isFinite(right)) return 0;
+  if (!Number.isFinite(left)) return 1;
+  if (!Number.isFinite(right)) return -1;
+  return left - right;
 }
 
 function compareRecordTimestamps(a, b) {
