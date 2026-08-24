@@ -292,7 +292,20 @@ async function verifyDashboard(binary) {
     await waitFor(() => stdout.includes(`http://127.0.0.1:${port}`), 15_000, () => (
       `dashboard did not start\nstdout:\n${stdout}\nstderr:\n${stderr}`
     ));
-    const response = await requestJson(port, '/api/summary');
+
+    const unauthorized = await requestText(port, '/api/summary');
+    assert.equal(unauthorized.statusCode, 401, 'protected API must reject a request without a session');
+
+    const dashboard = await requestText(port, '/');
+    assert.equal(dashboard.statusCode, 200);
+    const setCookies = dashboard.headers['set-cookie'];
+    assert.ok(Array.isArray(setCookies) && setCookies.length > 0, 'dashboard must establish a local session cookie');
+    const sessionCookie = setCookies
+      .map((cookie) => cookie.split(';', 1)[0])
+      .find((cookie) => cookie.startsWith('cc-token-meter-session='));
+    assert.ok(sessionCookie, 'dashboard session cookie must be present');
+
+    const response = await requestJson(port, '/api/summary', { Cookie: sessionCookie });
     assert.equal(response.statusCode, 200);
     assert.equal(response.body.totalIngestedMessages, 2);
   } finally {
@@ -316,22 +329,23 @@ function reservePort() {
   });
 }
 
-function requestJson(port, pathname) {
+function requestText(port, pathname, headers = {}) {
   return new Promise((resolve, reject) => {
-    const request = http.get({ host: '127.0.0.1', port, path: pathname }, (response) => {
+    const request = http.get({ host: '127.0.0.1', port, path: pathname, headers }, (response) => {
       let body = '';
       response.setEncoding('utf8');
       response.on('data', (chunk) => { body += chunk; });
       response.on('end', () => {
-        try {
-          resolve({ statusCode: response.statusCode, body: JSON.parse(body) });
-        } catch (error) {
-          reject(error);
-        }
+        resolve({ statusCode: response.statusCode, headers: response.headers, body });
       });
     });
     request.once('error', reject);
   });
+}
+
+async function requestJson(port, pathname, headers = {}) {
+  const response = await requestText(port, pathname, headers);
+  return { ...response, body: JSON.parse(response.body) };
 }
 
 async function waitFor(predicate, timeout, describeFailure) {
