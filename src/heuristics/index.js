@@ -3,6 +3,7 @@ import { cacheRatio } from './cacheRatio.js';
 import { longSessionNoCompact } from './longSessionNoCompact.js';
 import { outlierSessionTotal } from './outlierSessionTotal.js';
 import { largeToolResultSpike } from './largeToolResultSpike.js';
+import { rankAndDedupeInsights } from './contract.js';
 
 // Per-session cache of heuristic results, keyed by sessionId. Recomputed
 // only when the session's message count (or, as a finer-grained signal,
@@ -43,13 +44,13 @@ export function runHeuristics(sessionRecord, toolEvents, allSessionsHistory, raw
     return cached.tips;
   }
 
-  const tips = [
+  const tips = rankAndDedupeInsights([
     ...repeatedReads(sessionRecord, toolEvents, allSessionsHistory),
     ...cacheRatio(sessionRecord, toolEvents, allSessionsHistory),
     ...longSessionNoCompact(sessionRecord, toolEvents, allSessionsHistory, rawLines),
     ...outlierSessionTotal(sessionRecord, toolEvents, allSessionsHistory),
     ...largeToolResultSpike(sessionRecord, toolEvents, allSessionsHistory),
-  ];
+  ]);
 
   heuristicsCache.set(sessionId, {
     lastComputedAtMessageCount: messageCount,
@@ -66,3 +67,4 @@ export function clearHeuristicsCache() {
 }
 
 export { repeatedReads, cacheRatio, longSessionNoCompact, outlierSessionTotal, largeToolResultSpike };
+export { assertInsightContract, createInsight, rankAndDedupeInsights } from './contract.js';

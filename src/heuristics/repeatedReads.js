@@ -1,4 +1,5 @@
 import { sessionInputRatePerToken } from './_pricingHelper.js';
+import { createInsight } from './contract.js';
 
 /**
  * Flag files that were Read 3+ times within a session with no intervening
@@ -50,14 +51,34 @@ export function repeatedReads(sessionRecord, toolEvents) {
       savingsClause = ` That's roughly ${estimatedSavingsTokens.toLocaleString()} extra tokens (~$${estimatedSavingsUsd.toFixed(2)}) spent re-reading it.`;
     }
 
-    tips.push({
+    const savings = estimatedSavingsTokens == null
+      ? undefined
+      : {
+          kind: 'estimated',
+          tokens: estimatedSavingsTokens,
+          usd: estimatedSavingsUsd,
+          basis: 'Mean positive input tokens per assistant message multiplied by redundant reads.',
+        };
+
+    tips.push(createInsight({
       id: `repeatedReads:${sessionRecord.sessionId}:${filePath}`,
       sessionId: sessionRecord.sessionId,
       severity: 'info',
       message: `You read ${filePath} ${reads.length} times in this session without editing it in between. Consider keeping relevant excerpts in context, or use targeted Grep/offset+limit reads instead of full re-reads.${savingsClause}`,
-      estimatedSavingsTokens,
-      estimatedSavingsUsd,
-    });
+      action: 'Keep relevant excerpts in context or use targeted Grep and offset/limit reads.',
+      scope: { type: 'file', id: `${sessionRecord.sessionId}:${filePath}`, label: filePath },
+      confidence: {
+        level: 'high',
+        score: 0.95,
+        basis: 'Exact Read and edit tool events for the same local file path.',
+      },
+      evidence: [
+        { metric: 'read_count', value: reads.length, unit: 'reads', kind: 'measured' },
+        { metric: 'redundant_read_count', value: extraReads, unit: 'reads', kind: 'measured' },
+        { metric: 'intervening_edit_count', value: 0, unit: 'edits', kind: 'measured' },
+      ],
+      savings,
+    }));
   }
 
   return tips;

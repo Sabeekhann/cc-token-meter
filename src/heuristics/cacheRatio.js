@@ -1,5 +1,6 @@
 import { sessionInputRatePerToken } from './_pricingHelper.js';
 import { CACHE_READ_MULTIPLIER } from '../pricing/models.js';
+import { createInsight } from './contract.js';
 
 /**
  * Detect a significant drop in cache reuse later in a session: if the mean
@@ -39,14 +40,17 @@ export function cacheRatio(sessionRecord) {
         sessionRecord
       );
       return [
-        {
+        createCacheInsight({
           id: `cacheRatio:${sessionRecord.sessionId}`,
           sessionId: sessionRecord.sessionId,
-          severity: 'info',
           message: `Cache reuse dropped significantly later in this session (cache writes are outpacing cache reads ${meanLast.toFixed(1)}x vs the session start). This usually means context is being rebuilt rather than reused — consider running /compact or starting a fresh session for the next task.${savingsClause(estimatedSavingsTokens, estimatedSavingsUsd)}`,
+          firstRatio: meanFirst,
+          lastRatio: meanLast,
+          ratioChange: null,
+          messageCount: records.length,
           estimatedSavingsTokens,
           estimatedSavingsUsd,
-        },
+        }),
       ];
     }
     return [];
@@ -60,18 +64,65 @@ export function cacheRatio(sessionRecord) {
       sessionRecord
     );
     return [
-      {
+      createCacheInsight({
         id: `cacheRatio:${sessionRecord.sessionId}`,
         sessionId: sessionRecord.sessionId,
-        severity: 'info',
         message: `Cache reuse dropped significantly later in this session (cache writes are outpacing cache reads ${ratioOfRatios.toFixed(1)}x vs the session start). This usually means context is being rebuilt rather than reused — consider running /compact or starting a fresh session for the next task.${savingsClause(estimatedSavingsTokens, estimatedSavingsUsd)}`,
+        firstRatio: meanFirst,
+        lastRatio: meanLast,
+        ratioChange: ratioOfRatios,
+        messageCount: records.length,
         estimatedSavingsTokens,
         estimatedSavingsUsd,
-      },
+      }),
     ];
   }
 
   return [];
+}
+
+function createCacheInsight({
+  id,
+  sessionId,
+  message,
+  firstRatio,
+  lastRatio,
+  ratioChange,
+  messageCount,
+  estimatedSavingsTokens,
+  estimatedSavingsUsd,
+}) {
+  const savings = estimatedSavingsTokens == null
+    ? undefined
+    : {
+        kind: 'estimated',
+        tokens: estimatedSavingsTokens,
+        usd: estimatedSavingsUsd,
+        basis: 'Last-quarter cache-write tokens repriced as cache reads.',
+      };
+
+  return createInsight({
+    id,
+    sessionId,
+    severity: 'info',
+    message,
+    action: 'Run /compact or start a fresh focused session for the next task.',
+    scope: { type: 'session', id: sessionId },
+    confidence: {
+      level: 'medium',
+      score: 0.8,
+      basis: 'Quarter-over-quarter cache write/read ratio with at least 20 assistant messages.',
+    },
+    evidence: [
+      { metric: 'assistant_message_count', value: messageCount, unit: 'messages', kind: 'measured' },
+      { metric: 'first_quarter_write_read_ratio', value: firstRatio, unit: 'ratio', kind: 'measured' },
+      { metric: 'last_quarter_write_read_ratio', value: lastRatio, unit: 'ratio', kind: 'measured' },
+      ...(ratioChange == null
+        ? []
+        : [{ metric: 'ratio_change', value: ratioChange, unit: 'multiplier', kind: 'measured' }]),
+    ],
+    savings,
+  });
 }
 
 /**

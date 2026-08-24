@@ -29,14 +29,23 @@ export function longSessionNoCompact(sessionRecord, toolEvents, allSessionsHisto
   if (compactDetected) return [];
 
   return [
-    {
+    createInsight({
       id: `longSessionNoCompact:${sessionRecord.sessionId}`,
       sessionId: sessionRecord.sessionId,
       severity: 'warn',
       message: `This session has run ${messageCount} turns without a /compact. Long uncompacted sessions tend to accumulate stale context, inflating cache-write costs. Consider running /compact soon.`,
-      estimatedSavingsTokens: null,
-      estimatedSavingsUsd: null,
-    },
+      action: 'Run /compact before continuing long-running work.',
+      scope: { type: 'session', id: sessionRecord.sessionId },
+      confidence: {
+        level: 'medium',
+        score: 0.75,
+        basis: 'Assistant message count plus best-effort compact-event detection.',
+      },
+      evidence: [
+        { metric: 'assistant_message_count', value: messageCount, unit: 'messages', kind: 'measured' },
+        { metric: 'compact_event_detected', value: false, unit: 'boolean', kind: 'measured' },
+      ],
+    }),
   ];
 }
 
@@ -84,3 +93,4 @@ function extractTextContent(line) {
 }
 
 export { detectCompactEvent };
+import { createInsight } from './contract.js';
