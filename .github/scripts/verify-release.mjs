@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const REQUIRED_PACKAGE_FILES = ['bin', 'src', 'public', 'README.md', 'LICENSE'];
+const REQUIRED_PACKAGE_FILES = ['bin', 'src', 'public', 'README.md', 'LICENSE', 'NOTICE'];
 const EXPECTED_REPOSITORY = 'https://github.com/Sabeekhann/cc-token-meter.git';
 const EXPECTED_REGISTRY = 'https://registry.npmjs.org';
 
