@@ -13,6 +13,7 @@
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
+    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.1.2"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.1.2" /></a>
     <img alt="Corgea scanned" src="https://img.shields.io/badge/Corgea-scanned-ff6b2c" />
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
     <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-f3b33d" /></a>
