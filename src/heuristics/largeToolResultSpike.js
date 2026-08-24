@@ -1,4 +1,5 @@
 import { sessionInputRatePerToken } from './_pricingHelper.js';
+import { createInsight } from './contract.js';
 
 /** Byte-size threshold above which a tool_result is considered "large". */
 export const LARGE_RESULT_BYTE_THRESHOLD = 50000;
@@ -76,14 +77,30 @@ export function largeToolResultSpike(sessionRecord, toolEvents) {
     const estimatedSavingsTokens = Math.round(bytesOverThreshold / BYTES_PER_TOKEN_ESTIMATE);
     const estimatedSavingsUsd = estimatedSavingsTokens * sessionInputRatePerToken(sessionRecord);
 
-    tips.push({
+    tips.push(createInsight({
       id: `largeToolResultSpike:${sessionRecord.sessionId}:${dedupeKey}`,
       sessionId: sessionRecord.sessionId,
       severity: 'info',
       message: `A tool call returned a very large result (~${kb}KB of output) right before an unusually long response. If this was a file read or command output, consider using offset/limit, grep for specific content, or truncating the tool output rather than passing it through in full. That's roughly ${estimatedSavingsTokens.toLocaleString()} extra tokens (~$${estimatedSavingsUsd.toFixed(2)}) above the ${Math.round(LARGE_RESULT_BYTE_THRESHOLD / 1024)}KB threshold.`,
-      estimatedSavingsTokens,
-      estimatedSavingsUsd,
-    });
+      action: 'Limit, filter, or truncate large tool output before adding it to context.',
+      scope: { type: 'tool-result', id: `${sessionRecord.sessionId}:${resultEvt.toolUseId}` },
+      confidence: {
+        level: 'medium',
+        score: 0.8,
+        basis: 'Correlated tool result size and the next assistant response against its session p90.',
+      },
+      evidence: [
+        { metric: 'tool_result_bytes', value: resultEvt.contentByteLength, unit: 'bytes', kind: 'measured' },
+        { metric: 'next_response_output_tokens', value: nextAssistantMsg.outputTokens || 0, unit: 'tokens', kind: 'measured' },
+        { metric: 'session_output_token_p90', value: p90Threshold, unit: 'tokens', kind: 'measured' },
+      ],
+      savings: {
+        kind: 'estimated',
+        tokens: estimatedSavingsTokens,
+        usd: estimatedSavingsUsd,
+        basis: `Bytes above the ${LARGE_RESULT_BYTE_THRESHOLD}-byte threshold divided by ${BYTES_PER_TOKEN_ESTIMATE} bytes per token.`,
+      },
+    }));
   }
 
   return tips;
