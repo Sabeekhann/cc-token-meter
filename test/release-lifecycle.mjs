@@ -8,7 +8,11 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCli = process.env.npm_execpath;
+assert.ok(
+  npmCli && fs.existsSync(npmCli),
+  'test:lifecycle must run through npm so npm_execpath identifies the npm CLI',
+);
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cc token meter lifecycle '));
 const packDirectory = path.join(temporaryRoot, 'packed artifact');
 const installDirectory = path.join(temporaryRoot, 'clean install');
@@ -30,7 +34,7 @@ try {
   writeNetworkGuard();
   writeSyntheticTranscript();
 
-  const packed = run(npmCommand, [
+  const packed = runNpm([
     'pack',
     '--json',
     '--ignore-scripts',
@@ -111,7 +115,11 @@ try {
 function installTarball(tarball, force = false) {
   const args = ['install', tarball, '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline'];
   if (force) args.push('--force');
-  run(npmCommand, args, { cwd: installDirectory, env: npmEnvironment(), timeout: 120_000 });
+  runNpm(args, { cwd: installDirectory, env: npmEnvironment(), timeout: 120_000 });
+}
+
+function runNpm(args, options = {}) {
+  return run(process.execPath, [npmCli, ...args], options);
 }
 
 function npmEnvironment() {

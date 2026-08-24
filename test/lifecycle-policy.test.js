@@ -16,7 +16,9 @@ test('packed lifecycle remains a post-merge compatibility gate', () => {
 });
 
 test('packed lifecycle covers isolated install, upgrade, recovery, export, and offline runtime', () => {
-  assert.match(runner, /run\(npmCommand, \[\s*'pack'/);
+  assert.match(runner, /const npmCli = process\.env\.npm_execpath/);
+  assert.match(runner, /runNpm\(\[\s*'pack'/);
+  assert.match(runner, /run\(process\.execPath, \[npmCli, \.\.\.args\]/);
   assert.match(runner, /const args = \['install', tarball/);
   assert.match(runner, /CC_TOKEN_METER_HOME/);
   assert.match(runner, /--doctor/);
