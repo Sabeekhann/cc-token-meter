@@ -24,6 +24,8 @@ test('packed lifecycle covers isolated install, upgrade, recovery, export, and o
   assert.match(runner, /--json/);
   assert.match(runner, /--csv/);
   assert.match(runner, /version: 999/);
+  assert.match(runner, /usage-index-v2\.json/);
+  assert.match(runner, /migrated\.totalIngestedMessages/);
   assert.match(runner, /writeFileSync\(indexFile, '\{broken'/);
   assert.match(runner, /127\.0\.0\.1/);
   assert.match(runner, /network-guard\.cjs/);
