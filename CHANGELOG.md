@@ -5,6 +5,24 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-08-24
+
+Security-hardening patch for the local dashboard and repository scanning.
+
+### Security
+- Replaced request-derived static-file paths with an explicit allowlist of
+  packaged dashboard assets, removing the path-traversal data flow from the
+  local web server.
+- Added an in-memory cryptographically random dashboard session token and
+  HttpOnly, SameSite=Strict cookie authentication for local API and
+  Server-Sent Events endpoints.
+- Added loopback Host validation to reduce DNS-rebinding exposure while
+  retaining the existing `127.0.0.1` binding.
+- Added regression coverage for traversal attempts, local Host validation,
+  session authorization, and cookie security flags.
+- Added Corgea repository scanning alongside CodeQL, gitleaks, and dependency
+  auditing. The post-hardening Corgea full scan reported zero active findings.
+
 ## [1.1.0] — 2026-08-24
 
 Backward-compatible intelligence, accessibility, performance, and release
