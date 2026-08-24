@@ -3,9 +3,10 @@ import { parseSessionFile } from './parser.js';
 import { computeCost } from '../pricing/cost.js';
 import {
   DEFAULT_INDEX_FILE,
-  readLocalIndex,
+  readLocalIndexWithStatus,
   writeLocalIndex,
 } from './localIndex.js';
+import { compactSessionHistory } from './retention.js';
 
 const REGLOB_INTERVAL_MS = 5000;
 const TOOL_EVENT_RING_SIZE = 200;
@@ -35,17 +36,23 @@ export function createStore({
 
   function restoreIndex() {
     if (!persistIndex || !indexPath) return;
-    const index = readLocalIndex(indexPath);
-    if (!index) return;
+    const restored = readLocalIndexWithStatus(indexPath);
+    if (!restored) return;
+    const { index } = restored;
+    let compactedDuringRestore = false;
 
     for (const raw of index.sessions) {
       if (!raw || typeof raw.sessionId !== 'string') continue;
-      sessions.set(raw.sessionId, {
+      const hydrated = {
         ...raw,
         models: new Set(Array.isArray(raw.models) ? raw.models : []),
         toolEvents: Array.isArray(raw.toolEvents) ? raw.toolEvents : [],
+        dailyRollups: Array.isArray(raw.dailyRollups) ? raw.dailyRollups : [],
         usageRecords: Array.isArray(raw.usageRecords) ? raw.usageRecords : [],
-      });
+      };
+      const compacted = compactSessionHistory(hydrated);
+      compactedDuringRestore ||= compacted.usageRecords.length !== hydrated.usageRecords.length;
+      sessions.set(raw.sessionId, compacted);
     }
 
     for (const raw of index.files) {
@@ -57,7 +64,15 @@ export function createStore({
       });
     }
 
-    totalIngestedMessages = index.totalIngestedMessages;
+    totalIngestedMessages = Array.from(sessions.values())
+      .reduce((sum, session) => sum + (session.messageCount || 0), 0);
+    const correctedMessageCount = totalIngestedMessages !== index.totalIngestedMessages;
+    if (
+      restored.migrated ||
+      restored.sourcePath !== indexPath ||
+      compactedDuringRestore ||
+      correctedMessageCount
+    ) persistCurrentIndex();
   }
 
   function persistCurrentIndex() {
@@ -100,10 +115,9 @@ export function createStore({
         gitBranch: null,
         version: null,
         toolEvents: [], // bounded ring buffer of tool-use/tool-result events
-        // Per-message log, needed by heuristics/aggregation for
-        // chronological/statistical analysis. Kept unbounded per-session
-        // (sessions are bounded in message count in practice) — not
-        // ring-buffered like toolEvents since heuristics need full history.
+        // Older exact counters are folded into dailyRollups; only a bounded
+        // recent detail window remains for timelines and heuristics.
+        dailyRollups: [],
         usageRecords: [],
       };
       sessions.set(sessionId, agg);
@@ -194,6 +208,11 @@ export function createStore({
       touchedSessionIds.add(sessionId);
       const agg = getOrCreateSession(sessionId);
       pushToolEvent(agg, { kind: 'tool_result', ...evt });
+    }
+
+    for (const sessionId of touchedSessionIds) {
+      const session = sessions.get(sessionId);
+      if (session) sessions.set(sessionId, compactSessionHistory(session));
     }
 
     return touchedSessionIds;
@@ -307,7 +326,13 @@ export function createStore({
       Array.isArray(state && state.sessionIds) && state.sessionIds.length > 0
         ? state.sessionIds
         : [inferSessionIdFromFile(filePath)];
-    for (const sessionId of sessionIds) sessions.delete(sessionId);
+    for (const sessionId of sessionIds) {
+      const session = sessions.get(sessionId);
+      if (session) {
+        totalIngestedMessages = Math.max(0, totalIngestedMessages - (session.messageCount || 0));
+        sessions.delete(sessionId);
+      }
+    }
   }
 
   function fileIdentity(stat) {
