@@ -42,3 +42,5 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run unit and contract tests
         run: npm test
+      - name: Exercise packed release lifecycle
+        run: npm run test:lifecycle
