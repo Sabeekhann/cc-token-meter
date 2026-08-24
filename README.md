@@ -15,7 +15,7 @@
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
     <img alt="Corgea scanned" src="https://img.shields.io/badge/Corgea-scanned-ff6b2c" />
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
-    <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-f3b33d" /></a>
+    <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-f3b33d" /></a>
     <img alt="Local only" src="https://img.shields.io/badge/privacy-local--only-0f766e" />
   </p>
 
@@ -293,6 +293,6 @@ Bug fixes, tests, documentation, pricing updates, heuristics, and focused UI imp
 
 ## License and trademark note
 
-Released under the [MIT License](LICENSE).
+Released under the [Apache License 2.0](LICENSE). See [`NOTICE`](NOTICE) for attribution information.
 
 The mascot in this repository is an original Claude Code Token Meter project asset. Claude and Claude Code are products of Anthropic. This independent project is not affiliated with or endorsed by Anthropic.

@@ -5,6 +5,14 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Relicensed CC Token Meter from the MIT License to the Apache License,
+  Version 2.0 for future distributions from this change onward.
+- Added a `NOTICE` file and aligned npm package metadata and README licensing
+  references with the `Apache-2.0` SPDX identifier.
+- Previously distributed MIT-licensed versions remain available under the
+  license terms that accompanied those copies.
+
 ## [1.1.1] — 2026-08-24
 
 Security-hardening patch for the local dashboard and repository scanning.

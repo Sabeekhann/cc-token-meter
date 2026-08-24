@@ -3,7 +3,7 @@
   "version": "1.1.1",
   "description": "Local-only CLI + web dashboard for Claude Code token usage, cost estimates, and waste-reduction tips. 100% local, no API calls, no telemetry.",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Sabee Ur Rehman Khan",
   "homepage": "https://github.com/Sabeekhann/cc-token-meter#readme",
   "repository": {
@@ -29,7 +29,8 @@
     "src",
     "public",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "check": "node .github/scripts/project-policy.mjs",
