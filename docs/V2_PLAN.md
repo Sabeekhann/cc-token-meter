@@ -130,9 +130,8 @@ and offline run are covered by automated checks.
   project, branch, or session. Deterministic large-history performance budgets
   are enforced on Node 20 and Node 24.
 - Structured insight evidence/confidence and bounded history compaction are
-  implemented. Automated release publishing is implemented; activating npm
-  trusted publishing remains a one-time repository-owner setup step after the
-  initial package publish.
+  implemented. Automated release publishing through npm trusted publishing is
+  active for maintainer-created GitHub releases.
 
 The detailed dashboard information architecture and interaction requirements
 are maintained in [`UI_PLAN.md`](UI_PLAN.md).

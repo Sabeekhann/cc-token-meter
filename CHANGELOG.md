@@ -5,6 +5,40 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-08-24
+
+Backward-compatible intelligence, accessibility, performance, and release
+reliability improvements.
+
+### Added
+- Standardized every recommendation around measured evidence, confidence,
+  affected scope, a concrete action, and calculable savings, with deterministic
+  ranking and deduplication.
+- Added semantic landmarks, labeled controls, keyboard interactions, visible
+  focus states, accessible target sizing, text alternatives for charts, and
+  responsive coverage from 390 to 1,440 CSS pixels.
+- Added a packed-artifact lifecycle gate covering clean installation, warm
+  upgrade, v2 index migration, corrupt-index recovery, exports, and offline
+  loopback dashboard operation.
+- Added a deterministic 50,000-message benchmark with enforced cold-start,
+  warm-start, incremental-tail, heap-growth, and private-index-size budgets.
+
+### Changed
+- Upgraded the private index to bounded v3 storage: each session keeps its
+  newest 1,000 normalized usage records while older detail is compacted into
+  metadata-only daily rollups.
+- Preserved exact all-time, date, project, branch, session, model, cache, and
+  export totals across compaction and automatic v2-to-v3 migration.
+- Expanded post-merge compatibility coverage for the packaged release on
+  Node.js 20, 22, and 24 across Linux, macOS, and Windows.
+
+### Fixed
+- Made npm lifecycle commands portable on Windows by running the npm CLI
+  through the active Node.js executable.
+- Made transcript discovery platform-neutral so Windows path separators,
+  spaces, and literal glob metacharacters do not hide valid Claude Code
+  sessions.
+
 ## [1.0.2] — 2026-08-24
 
 Maintenance and discovery improvements following the first public npm
