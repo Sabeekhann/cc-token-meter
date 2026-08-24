@@ -1,16 +1,16 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { resolveStateDirectory } from '../paths.js';
 
 // v2 adds exact per-message cost, fallback-pricing, and branch attribution.
 // A v1 index is intentionally ignored and rebuilt from read-only transcripts
 // so filtered/day/branch exports cannot inherit old session-level estimates.
 export const LOCAL_INDEX_VERSION = 2;
-export const DEFAULT_INDEX_FILE = path.join(
-  os.homedir(),
-  '.claude-token-meter',
-  `usage-index-v${LOCAL_INDEX_VERSION}.json`
-);
+export function defaultIndexFile(home) {
+  return path.join(resolveStateDirectory(home), `usage-index-v${LOCAL_INDEX_VERSION}.json`);
+}
+
+export const DEFAULT_INDEX_FILE = defaultIndexFile();
 
 /**
  * Read and minimally validate the private local usage index. Corrupt,
