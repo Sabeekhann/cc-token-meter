@@ -4,13 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const SOURCE_ROOTS = ['bin', 'src', 'public', 'test', '.github/scripts'];
+const SOURCE_ROOTS = ['bin', 'src', 'public', 'test', 'benchmark', '.github/scripts'];
 const PURE_PATHS = [
   'src/analytics',
   'src/heuristics',
   'src/pricing',
   'src/budget/alerts.js',
   'src/ingest/aggregate.js',
+  'src/ingest/retention.js',
 ];
 const ALLOWED_RUNTIME_DEPENDENCIES = new Set(['glob', 'open']);
 const CODE_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
