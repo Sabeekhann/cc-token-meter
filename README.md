@@ -1,15 +1,17 @@
 <div align="center">
-  <img src="docs/cc-token-meter-mascot.png" alt="Claude Code Token Meter mascot" width="220" />
+  <img src="docs/social-preview.png" alt="Claude Code Token Meter — know where every token goes, local-only with no telemetry" width="100%" />
 
   <h1>Claude Code Token Meter</h1>
 
-  <p><strong>Your private, local usage cockpit for Claude Code.</strong></p>
-  <p>Live token usage, cost estimates, cache intelligence, budgets, and practical recommendations—without sending your transcripts anywhere.</p>
+  <p><strong>Private, local usage intelligence for Claude Code.</strong></p>
+  <p>Live token usage · Cost estimates · Cache intelligence · Budgets · Evidence-backed recommendations</p>
+  <p><sub>Read-only transcripts · No API key · No telemetry · Windows, macOS, and Linux</sub></p>
 
   <p>
     <a href="https://www.npmjs.com/package/cc-token-meter"><img alt="npm version" src="https://img.shields.io/npm/v/cc-token-meter?logo=npm&color=cb3837" /></a>
     <a href="https://www.npmjs.com/package/cc-token-meter"><img alt="npm downloads" src="https://img.shields.io/npm/dm/cc-token-meter?logo=npm&color=0f766e" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg" /></a>
+    <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-f3b33d" /></a>
@@ -17,10 +19,20 @@
   </p>
 
   <p>
-    <a href="#quick-start">Quick start</a> ·
+    <a href="#dashboard-preview">Dashboard</a> ·
+    <a href="#quick-start">Install</a> ·
     <a href="#what-you-get">Features</a> ·
     <a href="#cli-reference">CLI</a> ·
-    <a href="CONTRIBUTING.md">Contribute</a>
+    <a href="#privacy-by-design">Privacy</a> ·
+    <a href="#how-it-works">Architecture</a> ·
+    <a href="#contributing">Contribute</a>
+  </p>
+
+  <p>
+    <a href="https://github.com/Sabeekhann/cc-token-meter/releases/latest">Latest release</a> ·
+    <a href="docs/CI.md">CI &amp; compatibility</a> ·
+    <a href="SECURITY.md">Security</a> ·
+    <a href="CLAUDE.md">Agent guide</a>
   </p>
 </div>
 
@@ -37,6 +49,15 @@ It requires no API key, makes no Anthropic API call, works retroactively, and tr
 
 > [!IMPORTANT]
 > Dollar values are local estimates, not an Anthropic bill. Pricing rules can change; verify important decisions against [Anthropic's official pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing).
+
+## What's new in v1.1.0
+
+- **Actionable insight contracts:** recommendations now include measured evidence, confidence, affected scope, a concrete next action, and estimated savings when they can be calculated honestly.
+- **Accessible responsive dashboard:** semantic landmarks, keyboard navigation, visible focus, 44-pixel targets, text chart summaries, and layouts covering mobile through desktop.
+- **Bounded private history:** index v3 keeps recent message detail bounded while preserving exact historical totals through compact daily, model, branch, and version rollups.
+- **Safer upgrades and releases:** automatic v2-to-v3 migration plus packed-artifact validation across Node.js 20, 22, and 24 on Linux, macOS, and Windows.
+
+Read the [v1.1.0 release notes](docs/RELEASE_NOTES_v1.1.0.md) or view the [published GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/tag/v1.1.0).
 
 ## What you get
 
@@ -74,6 +95,16 @@ with Server-Sent Events.
 If the dashboard is empty, use Claude Code for at least one session and run the
 command again. The meter reads existing transcripts from `~/.claude/projects`;
 it does not require an Anthropic API key.
+
+### Compatibility
+
+| Requirement | Supported contract |
+| --- | --- |
+| **Node.js** | Version 20 or newer; CI exercises Node.js 20, 22, and 24. |
+| **Operating systems** | Linux, macOS, and Windows are covered by the compatibility workflow. |
+| **Claude Code data** | Existing local JSONL transcripts under `~/.claude/projects`. |
+| **Network posture** | No external runtime requests; the dashboard listens only on `127.0.0.1`. |
+| **Upgrade path** | Existing valid v2 indexes migrate automatically to the bounded v3 format. |
 
 ### Install as a reusable command
 
