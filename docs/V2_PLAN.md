@@ -113,7 +113,8 @@ and offline run are covered by automated checks.
 
 - Phase 1 is implemented in the v2 working branch.
 - Phase 2 has a working versioned index, atomic private writes, warm-start
-  restore, truncation recovery, corruption fallback, and `--no-cache`.
+  restore, bounded detailed history with exact daily rollups, automatic v2 to
+  v3 migration, truncation recovery, corruption fallback, and `--no-cache`.
 - Phase 4 has a complete first implementation of the Overview, Live Session,
   Projects, Insights, and Settings views, including project search, filters,
   session navigation, local budget saving, responsive layouts, and explicit
@@ -126,11 +127,12 @@ and offline run are covered by automated checks.
   templates, Dependabot maintenance, `doctor`, inclusive date/project
   filters, pricing-freshness diagnostics, a compact terminal summary,
   machine-readable JSON diagnostics, and private CSV exports grouped by day,
-  project, branch, or session.
-- Bounded history compaction, benchmark thresholds, and structured insight
-  evidence/confidence remain open roadmap work. Automated release publishing
-  is implemented; activating npm trusted publishing remains a one-time
-  repository-owner setup step after the initial package publish.
+  project, branch, or session. Deterministic large-history performance budgets
+  are enforced on Node 20 and Node 24.
+- Structured insight evidence/confidence and bounded history compaction are
+  implemented. Automated release publishing is implemented; activating npm
+  trusted publishing remains a one-time repository-owner setup step after the
+  initial package publish.
 
 The detailed dashboard information architecture and interaction requirements
 are maintained in [`UI_PLAN.md`](UI_PLAN.md).
