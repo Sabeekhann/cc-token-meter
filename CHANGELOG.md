@@ -5,6 +5,10 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-08-24
+
+Release hardening for secure, repeatable public npm distribution.
+
 ### Added
 - Private vulnerability-reporting guidance and a Contributor Covenant code of
   conduct.
