@@ -24,6 +24,9 @@ test('cross-platform compatibility runs only after merge or manually', () => {
   assert.match(compatibilityWorkflow, /windows-latest/);
   assert.match(compatibilityWorkflow, /node-version: 20\.x/);
   assert.match(compatibilityWorkflow, /node-version: 24\.x/);
+  assert.match(compatibilityWorkflow, /npm run benchmark:large/);
+  assert.match(compatibilityWorkflow, /matrix\.node-version == '20\.x'/);
+  assert.match(compatibilityWorkflow, /matrix\.node-version == '24\.x'/);
 });
 
 test('heavy security scans stay off the pull-request path', () => {
