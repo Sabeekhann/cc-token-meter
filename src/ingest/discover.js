@@ -14,11 +14,17 @@ import { resolveProjectsDirectory } from '../paths.js';
  */
 export async function discoverSessionFiles() {
   const projectsRoot = resolveProjectsDirectory();
-  const pattern = path.join(projectsRoot, '*', '*.jsonl');
 
   let files;
   try {
-    files = await glob(pattern, { nodir: true });
+    // Glob patterns always use forward slashes, including on Windows. Keep the
+    // OS-native absolute path in `cwd` so backslashes and literal glob
+    // metacharacters in the home directory are not parsed as pattern syntax.
+    files = await glob('*/*.jsonl', {
+      cwd: projectsRoot,
+      absolute: true,
+      nodir: true,
+    });
   } catch (err) {
     // Projects dir may not exist yet (fresh install / never used Claude Code).
     return [];
