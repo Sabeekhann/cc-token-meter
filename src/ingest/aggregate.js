@@ -51,11 +51,9 @@ export function aggregateByProject(sessions) {
 }
 
 /**
- * Roll sessions up by git branch (last-seen value per session — gitBranch is
- * NOT tracked per-message, so a session that switches branches mid-way has
- * its whole cost attributed to whichever branch was last seen, not split
- * proportionally). Sessions with no observed branch are grouped under the
- * '(no branch)' bucket.
+ * Roll sessions up by git branch. Recent per-message records and compacted
+ * historical rollups both retain branch attribution, so sessions that switch
+ * branches remain exact after detail retention runs.
  *
  * @param {Array<object>} sessions
  * @returns {Array<{branch: string, sessions: object[], inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, costUsd: number, tokenTotal: number}>}
@@ -65,8 +63,10 @@ export function aggregateByBranch(sessions) {
 
   for (const s of sessions) {
     const records = Array.isArray(s.usageRecords) ? s.usageRecords : [];
+    const rollups = Array.isArray(s.dailyRollups) ? s.dailyRollups : [];
+    const units = [...rollups, ...records];
 
-    if (records.length === 0) {
+    if (units.length === 0) {
       addSessionToBranch(byBranch, s.gitBranch || '(no branch)', s);
       continue;
     }
@@ -74,10 +74,10 @@ export function aggregateByBranch(sessions) {
     // Claude Code records gitBranch on every assistant message. Attribute
     // each message to its own branch so sessions that switch branches are
     // no longer charged entirely to the last branch seen in the session.
-    const sessionTokenTotal = records.reduce((sum, record) => sum + tokenTotal(record), 0);
+    const sessionTokenTotal = units.reduce((sum, record) => sum + tokenTotal(record), 0);
     const partials = new Map();
 
-    for (const record of records) {
+    for (const record of units) {
       const branch = record.gitBranch || s.gitBranch || '(no branch)';
       let partial = partials.get(branch);
       if (!partial) {
@@ -144,19 +144,23 @@ function emptySessionProjection(session) {
 }
 
 function addRecordToProjection(projection, record, session, sessionTokenTotal) {
-  projection.messageCount += 1;
+  projection.messageCount += Number.isFinite(record.messageCount) ? record.messageCount : 1;
   projection.inputTokens += record.inputTokens || 0;
   projection.outputTokens += record.outputTokens || 0;
   projection.cacheCreationInputTokens += record.cacheCreationInputTokens || 0;
   projection.cacheReadInputTokens += record.cacheReadInputTokens || 0;
   projection.estimatedCostUsed ||= record.estimatedCostUsed === true;
 
-  if (record.timestamp) {
-    if (!projection.firstTimestamp || record.timestamp < projection.firstTimestamp) {
-      projection.firstTimestamp = record.timestamp;
+  const firstTimestamp = record.firstTimestamp || record.timestamp || null;
+  const lastTimestamp = record.lastTimestamp || record.timestamp || null;
+  if (firstTimestamp) {
+    if (!projection.firstTimestamp || firstTimestamp < projection.firstTimestamp) {
+      projection.firstTimestamp = firstTimestamp;
     }
-    if (!projection.lastTimestamp || record.timestamp > projection.lastTimestamp) {
-      projection.lastTimestamp = record.timestamp;
+  }
+  if (lastTimestamp) {
+    if (!projection.lastTimestamp || lastTimestamp > projection.lastTimestamp) {
+      projection.lastTimestamp = lastTimestamp;
     }
   }
 
@@ -177,6 +181,7 @@ function addRecordToProjection(projection, record, session, sessionTokenTotal) {
  */
 function localDateKey(isoTimestamp) {
   const d = new Date(isoTimestamp);
+  if (!Number.isFinite(d.getTime())) return null;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -190,9 +195,9 @@ function localDateKey(isoTimestamp) {
  * own timestamp, not the session's start/end date as a whole. This avoids
  * splitting a single message's token counts across two days.
  *
- * Sessions must carry a `usageRecords` array (as produced by store.js) for
- * this to be accurate; if absent, the whole session's totals are bucketed
- * under its lastTimestamp's date as a best-effort fallback.
+ * Exact older counters may arrive as dailyRollups while the bounded recent
+ * window arrives as usageRecords. If neither exists, the whole session's
+ * totals are bucketed under lastTimestamp as a compatibility fallback.
  *
  * @param {Array<object>} sessions
  * @returns {Array<{date: string, inputTokens: number, outputTokens: number, cacheCreationInputTokens: number, cacheReadInputTokens: number, costUsd: number, tokenTotal: number, messageCount: number}>}
@@ -219,28 +224,24 @@ export function aggregateByDay(sessions) {
   }
 
   for (const s of sessions) {
-    if (Array.isArray(s.usageRecords) && s.usageRecords.length > 0) {
-      for (const record of s.usageRecords) {
+    const rollups = Array.isArray(s.dailyRollups) ? s.dailyRollups : [];
+    const records = Array.isArray(s.usageRecords) ? s.usageRecords : [];
+
+    for (const rollup of rollups) {
+      if (!rollup.date) continue;
+      addUnitToDay(ensureBucket(rollup.date), rollup, s);
+    }
+
+    if (records.length > 0) {
+      for (const record of records) {
         if (!record.timestamp) continue;
         const date = localDateKey(record.timestamp);
-        const bucket = ensureBucket(date);
-        bucket.inputTokens += record.inputTokens || 0;
-        bucket.outputTokens += record.outputTokens || 0;
-        bucket.cacheCreationInputTokens += record.cacheCreationInputTokens || 0;
-        bucket.cacheReadInputTokens += record.cacheReadInputTokens || 0;
-        bucket.tokenTotal += tokenTotal(record);
-        bucket.messageCount += 1;
-        if (Number.isFinite(record.costUsd)) {
-          bucket.costUsd += record.costUsd;
-        } else {
-          // Compatibility path for snapshots produced before per-message
-          // cost was added. New store records always take the exact path.
-          const perMessageCost = s.messageCount > 0 ? s.costUsd / s.messageCount : 0;
-          bucket.costUsd += perMessageCost;
-        }
+        if (!date) continue;
+        addUnitToDay(ensureBucket(date), record, s);
       }
-    } else if (s.lastTimestamp) {
+    } else if (rollups.length === 0 && s.lastTimestamp) {
       const date = localDateKey(s.lastTimestamp);
+      if (!date) continue;
       const bucket = ensureBucket(date);
       bucket.inputTokens += s.inputTokens || 0;
       bucket.outputTokens += s.outputTokens || 0;
@@ -253,6 +254,22 @@ export function aggregateByDay(sessions) {
   }
 
   return Array.from(byDay.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+function addUnitToDay(bucket, record, session) {
+  bucket.inputTokens += record.inputTokens || 0;
+  bucket.outputTokens += record.outputTokens || 0;
+  bucket.cacheCreationInputTokens += record.cacheCreationInputTokens || 0;
+  bucket.cacheReadInputTokens += record.cacheReadInputTokens || 0;
+  bucket.tokenTotal += tokenTotal(record);
+  bucket.messageCount += Number.isFinite(record.messageCount) ? record.messageCount : 1;
+  if (Number.isFinite(record.costUsd)) {
+    bucket.costUsd += record.costUsd;
+  } else {
+    const unitMessages = Number.isFinite(record.messageCount) ? record.messageCount : 1;
+    const perMessageCost = session.messageCount > 0 ? session.costUsd / session.messageCount : 0;
+    bucket.costUsd += perMessageCost * unitMessages;
+  }
 }
 
 /**
