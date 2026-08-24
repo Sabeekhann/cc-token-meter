@@ -8,7 +8,7 @@ import { startServer } from '../../server/index.js';
  */
 export async function startCommand({ port, open, cache }) {
   const { port: actualPort, stop } = await startServer({ port, cache });
-  const url = `http://localhost:${actualPort}`;
+  const url = `http://127.0.0.1:${actualPort}`;
 
   console.log(`cc-token-meter dashboard running at ${url}`);
   console.log('100% local — no data leaves your machine. Press Ctrl+C to stop.');
