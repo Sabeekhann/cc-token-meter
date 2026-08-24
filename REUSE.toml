@@ -1,0 +1,19 @@
+version = 1
+
+# Primary entrypoints and local-server boundary modules carry inline SPDX
+# notices. The remaining shipped source/assets are covered here so every
+# distributed project-owned file has explicit machine-readable licensing.
+
+[[annotations]]
+path = [
+  "src/analytics/**",
+  "src/budget/**",
+  "src/cli/commands/**",
+  "src/heuristics/**",
+  "src/ingest/**",
+  "src/pricing/**",
+  "public/**"
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 FiveNodes"
+SPDX-License-Identifier = "Apache-2.0"
