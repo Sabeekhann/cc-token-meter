@@ -1,4 +1,5 @@
 import { computeCost } from '../pricing/cost.js';
+import { createInsight } from './contract.js';
 
 /**
  * Flag a session whose total token count exceeds the 90th percentile of
@@ -26,14 +27,24 @@ export function outlierSessionTotal(sessionRecord, toolEvents, allSessionsHistor
   const cost = sessionRecord.costUsd != null ? sessionRecord.costUsd : estimateSessionCost(sessionRecord);
 
   return [
-    {
+    createInsight({
       id: `outlierSessionTotal:${sessionRecord.sessionId}`,
       sessionId: sessionRecord.sessionId,
       severity: 'info',
       message: `This session has used ${Math.round(thisTotal).toLocaleString()} tokens (~$${cost.toFixed(2)}), more than 90% of your past sessions. If this is a single large task, consider splitting it across multiple focused sessions.`,
-      estimatedSavingsTokens: null,
-      estimatedSavingsUsd: null,
-    },
+      action: 'Split the next large task across multiple focused sessions.',
+      scope: { type: 'session', id: sessionRecord.sessionId },
+      confidence: {
+        level: 'high',
+        score: 0.9,
+        basis: 'Exact session token total compared with a deterministic historical percentile.',
+      },
+      evidence: [
+        { metric: 'session_token_total', value: thisTotal, unit: 'tokens', kind: 'measured' },
+        { metric: 'historical_p90_token_total', value: p90, unit: 'tokens', kind: 'measured' },
+        { metric: 'historical_session_count', value: history.length, unit: 'sessions', kind: 'measured' },
+      ],
+    }),
   ];
 }
 
