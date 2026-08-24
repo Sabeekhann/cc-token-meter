@@ -3,7 +3,7 @@
 Use only the synthetic dashboard fixture when running this checklist:
 
 ```bash
-npm run preview
+npm run preview:dashboard
 ```
 
 Do not use contributor transcripts or production usage data for screenshots or test evidence.
