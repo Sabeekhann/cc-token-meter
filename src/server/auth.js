@@ -1,3 +1,6 @@
+// Copyright 2026 FiveNodes
+// SPDX-License-Identifier: Apache-2.0
+
 import crypto from 'node:crypto';
 
 const SESSION_COOKIE_NAME = 'cc-token-meter-session';
