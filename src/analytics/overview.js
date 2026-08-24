@@ -39,6 +39,17 @@ export function buildUsageIntelligence(sessions, options = {}) {
 function flattenRecords(sessions) {
   const records = [];
   for (const session of sessions) {
+    const dailyRollups = Array.isArray(session.dailyRollups) ? session.dailyRollups : [];
+    for (const rollup of dailyRollups) {
+      records.push({
+        ...rollup,
+        timestamp: rollup.lastTimestamp || rollup.firstTimestamp || null,
+        sessionId: session.sessionId || null,
+        project: session.projectCwd || session.projectDirNameFallback || 'unknown',
+        gitBranch: rollup.gitBranch || session.gitBranch || null,
+        isRollup: true,
+      });
+    }
     const usageRecords = Array.isArray(session.usageRecords) ? session.usageRecords : [];
     for (const record of usageRecords) {
       records.push({
@@ -46,6 +57,7 @@ function flattenRecords(sessions) {
         sessionId: record.sessionId || session.sessionId || null,
         project: record.projectCwd || session.projectCwd || session.projectDirNameFallback || 'unknown',
         gitBranch: record.gitBranch || session.gitBranch || null,
+        isRollup: false,
       });
     }
   }
@@ -77,13 +89,14 @@ function buildActiveSummary(sessions, nowMs, windowMinutes) {
 function buildVelocity(records, nowMs, windowMinutes) {
   const cutoff = nowMs - windowMinutes * 60_000;
   const recent = records.filter((record) => {
+    if (record.isRollup) return false;
     const timestamp = toTimestamp(record.timestamp);
     return Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= nowMs;
   });
 
   const totals = recent.reduce(
     (acc, record) => {
-      acc.messageCount += 1;
+      acc.messageCount += recordMessageCount(record);
       acc.tokenTotal += tokenTotal(record);
       acc.costUsd += recordCost(record).totalCost;
       return acc;
@@ -147,7 +160,7 @@ function buildModelMix(records) {
     }
 
     const cost = recordCost(record);
-    bucket.messageCount += 1;
+    bucket.messageCount += recordMessageCount(record);
     bucket.tokenTotal += tokenTotal(record);
     bucket.costUsd += cost.totalCost;
     bucket.estimatedCostUsed ||= cost.estimated;
@@ -162,17 +175,26 @@ function buildDataQuality(records) {
   let estimatedCostMessageCount = 0;
 
   for (const record of records) {
-    if (!Number.isFinite(toTimestamp(record.timestamp))) missingTimestampCount += 1;
-    if (!record.gitBranch) missingBranchCount += 1;
-    if (recordCost(record).estimated) estimatedCostMessageCount += 1;
+    const count = recordMessageCount(record);
+    missingTimestampCount += record.isRollup
+      ? numOr0(record.missingTimestampCount)
+      : Number.isFinite(toTimestamp(record.timestamp)) ? 0 : count;
+    missingBranchCount += record.isRollup
+      ? numOr0(record.missingBranchCount)
+      : record.gitBranch ? 0 : count;
+    estimatedCostMessageCount += record.isRollup
+      ? numOr0(record.estimatedCostMessageCount)
+      : recordCost(record).estimated ? count : 0;
   }
 
+  const messageCount = records.reduce((sum, record) => sum + recordMessageCount(record), 0);
+
   return {
-    messageCount: records.length,
+    messageCount,
     missingTimestampCount,
     missingBranchCount,
     estimatedCostMessageCount,
-    exactCostMessageCount: records.length - estimatedCostMessageCount,
+    exactCostMessageCount: messageCount - estimatedCostMessageCount,
   };
 }
 
@@ -198,6 +220,10 @@ function tokenTotal(record) {
 
 function numOr0(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function recordMessageCount(record) {
+  return Number.isFinite(record.messageCount) ? record.messageCount : 1;
 }
 
 function positiveNumber(value, fallback) {
