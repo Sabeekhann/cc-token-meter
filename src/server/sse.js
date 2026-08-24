@@ -1,4 +1,5 @@
 import { buildSummary } from './summary.js';
+import { isAuthorizedRequest } from './auth.js';
 
 const SSE_PUSH_INTERVAL_MS = 1500;
 
@@ -11,8 +12,18 @@ const SSE_PUSH_INTERVAL_MS = 1500;
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {ReturnType<import('../ingest/store.js').createStore>} store
+ * @param {string} sessionToken
  */
-export function handleSseConnection(req, res, store) {
+export function handleSseConnection(req, res, store, sessionToken) {
+  if (!isAuthorizedRequest(req, sessionToken)) {
+    res.writeHead(401, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    });
+    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    return;
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
