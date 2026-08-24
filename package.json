@@ -36,6 +36,7 @@
     "ci": "npm run check && npm test",
     "test": "node --test test/*.test.js",
     "test:lifecycle": "node test/release-lifecycle.mjs",
+    "benchmark:large": "node --expose-gc benchmark/large-history.mjs",
     "preview:dashboard": "node test/dashboard-demo-server.js"
   },
   "keywords": [
