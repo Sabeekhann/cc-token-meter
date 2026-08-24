@@ -6,6 +6,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const REQUIRED_PACKAGE_FILES = ['bin', 'src', 'public', 'README.md', 'LICENSE', 'NOTICE'];
 const EXPECTED_REPOSITORY = 'https://github.com/Sabeekhann/cc-token-meter.git';
 const EXPECTED_REGISTRY = 'https://registry.npmjs.org';
+const EXPECTED_LICENSE = 'Apache-2.0';
 
 export function validateRelease({ tag, packageJson, changelog }) {
   const failures = [];
@@ -20,6 +21,9 @@ export function validateRelease({ tag, packageJson, changelog }) {
   }
   if (packageJson.private === true) {
     failures.push('package.json must not mark the release package as private');
+  }
+  if (packageJson.license !== EXPECTED_LICENSE) {
+    failures.push(`package.json license must equal ${EXPECTED_LICENSE}`);
   }
   if (packageJson.repository?.url !== EXPECTED_REPOSITORY) {
     failures.push(`package.json repository.url must equal ${EXPECTED_REPOSITORY}`);
