@@ -19,7 +19,7 @@ test('dashboard exposes the five v2 task views and functional controls', () => {
   assert.match(html, /id="budgetForm"/);
   assert.match(html, /data-insight-filter="warn"/);
   assert.match(html, /id="liveSessionContent"/);
-  assert.match(html, /usage-index-v2\.json/);
+  assert.match(html, /usage-index-v3\.json/);
   assert.match(html, /id="pricingVerifiedOn"/);
 });
 
