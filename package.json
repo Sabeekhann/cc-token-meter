@@ -35,6 +35,7 @@
     "check": "node .github/scripts/project-policy.mjs",
     "ci": "npm run check && npm test",
     "test": "node --test test/*.test.js",
+    "test:lifecycle": "node test/release-lifecycle.mjs",
     "preview:dashboard": "node test/dashboard-demo-server.js"
   },
   "keywords": [
