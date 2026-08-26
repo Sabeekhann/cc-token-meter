@@ -114,6 +114,9 @@ export function createStore({
         estimatedCostUsed: false,
         gitBranch: null,
         version: null,
+        // Boolean only after ingestion has evidence for this session. An
+        // absent value (for example, from a legacy warm index) means unknown.
+        compactDetected: undefined,
         toolEvents: [], // bounded ring buffer of tool-use/tool-result events
         // Older exact counters are folded into dailyRollups; only a bounded
         // recent detail window remains for timelines and heuristics.
@@ -132,7 +135,7 @@ export function createStore({
     }
   }
 
-  function applyParsedResults(filePath, projectDirName, result) {
+  function applyParsedResults(filePath, projectDirName, result, compactDetectionState) {
     const { usageRecords, toolUseEvents, toolResultEvents } = result;
     const touchedSessionIds = new Set();
 
@@ -210,6 +213,16 @@ export function createStore({
       pushToolEvent(agg, { kind: 'tool_result', ...evt });
     }
 
+    // Full-scan evidence is carried forward at the file level across later
+    // tails. Legacy indexes without that evidence remain unknown unless a
+    // newly appended compact event provides a positive signal.
+    if (typeof compactDetectionState === 'boolean') {
+      for (const sessionId of touchedSessionIds) {
+        const agg = getOrCreateSession(sessionId);
+        agg.compactDetected = compactDetectionState;
+      }
+    }
+
     for (const sessionId of touchedSessionIds) {
       const session = sessions.get(sessionId);
       if (session) sessions.set(sessionId, compactSessionHistory(session));
@@ -273,13 +286,15 @@ export function createStore({
         // New file — cold scan it fully from offset 0.
         projectDirName = projectDirName || fileInfo.projectDirName;
         const result = await parseFile(filePath, { startOffset: 0 });
-        const sessionIds = applyParsedResults(filePath, projectDirName, result);
+        const compactDetected = mergeCompactDetection(undefined, result);
+        const sessionIds = applyParsedResults(filePath, projectDirName, result, compactDetected);
         fileState.set(filePath, {
           offset: result.newOffset,
           mtimeMs: stat.mtimeMs,
           size: stat.size,
           projectDirName,
           sessionIds: Array.from(sessionIds),
+          compactDetected,
           ...fileIdentity(stat),
         });
         changed = true;
@@ -300,7 +315,16 @@ export function createStore({
         const result = await parseFile(filePath, {
           startOffset: replacedOrTruncated ? 0 : prev.offset,
         });
-        const touchedSessionIds = applyParsedResults(filePath, prev.projectDirName, result);
+        const compactDetected = mergeCompactDetection(
+          replacedOrTruncated ? undefined : prev.compactDetected,
+          result,
+        );
+        const touchedSessionIds = applyParsedResults(
+          filePath,
+          prev.projectDirName,
+          result,
+          compactDetected,
+        );
         const sessionIds = replacedOrTruncated
           ? touchedSessionIds
           : new Set([...(prev.sessionIds || []), ...touchedSessionIds]);
@@ -310,6 +334,7 @@ export function createStore({
           size: stat.size,
           projectDirName: prev.projectDirName,
           sessionIds: Array.from(sessionIds),
+          compactDetected,
           ...fileIdentity(stat),
         });
         changed = true;
@@ -341,6 +366,12 @@ export function createStore({
       ino: Number.isFinite(stat.ino) ? stat.ino : null,
       birthtimeMs: Number.isFinite(stat.birthtimeMs) ? stat.birthtimeMs : null,
     };
+  }
+
+  function mergeCompactDetection(previousState, result) {
+    if (result.compactDetected === true) return true;
+    if (result.compactDetectionComplete === true) return false;
+    return typeof previousState === 'boolean' ? previousState : undefined;
   }
 
   function fileIdentityChanged(previous, stat) {

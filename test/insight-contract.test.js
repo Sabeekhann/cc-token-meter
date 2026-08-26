@@ -73,7 +73,11 @@ test('all heuristics emit the shared evidence, confidence, action, and scope con
     cacheReadInputTokens: 100,
   }));
   const cache = cacheRatio({ sessionId: 'cache', usageRecords: cacheRecords })[0];
-  const long = longSessionNoCompact({ sessionId: 'long', messageCount: 60 }, [], [], [])[0];
+  const long = longSessionNoCompact({
+    sessionId: 'long',
+    messageCount: 60,
+    compactDetected: false,
+  })[0];
   const history = [100, 200, 300, 400, 500].map((value, index) => ({
     sessionId: `history-${index}`,
     inputTokens: value,
@@ -115,7 +119,11 @@ test('heuristic boundaries are explicit and do not over-trigger', () => {
   assert.equal(repeatedReads({ sessionId: 'r2' }, reads(2)).length, 0);
   assert.equal(repeatedReads({ sessionId: 'r3' }, reads(3)).length, 1);
   assert.equal(longSessionNoCompact({ sessionId: 'l59', messageCount: 59 }).length, 0);
-  assert.equal(longSessionNoCompact({ sessionId: 'l60', messageCount: 60 }).length, 1);
+  assert.equal(longSessionNoCompact({
+    sessionId: 'l60',
+    messageCount: 60,
+    compactDetected: false,
+  }).length, 1);
 
   const history = [100, 200, 300, 400, 500].map((inputTokens, index) => ({
     sessionId: `h-${index}`,
