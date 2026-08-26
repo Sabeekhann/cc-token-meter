@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SOURCE_ROOTS = ['bin', 'src', 'public', 'test', 'benchmark', '.github/scripts'];
+const RUNTIME_ROOTS = ['bin', 'src'];
 const PURE_PATHS = [
   'src/analytics',
   'src/heuristics',
@@ -97,6 +98,24 @@ function checkPureModuleBoundaries() {
   }
 }
 
+function checkRuntimeIsLocalOnly() {
+  const files = RUNTIME_ROOTS.flatMap((root) => walk(path.join(ROOT, root)))
+    .filter((file) => CODE_EXTENSIONS.has(path.extname(file)));
+  const bannedNetworkImport = /(?:from\s*|import\s*\(|require\s*\(\s*)['"](?:node:)?(?:https|net|tls|dns|dgram|child_process)['"]/;
+  const directOutboundCall = /\bfetch\s*\(|\b(?:http|https|net|tls)\s*\.\s*(?:request|get|connect|createConnection)\s*\(/;
+  const destructuredHttpClient = /import\s*\{[^}]*\b(?:request|get)\b[^}]*\}\s*from\s*['"](?:node:)?http['"]/s;
+
+  for (const file of files) {
+    const source = fs.readFileSync(file, 'utf8');
+    if (bannedNetworkImport.test(source)) {
+      fail('local-only-runtime', `${relative(file)} imports an outbound-network or subprocess primitive.`);
+    }
+    if (directOutboundCall.test(source) || destructuredHttpClient.test(source)) {
+      fail('local-only-runtime', `${relative(file)} contains an outbound request primitive.`);
+    }
+  }
+}
+
 function checkDashboardIsLocalOnly() {
   const files = walk(path.join(ROOT, 'public')).filter((file) => ['.html', '.css', '.js'].includes(path.extname(file)));
   const remoteAsset = /(?:src|href)\s*=\s*['"](?:https?:)?\/\//i;
@@ -141,6 +160,7 @@ function checkLoopbackAndHeaders() {
 checkSyntax();
 checkRuntimeDependencies();
 checkPureModuleBoundaries();
+checkRuntimeIsLocalOnly();
 checkDashboardIsLocalOnly();
 checkLoopbackAndHeaders();
 
@@ -152,5 +172,5 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(`Project policy passed (${syntaxFileCount} JavaScript files checked).`);
-  console.log('Verified: local-only dashboard, loopback server, pure analytics, and dependency footprint.');
+  console.log('Verified: local-only runtime/dashboard, loopback server, pure analytics, and dependency footprint.');
 }
