@@ -11,6 +11,7 @@
     <a href="https://www.npmjs.com/package/cc-token-meter"><img alt="npm version" src="https://img.shields.io/npm/v/cc-token-meter?logo=npm&color=cb3837" /></a>
     <a href="https://www.npmjs.com/package/cc-token-meter"><img alt="npm downloads" src="https://img.shields.io/npm/dm/cc-token-meter?logo=npm&color=0f766e" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/tests.yml/badge.svg" /></a>
+    <a href="https://app.codecov.io/github/Sabeekhann/cc-token-meter"><img alt="Codecov coverage" src="https://codecov.io/github/Sabeekhann/cc-token-meter/graph/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
     <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.1.2"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.1.2" /></a>
