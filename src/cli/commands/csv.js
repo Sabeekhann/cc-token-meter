@@ -4,6 +4,7 @@ import { createStore } from '../../ingest/store.js';
 import { buildSummary } from '../../server/summary.js';
 
 const GROUPS = new Set(['day', 'project', 'branch', 'session']);
+const SPREADSHEET_FORMULA_PREFIX = /^[=+\-@\t\r]/;
 
 export async function csvCommand({
   cache = true,
@@ -124,7 +125,13 @@ function metricRow(label, item, count) {
 }
 
 function csvCell(value) {
-  const string = value == null ? '' : String(value);
+  let string = value == null ? '' : String(value);
+
+  // Spreadsheet applications may execute cells beginning with formula
+  // sigils. Prefix text-like values with an apostrophe so exported project,
+  // branch, session, and model labels remain inert when opened interactively.
+  if (SPREADSHEET_FORMULA_PREFIX.test(string)) string = `'${string}`;
+
   if (!/[",\r\n]/.test(string)) return string;
   return `"${string.replace(/"/g, '""')}"`;
 }
