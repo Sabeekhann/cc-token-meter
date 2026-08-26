@@ -271,21 +271,25 @@ npm run ci
 npm run preview:dashboard
 ```
 
-`npm run ci` runs the repository policy gate and all tests. The policy gate protects the local-only, loopback-only, dependency-light, pure-analytics, browser-security, and no-remote-assets boundaries.
+`npm run ci` runs the repository policy gate and all tests. The policy gate
+protects the local-only, loopback-only, dependency-light, pure-analytics,
+browser-security, and no-remote-assets boundaries.
 
 The repository also includes:
 
-- one fast required PR gate for policy, tests, audit, packaging, CLI smoke
-  checks, and conflict markers;
-- multi-platform compatibility checks after merge and on manual runs;
+- a draft-first PR flow with `Required CI` and `Corgea: Security Scan`
+  required before normal merges;
+- informational Codecov coverage generated inside Required CI;
+- multi-platform Compatibility plus CodeQL, gitleaks, and dependency auditing
+  after merge, on schedule, or manually;
 - Conventional Commit PR-title and template checks;
 - automated area, size, and readiness labels;
-- scheduled/main-branch CodeQL, gitleaks, and dependency auditing, plus Corgea repository scanning;
 - release-tag validation and token-free npm publishing through a trusted
   GitHub Actions publisher;
 - Dependabot updates and repository-wide maintainer ownership.
 
-See [`docs/CI.md`](docs/CI.md) for the exact checks and permissions.
+See [`docs/CI.md`](docs/CI.md) for the exact draft-to-merge flow, checks, and
+permissions.
 
 ## Contributing
 

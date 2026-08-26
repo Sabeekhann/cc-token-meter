@@ -50,11 +50,12 @@ read this file before starting any development or design task in this repo.
     `cacheCreationInputTokens`/`cacheReadInputTokens`/`cacheWrite5m`/
     `cacheWrite1h`, `costUsd`, `estimatedCostUsed`, `compactDetected`
     (tri-state: boolean after a full scan, absent for legacy cache entries),
-    `gitBranch` (last-seen session value), `version`, `usageRecords[]` (unbounded, per-message
-    timestamp/token/exact-cost/branch data), `toolEvents[]` (ring-buffered
-    at 200).
+    `gitBranch` (last-seen session value), `version`, `usageRecords[]` (the
+    newest 1,000 per session, with older detail compacted into metadata-only
+    daily rollups while exact aggregate totals are preserved), and
+    `toolEvents[]` (ring-buffered at 200).
   - `localIndex.js` — reads/writes
-    `~/.claude-token-meter/usage-index-v2.json` atomically with owner-only
+    `~/.claude-token-meter/usage-index-v3.json` atomically with owner-only
     permissions where supported. Corrupt/future-version indexes are ignored
     and rebuilt. It contains normalized counters/events and local paths
     needed for analytics, never prompt or tool-result content.
@@ -236,7 +237,7 @@ Useful for scripting/CI-adjacent local checks.
 - Reads are strictly confined to `~/.claude/projects/**/*.jsonl` — never
   writes back to those transcript files under any circumstance.
 - Tool-owned writes are confined to `~/.claude-token-meter/config.json`
-  (budget caps) and `usage-index-v2.json` (normalized local usage metadata).
+  (budget caps) and `usage-index-v3.json` (normalized local usage metadata).
   The index contains paths but never prompt/tool-result content and can be
   disabled with `--no-cache`.
 - No outbound network calls except serving the local dashboard itself — no
@@ -258,8 +259,9 @@ Useful for scripting/CI-adjacent local checks.
   exist in the data model but aren't rendered visually per-row in the
   dashboard yet.
 - The first uncached scan still scales with total transcript history volume;
-  warm starts restore the local index. Detailed `usageRecords` remain
-  unbounded until the v2 rollup/retention phase is implemented.
+  warm starts restore the bounded v3 local index. Each session retains its
+  newest 1,000 normalized usage records while older detail is compacted into
+  metadata-only daily rollups without changing aggregate totals.
 - Project-path reconstruction is lossy for paths containing literal
   hyphens (Claude Code sanitizes `/` to `-`; `cwd` on parsed lines is the
   authoritative label when available, directory-name reversal is only a
@@ -267,36 +269,42 @@ Useful for scripting/CI-adjacent local checks.
 
 ## CI / review
 
-- `.github/workflows/tests.yml` runs product-policy/package validation plus
-  Node 20/22/24 tests across Linux, macOS, and Windows. The stable aggregate
-  branch-protection check is `CI / Required CI`.
+- Open substantial work as a draft PR. Before marking it ready, complete the
+  template, self-review, local validation, and requested changes.
+- `.github/workflows/tests.yml` runs the Ubuntu/Node 24 `Required CI` gate
+  on PRs, pushes to `main`, and manual dispatches. It covers project policy,
+  tests, production audit, packaging, CLI smoke checks, conflict markers, and
+  an informational Codecov upload through GitHub OIDC.
+- `Corgea: Security Scan` is a separate required PR status reported by the
+  Corgea GitHub App. It is not a step in Required CI. Both required statuses
+  must pass before a normal merge.
 - `.github/workflows/pr-governance.yml` uses trusted base-branch code on
   `pull_request_target` to validate titles/templates, apply labels, and update
   one bot comment without executing PR head code.
-- `.github/workflows/security.yml` runs npm audit, CodeQL v4, and a
-  checksum-verified gitleaks binary. `.github/workflows/merge-conflicts.yml`
-  rejects unresolved conflict markers. Dependabot covers npm and Actions.
-- `.github/workflows/sabees-bot-review.yml` runs an automated
-  architect-level Claude review on every PR (`review-internal` for
-  same-repo branches, `review-fork` gated behind the `external-pr-review`
-  GitHub Environment for fork PRs). It checks structural conventions only —
-  file placement, duplication, module/pure-function boundaries, dependency
-  footprint — in bare mode with Bash/project hooks/MCP disabled and a bounded
-  turn/cost budget. It is explicitly **not** a substitute for correctness,
-  security, test-adequacy, or UX review.
-- No `vercel.json`/deploy pipeline in this repo — it's an npm package
+- `.github/workflows/compatibility.yml` runs after pushes to `main` or
+  manually across Node 20/22 on Linux and Node 24 on macOS/Windows, including
+  packed-release lifecycle and large-history performance validation.
+- `.github/workflows/security.yml` runs after pushes to `main`, weekly, or
+  manually with production dependency audit, CodeQL, and checksum-verified
+  gitleaks.
+- Publishing is separate from PR validation. A maintainer-published,
+  non-prerelease GitHub Release triggers `.github/workflows/publish.yml`,
+  which verifies the tag/version, reruns the local gate, and publishes to npm
+  with trusted OIDC.
+- No `vercel.json` or deployment pipeline exists; this is an npm package
   (`npx cc-token-meter`), not a hosted service.
 
 ## Package / publish facts
 
-- `package.json`: `name: "cc-token-meter"`, `"private": false` (published
-  to npm, invoked via `npx cc-token-meter`), `bin: { "cc-token-meter":
-  "./bin/cc-token-meter.js" }`, `files: ["bin", "src", "public",
-  "README.md", "LICENSE"]` — `test/` and `CONTRIBUTING.md` are intentionally
-  excluded from the published package.
-- License: MIT.
-- `docs/CI.md` documents workflow permissions, branch protection, the
-  `ANTHROPIC_API_KEY` secret, and the `external-pr-review` environment.
+- `package.json`: `name: "cc-token-meter"`, `"private": false`, binary
+  `./bin/cc-token-meter.js`, and package files `bin`, `src`, `public`,
+  `README.md`, `LICENSE`, `NOTICE`, and `REUSE.toml`.
+- License: Apache-2.0.
+- The runtime requires no Anthropic API key and sends no telemetry. CI-only
+  Codecov and Corgea integrations are repository services, not package runtime
+  dependencies.
+- `docs/CI.md` is the canonical source for PR gates, workflow permissions,
+  post-merge validation, and npm trusted publishing.
 
 ## File layout
 

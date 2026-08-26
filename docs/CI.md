@@ -8,9 +8,10 @@ that do not fit this small Node.js CLI.
 
 ## What runs
 
-| Workflow | Trigger | Purpose |
+| Automation | Trigger | Purpose |
 | --- | --- | --- |
 | CI / Required CI | PRs, pushes to `main`, manual | One Ubuntu/Node 24 gate: project policy, tests, informational Codecov coverage, production audit, package dry-run, CLI smoke tests, and conflict-marker detection |
+| Corgea: Security Scan | Pull-request events handled by the Corgea GitHub App | Independent repository security review reported as a required PR status; it is not a GitHub Actions job |
 | Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it runs unit tests plus the packed-artifact lifecycle, and enforces large-history budgets on Node 20/24; it has no pull-request trigger |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
@@ -30,11 +31,11 @@ npm run ci
 npm pack --dry-run
 ```
 
-Required CI also generates `lcov.info` from `src/**/*.js` with Node's built-in
+Required CI generates `lcov.info` from `src/**/*.js` with Node's built-in
 test runner and uploads it to Codecov using GitHub OIDC. No Codecov token, Jest,
 or coverage dependency is stored in the repository. Project and patch coverage
-checks begin as informational signals in `codecov.yml`; maintainers can make
-them blocking later after a stable baseline is established.
+checks are informational signals in `codecov.yml`; Codecov is not a required
+merge status.
 
 The required pull-request job intentionally excludes the heavier clean-install
 lifecycle. After merge (or when started manually), Compatibility runs
@@ -45,6 +46,23 @@ and starts the installed dashboard on `127.0.0.1`. See
 [`RELEASE_LIFECYCLE.md`](RELEASE_LIFECYCLE.md) for the full contract.
 Node 20 and Node 24 jobs also run `npm run benchmark:large`; its deterministic
 fixture and thresholds are documented in [`PERFORMANCE.md`](PERFORMANCE.md).
+
+## Pull-request flow
+
+1. Create a focused branch and open a draft PR.
+2. Push corrections to the same branch while Required CI, PR Governance, and
+   informational Codecov reporting provide feedback.
+3. Complete the PR template, self-review, local validation, and requested
+   changes before marking the PR ready for review.
+4. Wait for both `Required CI` and `Corgea: Security Scan` to pass.
+5. Obtain the required approval and resolve every review conversation.
+6. A maintainer merges the PR.
+7. Security and Compatibility validate `main`; publishing remains a separate
+   maintainer-controlled GitHub Release action.
+
+Corgea runs through its GitHub App and reports directly to the pull request. It
+does not run inside `.github/workflows/tests.yml`. Codecov is the opposite:
+its report appears only after Required CI reaches the coverage upload step.
 
 ## One-time repository-owner setup
 
@@ -60,28 +78,31 @@ uses GitHub API metadata for the PR title, body, and changed-file list.
 
 ### 2. Branch protection
 
-`.github/CODEOWNERS` assigns the entire repository to `@Sabeekhann`. The file
-requests the right reviewer, but GitHub does not enforce that ownership until
-`main` has a protection rule or branch ruleset with code-owner review enabled.
+`.github/CODEOWNERS` assigns the entire repository to `@Sabeekhann`. The
+active **Protect main** branch ruleset targets the default branch and enforces:
 
-In **Settings → Rules → Rulesets**, create an active branch ruleset targeting
-the default branch. Configure it as follows:
-
-- require a pull request before merging;
-- require one approval and approval from Code Owners;
-- dismiss stale approvals when new commits are pushed;
-- require all review conversations to be resolved;
-- require the single stable status check below;
-- block force pushes and branch deletion;
-- do not grant write access to contributors who should not be able to merge.
+- a pull request before merging;
+- one approval and approval from Code Owners;
+- dismissal of stale approvals when new commits are pushed;
+- resolution of all review conversations;
+- both required status checks listed below;
+- blocked force pushes and branch deletion.
 
 ```text
-Required CI
+Required CI              (GitHub Actions)
+Corgea: Security Scan    (Corgea)
 ```
 
-Keep PR Governance advisory. Security and compatibility checks run outside the
-pull-request path, so they cannot leave contributor PRs waiting on macOS,
-Windows, CodeQL, or gitleaks downloads.
+Do not substitute similarly named checks or remove their integration sources.
+Keep PR Governance and Codecov advisory. Security and Compatibility run outside
+the pull-request path, so contributor PRs do not wait on macOS, Windows,
+CodeQL, or full-history gitleaks work.
+
+The repository owner is currently present in the ruleset bypass list with
+**Allow for pull requests only**. That preserves an explicit maintainer recovery
+path but means the owner can choose to bypass the configured rules. Normal
+merges should still wait for the documented checks, approval, and resolved
+feedback.
 
 For this personal-account repository, collaborators have write access and can
 merge pull requests. To make merging maintainer-only, keep the collaborator
