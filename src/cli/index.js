@@ -146,8 +146,8 @@ function parseArgs(argv) {
 
 function parseRequiredNumber(flagName, value) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`${flagName} requires a numeric value, got: ${value}`);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${flagName} requires a non-negative numeric value, got: ${value}`);
   }
   return parsed;
 }

@@ -40,16 +40,15 @@ export async function handleApiRoute(req, res, url, store) {
 
     const updates = {};
     for (const key of allowedKeys) {
-      if (Object.prototype.hasOwnProperty.call(body, key)) {
-        const value = body[key];
-        if (value === null || typeof value === 'number') {
-          updates[key] = value;
-        }
-      }
+      if (Object.prototype.hasOwnProperty.call(body, key)) updates[key] = body[key];
     }
 
-    const next = writeConfig(updates);
-    sendJson(res, 200, { ok: true, config: next });
+    try {
+      const next = writeConfig(updates);
+      sendJson(res, 200, { ok: true, config: next });
+    } catch (err) {
+      sendJson(res, 400, { error: 'Invalid budget config', detail: String(err && err.message) });
+    }
     return true;
   }
 
