@@ -7,6 +7,7 @@ const ciWorkflow = fs.readFileSync('.github/workflows/tests.yml', 'utf8');
 const compatibilityWorkflow = fs.readFileSync('.github/workflows/compatibility.yml', 'utf8');
 const securityWorkflow = fs.readFileSync('.github/workflows/security.yml', 'utf8');
 const publishWorkflow = fs.readFileSync('.github/workflows/publish.yml', 'utf8');
+const codecovConfig = fs.readFileSync('codecov.yml', 'utf8');
 
 test('pull requests have one fast required CI job', () => {
   assert.match(ciWorkflow, /required:\n    name: Required/);
@@ -14,6 +15,14 @@ test('pull requests have one fast required CI job', () => {
   assert.match(ciWorkflow, /npm run check/);
   assert.match(ciWorkflow, /npm test/);
   assert.match(ciWorkflow, /npm audit --omit=dev --audit-level=high/);
+  assert.match(ciWorkflow, /--test-coverage-include='src\/\*\*\/\*\.js'/);
+  assert.match(ciWorkflow, /--test-reporter=lcov/);
+  assert.match(ciWorkflow, /codecov\/codecov-action@[0-9a-f]{40}/);
+  assert.doesNotMatch(ciWorkflow, /codecov\/codecov-action@v\d/);
+  assert.match(ciWorkflow, /use_oidc: true/);
+  assert.match(ciWorkflow, /fail_ci_if_error: false/);
+  assert.match(codecovConfig, /project:[\s\S]*informational: true/);
+  assert.match(codecovConfig, /patch:[\s\S]*informational: true/);
   assert.match(ciWorkflow, /Reject unresolved merge-conflict markers/);
 });
 

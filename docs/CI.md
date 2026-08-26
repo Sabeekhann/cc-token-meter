@@ -10,7 +10,7 @@ that do not fit this small Node.js CLI.
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| CI / Required CI | PRs, pushes to `main`, manual | One Ubuntu/Node 24 gate: project policy, tests, production audit, package dry-run, CLI smoke tests, and conflict-marker detection |
+| CI / Required CI | PRs, pushes to `main`, manual | One Ubuntu/Node 24 gate: project policy, tests, informational Codecov coverage, production audit, package dry-run, CLI smoke tests, and conflict-marker detection |
 | Compatibility | Pushes to `main`, manual | Node 20/22 on Linux and Node 24 on macOS/Windows; it runs unit tests plus the packed-artifact lifecycle, and enforces large-history budgets on Node 20/24; it has no pull-request trigger |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
@@ -29,6 +29,12 @@ npm ci
 npm run ci
 npm pack --dry-run
 ```
+
+Required CI also generates `lcov.info` from `src/**/*.js` with Node's built-in
+test runner and uploads it to Codecov using GitHub OIDC. No Codecov token, Jest,
+or coverage dependency is stored in the repository. Project and patch coverage
+checks begin as informational signals in `codecov.yml`; maintainers can make
+them blocking later after a stable baseline is established.
 
 The required pull-request job intentionally excludes the heavier clean-install
 lifecycle. After merge (or when started manually), Compatibility runs
