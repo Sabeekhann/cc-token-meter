@@ -5,6 +5,40 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.4] — 2026-08-26
+
+Maintenance, correctness, security, and compatibility improvements following
+v1.1.3.
+
+### Fixed
+- Align Claude model identifier matching with current canonical model IDs while
+  preserving historical aliases and fallback behavior.
+- Neutralize spreadsheet-formula prefixes in CSV exports before normal CSV
+  quoting is applied.
+- Validate budget/config updates consistently across CLI, stored config, and
+  dashboard API paths; invalid values now fail safely instead of persisting.
+- Reject unknown CLI flags and unexpected positional arguments instead of
+  silently accepting mistyped commands.
+
+### Changed
+- Replace the `glob` runtime dependency with deterministic native filesystem
+  transcript discovery; `open` is now the only production dependency.
+- Normalize npm repository/bin metadata and strengthen release-package contract
+  validation.
+- Expand compatibility coverage to Node.js 26 while retaining Node.js 20 as
+  the supported minimum.
+- Isolate Codecov OIDC permissions from Required CI and add advisory dependency
+  review for pull requests.
+- Enforce the local-only runtime network boundary in repository policy checks.
+- Remove the completed one-shot maintenance workflow and synchronize public and
+  maintainer documentation with the current repository state.
+
+### Security
+- Preserve the loopback-only dashboard, authenticated local API/SSE boundary,
+  no-telemetry policy, and no external runtime requests.
+- Final post-merge validation passed Required CI, Coverage, Node 20/22/24/26
+  compatibility, dependency audit, gitleaks, and CodeQL.
+
 ## [1.1.3] — 2026-08-26
 
 Correctness patch for Claude Code compact-session detection, with stronger CI visibility.
