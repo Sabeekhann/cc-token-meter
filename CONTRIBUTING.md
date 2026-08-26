@@ -258,13 +258,25 @@ Complete the pull request template with:
 - privacy, rollout, and rollback considerations;
 - any checklist item that is intentionally not applicable.
 
-Draft pull requests may leave the Review Readiness boxes unchecked. Before requesting human review:
+Open substantial changes as draft pull requests. While the PR is a draft:
 
-- perform a self-review;
-- remove debugging code and unrelated changes;
-- confirm the branch contains no sensitive data;
-- run `npm run ci`;
-- check **This PR is ready for human review** in the PR body.
+1. keep the diff focused and push follow-up corrections to the same branch;
+2. review Required CI, PR Governance, and informational Codecov results;
+3. address automated findings and human review comments;
+4. perform a self-review and remove debugging or unrelated changes;
+5. confirm the branch contains no sensitive data and run `npm run ci`;
+6. check **This PR is ready for human review** in the PR body.
+
+After marking the PR ready for review, do not merge until both required statuses
+have passed:
+
+```text
+Required CI
+Corgea: Security Scan
+```
+
+Codecov coverage remains advisory. Resolve every review conversation and obtain
+the approval required by the `main` ruleset before a maintainer merges.
 
 ## Privacy and security
 
@@ -282,12 +294,19 @@ If a proposed feature needs outbound networking, telemetry, transcript mutation,
 
 ## Review process
 
-Every pull request receives one required CI result covering product policy,
-tests, production dependency audit, packaging, CLI smoke behavior, and merge
-markers. PR Governance separately validates metadata and maintains labels.
-Cross-platform compatibility, CodeQL, and full secret scanning run after merge,
+Every pull request has two required merge-gate statuses. `Required CI` runs
+project policy, tests, the production dependency audit, packaging, CLI smoke
+behavior, and conflict-marker detection. `Corgea: Security Scan` is reported
+independently by the Corgea GitHub App. Both must pass before merge.
+
+Required CI also uploads a privacy-safe source coverage report to Codecov.
+Codecov project and patch results are informational and do not replace either
+required gate. PR Governance separately validates metadata and maintains
+labels.
+
+Cross-platform Compatibility, CodeQL, and full secret scanning run after merge,
 on schedule, or manually so contributor feedback stays fast. These workflows
-do not replace human review.
+and automated services do not replace human review.
 
 Publishing is not part of the pull-request path. Only a maintainer-created
 GitHub Release can start the npm publishing workflow, and the release tag must
@@ -305,7 +324,7 @@ Maintainers review for:
 
 Reviews may request changes. Address each thread with a code change, evidence,
 or a concise technical explanation. `main` is maintainer-owned through
-`.github/CODEOWNERS`; once checks pass and feedback is resolved, only a
-maintainer decides whether and when to merge.
+`.github/CODEOWNERS`; once required checks pass, approval is recorded, and
+feedback is resolved, only a maintainer decides whether and when to merge.
 
 Thank you for contributing responsibly.
