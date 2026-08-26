@@ -36,9 +36,10 @@ Claude JSONL transcripts (read-only)
   -> vanilla local dashboard and CLI exports
 ```
 
-The source adapter boundary should make future support for other local agent
-logs possible without coupling their schemas to analytics. Claude Code remains
-the only v2 source until its pipeline is reliable and documented.
+The source adapter boundary keeps local-agent log schemas out of analytics.
+Claude Code remains the supported source for the current product; additional
+sources should be added only when they can preserve the same privacy and
+reliability guarantees.
 
 ## Delivery plan
 
@@ -111,27 +112,37 @@ and offline run are covered by automated checks.
 
 ## Current implementation status
 
-- Phase 1 is implemented in the v2 working branch.
-- Phase 2 has a working versioned index, atomic private writes, warm-start
-  restore, bounded detailed history with exact daily rollups, automatic v2 to
-  v3 migration, truncation recovery, corruption fallback, and `--no-cache`.
-- Phase 4 has a complete first implementation of the Overview, Live Session,
-  Projects, Insights, and Settings views, including project search, filters,
-  session navigation, local budget saving, responsive layouts, and explicit
-  loading/empty/connection states.
-- Phase 5 now has a single required PR gate for product policy, tests,
-  dependency audit, package validation, CLI smoke behavior, and merge-marker
-  protection. Node 20/22/24 and Linux/macOS/Windows compatibility checks run
-  after merge or manually; CodeQL and secret scans run on `main`, weekly, or
-  manually. It also includes PR governance, maintainer ownership, issue/PR
-  templates, Dependabot maintenance, `doctor`, inclusive date/project
-  filters, pricing-freshness diagnostics, a compact terminal summary,
-  machine-readable JSON diagnostics, and private CSV exports grouped by day,
-  project, branch, or session. Deterministic large-history performance budgets
-  are enforced on Node 20 and Node 24.
-- Structured insight evidence/confidence and bounded history compaction are
-  implemented. Automated release publishing through npm trusted publishing is
-  active for maintainer-created GitHub releases.
+All five delivery phases have substantial implementations on `main`.
+
+- **Phase 1 — accounting:** exact per-message attribution, date-aware pricing,
+  fallback-price visibility, branch/session/project aggregation, live velocity,
+  cache health, model mix, and data-quality summaries are implemented and
+  regression-tested.
+- **Phase 2 — local index:** the private v3 index uses atomic writes, warm-start
+  offsets, bounded recent detail with exact daily rollups, v2-to-v3 migration,
+  truncation recovery, corruption fallback, and `--no-cache` support.
+- **Phase 3 — intelligence:** structured insight evidence/confidence, ranked
+  recommendations, savings estimates where calculable, compact-session
+  awareness, and bounded-history-aware heuristics are implemented.
+- **Phase 4 — dashboard:** Overview, Live Session, Projects, Insights, and
+  Settings are implemented with search/filtering, session navigation, local
+  budget saving, responsive layouts, and explicit loading/empty/connection
+  states.
+- **Phase 5 — reliability/release:** `doctor`, date/project filters, compact
+  summaries, JSON/CSV exports, release lifecycle checks, deterministic large-
+  history benchmarks, PR governance, required CI, Corgea review, informational
+  Codecov/dependency review, Security workflows, and npm trusted publishing are
+  in place.
+
+Compatibility currently covers Node 20, 22, 24, and 26 across Linux, macOS, and
+Windows. Large-history budgets run on Node 20, 24, and 26. The shipped runtime
+remains local-only and loopback-only, and the maintenance stack is reducing the
+runtime dependency footprint to `open` only.
+
+This document is now a product/architecture plan and status reference rather
+than a description of a separate working branch. Future v2 work should be
+tracked as focused issues/PRs against `main` and should preserve the constraints
+above.
 
 The detailed dashboard information architecture and interaction requirements
 are maintained in [`UI_PLAN.md`](UI_PLAN.md).

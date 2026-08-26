@@ -14,7 +14,7 @@
     <a href="https://app.codecov.io/github/Sabeekhann/cc-token-meter"><img alt="Codecov coverage" src="https://codecov.io/github/Sabeekhann/cc-token-meter/graph/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
-    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.1.2"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.1.2" /></a>
+    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.1.3"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.1.3" /></a>
     <img alt="Corgea scanned" src="https://img.shields.io/badge/Corgea-scanned-ff6b2c" />
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
     <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-f3b33d" /></a>
@@ -58,15 +58,11 @@ It requires no API key, makes no Anthropic API call, works retroactively, and tr
 > [!IMPORTANT]
 > Dollar values are local estimates, not an Anthropic bill. Pricing rules can change; verify important decisions against [Anthropic's official pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing).
 
-## What's new in v1.1.1
+## Current release
 
-- **Hardened local dashboard:** packaged assets are served from an explicit allowlist, eliminating request-controlled filesystem paths from the web server.
-- **Authenticated local API:** every dashboard process creates an in-memory random session token; `/api/*` and live SSE updates require its HttpOnly, SameSite=Strict cookie.
-- **Loopback Host validation:** requests must target `127.0.0.1` or `localhost`, adding another boundary against local-browser attacks while the server remains bound to `127.0.0.1`.
-- **Expanded security validation:** regression tests cover traversal attempts, local Host validation, session authorization, and cookie security flags.
-- **Corgea scanning:** Corgea now complements CodeQL, gitleaks, and dependency auditing for repository security review. The post-hardening full scan reported zero active findings.
+The current published version is **v1.1.3**. It includes privacy-safe compact-session detection, informational Codecov coverage, repository maintenance improvements, and the local-only dashboard/security work delivered across the v1.1 series.
 
-Read the [v1.1.1 release notes](docs/RELEASE_NOTES_v1.1.1.md). Scanner results are point-in-time signals, not a guarantee that software is vulnerability-free.
+See the [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/latest) and [`CHANGELOG.md`](CHANGELOG.md) for the version-by-version history. Work merged after v1.1.3 remains unreleased until a maintainer explicitly prepares and publishes a later release.
 
 ## What you get
 
@@ -124,7 +120,7 @@ it does not require an Anthropic API key.
 
 | Requirement | Supported contract |
 | --- | --- |
-| **Node.js** | Version 20 or newer; CI exercises Node.js 20, 22, and 24. |
+| **Node.js** | Version 20 or newer; CI exercises Node.js 20, 22, 24, and 26. |
 | **Operating systems** | Linux, macOS, and Windows are covered by the compatibility workflow. |
 | **Claude Code data** | Existing local JSONL transcripts under `~/.claude/projects`. |
 | **Network posture** | No external runtime requests; the dashboard listens only on `127.0.0.1`. |
@@ -144,13 +140,16 @@ npm install --global cc-token-meter@latest
 npm uninstall --global cc-token-meter
 ```
 
-### Preview the UI safely
+### Preview the UI safely from a source checkout
+
+The synthetic preview is a development script and is **not** part of the published npm command surface. Run it only after cloning the repository and installing its locked dependencies:
 
 ```bash
+npm ci
 npm run preview:dashboard
 ```
 
-Open `http://127.0.0.1:4318`. This preview uses clearly synthetic fixture data and never reads personal Claude Code transcripts, so it is the best way to explore or work on the interface.
+Open `http://127.0.0.1:4318`. This preview uses clearly synthetic fixture data and never reads personal Claude Code transcripts, so it is the best way to explore or work on the interface from source.
 
 ## Privacy by design
 
@@ -279,9 +278,9 @@ The repository also includes:
 
 - a draft-first PR flow with `Required CI` and `Corgea: Security Scan`
   required before normal merges;
-- informational Codecov coverage generated inside Required CI;
-- multi-platform Compatibility plus CodeQL, gitleaks, and dependency auditing
-  after merge, on schedule, or manually;
+- a separate informational Codecov coverage job and advisory dependency review;
+- multi-platform Compatibility across Node 20, 22, 24, and 26 plus CodeQL,
+  gitleaks, and dependency auditing after merge, on schedule, or manually;
 - Conventional Commit PR-title and template checks;
 - automated area, size, and readiness labels;
 - release-tag validation and token-free npm publishing through a trusted
