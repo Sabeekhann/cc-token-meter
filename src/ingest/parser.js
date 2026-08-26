@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { isCompactEvent } from './compact.js';
 
 const TOOL_NAMES_WITH_FILE_PATH = new Set(['Read', 'Edit', 'Write', 'MultiEdit']);
 
@@ -22,6 +23,8 @@ const TOOL_NAMES_WITH_FILE_PATH = new Set(['Read', 'Edit', 'Write', 'MultiEdit']
  *   usageRecords: Array<object>,
  *   toolUseEvents: Array<object>,
  *   toolResultEvents: Array<object>,
+ *   compactDetected: boolean,
+ *   compactDetectionComplete: boolean,
  *   newOffset: number,
  * }>}
  */
@@ -29,6 +32,7 @@ export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
   const usageRecords = [];
   const toolUseEvents = [];
   const toolResultEvents = [];
+  const compactEvents = { detected: false };
 
   // If the file shrank below the requested offset (e.g. truncated/rotated),
   // fall back to reading from the start to avoid an invalid stream range.
@@ -40,13 +44,20 @@ export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
     }
   } catch {
     // File may have disappeared; return an empty result at the same offset.
-    return { usageRecords, toolUseEvents, toolResultEvents, newOffset: startOffset };
+    return {
+      usageRecords,
+      toolUseEvents,
+      toolResultEvents,
+      compactDetected: false,
+      compactDetectionComplete: false,
+      newOffset: startOffset,
+    };
   }
 
   const stream = fs.createReadStream(filePath, { start: effectiveStartOffset });
   let offset = effectiveStartOffset;
   let pending = Buffer.alloc(0);
-  const events = { usageRecords, toolUseEvents, toolResultEvents };
+  const events = { usageRecords, toolUseEvents, toolResultEvents, compactEvents };
 
   // Split the raw byte stream ourselves instead of relying on readline.
   // This preserves the exact on-disk delimiter width for both LF and CRLF,
@@ -71,7 +82,14 @@ export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
     offset += pending.length;
   }
 
-  return { usageRecords, toolUseEvents, toolResultEvents, newOffset: offset };
+  return {
+    usageRecords,
+    toolUseEvents,
+    toolResultEvents,
+    compactDetected: compactEvents.detected,
+    compactDetectionComplete: effectiveStartOffset === 0,
+    newOffset: offset,
+  };
 }
 
 function withoutTrailingCarriageReturn(line) {
@@ -93,10 +111,12 @@ function processSerializedLine(serializedLine, events) {
   return true;
 }
 
-function processLine(obj, { usageRecords, toolUseEvents, toolResultEvents }) {
+function processLine(obj, { usageRecords, toolUseEvents, toolResultEvents, compactEvents }) {
   if (!obj || typeof obj !== 'object' || typeof obj.type !== 'string') {
     return;
   }
+
+  if (isCompactEvent(obj)) compactEvents.detected = true;
 
   switch (obj.type) {
     case 'assistant': {

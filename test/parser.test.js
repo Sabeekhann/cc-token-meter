@@ -23,6 +23,8 @@ test('parses a well-formed session file, ignoring unknown line types', async () 
   assert.equal(result.toolResultEvents.length, 1);
   assert.equal(result.toolResultEvents[0].toolUseId, 'toolu_abc123');
   assert.ok(result.toolResultEvents[0].contentByteLength > 0);
+  assert.equal(result.compactDetected, false);
+  assert.equal(result.compactDetectionComplete, true);
 
   // Offset should equal the full file size (all lines consumed).
   const stat = fs.statSync(filePath);
@@ -78,7 +80,30 @@ test('supports incremental tailing via startOffset', async () => {
   // since the file didn't change.
   const secondHalf = await parseSessionFile(filePath, { startOffset: firstHalf.newOffset });
   assert.equal(secondHalf.usageRecords.length, 0);
+  assert.equal(secondHalf.compactDetected, false);
+  assert.equal(secondHalf.compactDetectionComplete, false);
   assert.equal(secondHalf.newOffset, firstHalf.newOffset);
+});
+
+test('detects a compact-boundary event without retaining transcript content', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-compact-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const filePath = path.join(dir, 'session.jsonl');
+  const lines = [
+    JSON.stringify({
+      type: 'system',
+      subtype: 'compact_boundary',
+      sessionId: 'session',
+      content: 'Conversation compacted',
+    }),
+  ];
+  fs.writeFileSync(filePath, `${lines.join('\n')}\n`, 'utf8');
+
+  const result = await parseSessionFile(filePath);
+
+  assert.equal(result.compactDetected, true);
+  assert.equal(result.compactDetectionComplete, true);
+  assert.equal('rawLines' in result, false);
 });
 
 test('tracks exact byte offsets for CRLF-authored JSONL', async (t) => {

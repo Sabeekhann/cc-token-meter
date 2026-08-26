@@ -1,6 +1,6 @@
 import { repeatedReads } from './repeatedReads.js';
 import { cacheRatio } from './cacheRatio.js';
-import { longSessionNoCompact } from './longSessionNoCompact.js';
+import { longSessionNoCompact, detectCompactEvent } from './longSessionNoCompact.js';
 import { outlierSessionTotal } from './outlierSessionTotal.js';
 import { largeToolResultSpike } from './largeToolResultSpike.js';
 import { rankAndDedupeInsights } from './contract.js';
@@ -10,7 +10,7 @@ import { rankAndDedupeInsights } from './contract.js';
 // its tool-event count) has changed since the last computation — this
 // avoids re-running all 5 heuristics every ~1.5s poll tick for sessions
 // that are currently idle.
-const heuristicsCache = new Map(); // sessionId -> { lastComputedAtMessageCount, lastComputedAtToolEventCount, tips }
+const heuristicsCache = new Map(); // sessionId -> { lastComputedAtMessageCount, lastComputedAtToolEventCount, compactDetectionState, tips }
 
 /**
  * Run all 5 heuristics against a single session and return the combined
@@ -34,12 +34,14 @@ export function runHeuristics(sessionRecord, toolEvents, allSessionsHistory, raw
   const sessionId = sessionRecord.sessionId;
   const messageCount = sessionRecord.messageCount || 0;
   const toolEventCount = toolEvents.length;
+  const compactDetectionState = detectCompactEvent(rawLines, sessionRecord.compactDetected);
 
   const cached = heuristicsCache.get(sessionId);
   if (
     cached &&
     cached.lastComputedAtMessageCount === messageCount &&
-    cached.lastComputedAtToolEventCount === toolEventCount
+    cached.lastComputedAtToolEventCount === toolEventCount &&
+    cached.compactDetectionState === compactDetectionState
   ) {
     return cached.tips;
   }
@@ -55,6 +57,7 @@ export function runHeuristics(sessionRecord, toolEvents, allSessionsHistory, raw
   heuristicsCache.set(sessionId, {
     lastComputedAtMessageCount: messageCount,
     lastComputedAtToolEventCount: toolEventCount,
+    compactDetectionState,
     tips,
   });
 

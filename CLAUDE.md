@@ -48,8 +48,9 @@ read this file before starting any development or design task in this repo.
     `projectCwd`/`projectDirNameFallback`, `models[]`, `firstTimestamp`/
     `lastTimestamp`, `messageCount`, `inputTokens`/`outputTokens`/
     `cacheCreationInputTokens`/`cacheReadInputTokens`/`cacheWrite5m`/
-    `cacheWrite1h`, `costUsd`, `estimatedCostUsed`, `gitBranch` (last-seen
-    session value), `version`, `usageRecords[]` (unbounded, per-message
+    `cacheWrite1h`, `costUsd`, `estimatedCostUsed`, `compactDetected`
+    (tri-state: boolean after a full scan, absent for legacy cache entries),
+    `gitBranch` (last-seen session value), `version`, `usageRecords[]` (unbounded, per-message
     timestamp/token/exact-cost/branch data), `toolEvents[]` (ring-buffered
     at 200).
   - `localIndex.js` — reads/writes
@@ -113,9 +114,9 @@ read this file before starting any development or design task in this repo.
   `(sessionRecord, toolEvents, allSessionsHistory) => Tip[]`, where
   `Tip = { id, sessionId, severity, message }`:
   - `repeatedReads.js`, `cacheRatio.js`, `longSessionNoCompact.js`
-    (compact-detection is best-effort/unverified — checks for a `user`-type
-    line starting with literal `/compact`, or loosely any `system`-type
-    line mentioning "compact"), `outlierSessionTotal.js`,
+    (uses the privacy-safe `compactDetected` aggregate populated during
+    streaming ingestion, and stays silent when legacy cache data lacks that
+    evidence), `outlierSessionTotal.js`,
     `largeToolResultSpike.js`.
   - `index.js` — `runHeuristics(sessionRecord, toolEvents,
     allSessionsHistory, rawLines?)` registers and runs all 5, with a
@@ -256,8 +257,6 @@ Useful for scripting/CI-adjacent local checks.
   — treat dollar figures as estimates; `estimated`/`usedFallback` flags
   exist in the data model but aren't rendered visually per-row in the
   dashboard yet.
-- `longSessionNoCompact`'s compact-detection logic is best-effort/unverified
-  against a real `/compact`-containing transcript.
 - The first uncached scan still scales with total transcript history volume;
   warm starts restore the local index. Detailed `usageRecords` remain
   unbounded until the v2 rollup/retention phase is implemented.

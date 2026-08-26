@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createStore } from '../src/ingest/store.js';
 import { parseSessionFile } from '../src/ingest/parser.js';
+import { buildSummary } from '../src/server/summary.js';
 
 function assistantLine({ sessionId, timestamp, inputTokens }) {
   return JSON.stringify({
@@ -24,6 +25,15 @@ function assistantLine({ sessionId, timestamp, inputTokens }) {
         cache_read_input_tokens: 0,
       },
     },
+  });
+}
+
+function compactBoundaryLine(sessionId = 'session-1') {
+  return JSON.stringify({
+    type: 'system',
+    subtype: 'compact_boundary',
+    sessionId,
+    content: 'Conversation compacted',
   });
 }
 
@@ -72,6 +82,7 @@ test('store restores an unchanged transcript from the local index without repars
   await first.ingestNewData();
   assert.equal(parseCount, 1);
   assert.equal(first.getSnapshot().sessions[0].messageCount, 1);
+  assert.equal(first.getSnapshot().sessions[0].compactDetected, false);
 
   const second = createStore({
     indexPath,
@@ -83,6 +94,76 @@ test('store restores an unchanged transcript from the local index without repars
   assert.equal(parseCount, 1, 'second store should trust the unchanged indexed offset');
   assert.equal(second.getSnapshot().sessions[0].messageCount, 1);
   assert.deepEqual(second.getSnapshot().sessions[0].models, ['claude-sonnet-5']);
+  assert.equal(second.getSnapshot().sessions[0].compactDetected, false);
+});
+
+test('store carries compact detection from streaming ingestion into the session aggregate', async (t) => {
+  const line = assistantLine({
+    sessionId: 'session-1',
+    timestamp: '2026-08-21T12:00:00.000Z',
+    inputTokens: 100,
+  });
+  const { filePath } = tempSession(t, [line, compactBoundaryLine()]);
+  const store = createStore({
+    persistIndex: false,
+    discoverFiles: discoverOnly(filePath),
+  });
+
+  await store.ingestNewData();
+
+  assert.equal(store.getSnapshot().sessions[0].compactDetected, true);
+});
+
+test('summary suppresses the long-session warning after an ingested compact event', async (t) => {
+  const start = Date.parse('2026-08-21T12:00:00.000Z');
+  const lines = Array.from({ length: 60 }, (_, index) => assistantLine({
+    sessionId: 'session-1',
+    timestamp: new Date(start + index * 60_000).toISOString(),
+    inputTokens: 100,
+  }));
+  lines.splice(30, 0, compactBoundaryLine());
+  const { filePath } = tempSession(t, lines);
+  const store = createStore({
+    persistIndex: false,
+    discoverFiles: discoverOnly(filePath),
+  });
+
+  await store.ingestNewData();
+  const summary = buildSummary(store, {
+    config: {
+      dailyTokenCap: null,
+      dailyCostCapUsd: null,
+      sessionTokenCap: null,
+      sessionCostCapUsd: null,
+      warnThresholdPct: 80,
+    },
+  });
+
+  assert.equal(
+    summary.tips.some((tip) => tip.id.startsWith('longSessionNoCompact:')),
+    false,
+  );
+});
+
+test('store carries full-scan evidence across later incremental tails without creating empty sessions', async (t) => {
+  const { filePath } = tempSession(t, []);
+  const store = createStore({
+    persistIndex: false,
+    discoverFiles: discoverOnly(filePath),
+  });
+
+  await store.ingestNewData();
+  assert.equal(store.getSnapshot().sessions.length, 0);
+
+  const line = assistantLine({
+    sessionId: 'session-1',
+    timestamp: '2026-08-21T12:00:00.000Z',
+    inputTokens: 100,
+  });
+  fs.appendFileSync(filePath, `${line}\n`, 'utf8');
+  await store.ingestNewData();
+
+  assert.equal(store.getSnapshot().sessions[0].compactDetected, false);
 });
 
 test('store rebuilds a truncated transcript instead of double-counting old records', async (t) => {

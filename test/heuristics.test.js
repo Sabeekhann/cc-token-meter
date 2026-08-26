@@ -5,6 +5,7 @@ import { cacheRatio } from '../src/heuristics/cacheRatio.js';
 import { longSessionNoCompact, detectCompactEvent } from '../src/heuristics/longSessionNoCompact.js';
 import { outlierSessionTotal } from '../src/heuristics/outlierSessionTotal.js';
 import { largeToolResultSpike } from '../src/heuristics/largeToolResultSpike.js';
+import { clearHeuristicsCache, runHeuristics } from '../src/heuristics/index.js';
 
 function toolUse(name, filePath, timestamp, toolUseId) {
   return { kind: 'tool_use', name, filePath, timestamp, toolUseId: toolUseId || `tu-${timestamp}` };
@@ -109,12 +110,31 @@ test('cacheRatio: true negative — stable ratio throughout, and under 20 messag
 // --- longSessionNoCompact ---
 
 test('longSessionNoCompact: true positive — 60+ messages, no compact detected', () => {
-  const session = { sessionId: 's6', messageCount: 65 };
+  const session = { sessionId: 's6', messageCount: 65, compactDetected: false };
   const tips = longSessionNoCompact(session, [], [], []);
   assert.equal(tips.length, 1);
   assert.match(tips[0].message, /65 turns/);
   assert.equal(tips[0].estimatedSavingsTokens, null);
   assert.equal(tips[0].estimatedSavingsUsd, null);
+});
+
+test('longSessionNoCompact: unavailable compact evidence does not produce a warning', () => {
+  const session = { sessionId: 'legacy-cache', messageCount: 65 };
+  assert.equal(longSessionNoCompact(session, [], [], []).length, 0);
+  assert.equal(detectCompactEvent([]), null);
+});
+
+test('runHeuristics invalidates cached warnings when compact evidence changes', () => {
+  clearHeuristicsCache();
+  const session = { sessionId: 'cache-state', messageCount: 65, compactDetected: false };
+  assert.ok(runHeuristics(session, [], [session]).some((tip) => tip.id.startsWith('longSessionNoCompact:')));
+
+  session.compactDetected = true;
+  assert.equal(
+    runHeuristics(session, [], [session]).some((tip) => tip.id.startsWith('longSessionNoCompact:')),
+    false,
+  );
+  clearHeuristicsCache();
 });
 
 test('longSessionNoCompact: true negative — 60+ messages but a /compact line is present', () => {
@@ -135,6 +155,21 @@ test('longSessionNoCompact: true negative — under 60 messages', () => {
 test('detectCompactEvent: detects system-type "compact" mention as secondary signal', () => {
   const rawLines = [{ type: 'system', content: 'Context was compacted automatically' }];
   assert.equal(detectCompactEvent(rawLines), true);
+});
+
+test('detectCompactEvent: detects Claude Code command-tag form', () => {
+  const rawLines = [{
+    type: 'user',
+    message: {
+      content: '<command-message>compact</command-message>\n<command-name>/compact</command-name>',
+    },
+  }];
+  assert.equal(detectCompactEvent(rawLines), true);
+});
+
+test('detectCompactEvent: non-compact raw lines establish negative evidence', () => {
+  const rawLines = [{ type: 'user', message: { content: 'Continue with the task' } }];
+  assert.equal(detectCompactEvent(rawLines), false);
 });
 
 // --- outlierSessionTotal ---
