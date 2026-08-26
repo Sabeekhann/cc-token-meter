@@ -21,6 +21,10 @@
   </p>
 
   <p>
+    <a href="https://www.producthunt.com/products/cc-token-meter?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-cc-token-meter" target="_blank" rel="noopener noreferrer"><img alt="CC Token Meter - Know where every Claude Code token goes | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1231137&amp;theme=light&amp;t=1787751781542"></a>
+  </p>
+
+  <p>
     <a href="#dashboard-preview">Dashboard</a> ·
     <a href="#quick-start">Install</a> ·
     <a href="#what-you-get">Features</a> ·
