@@ -1,55 +1,61 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { glob } from 'glob';
 import { resolveProjectsDirectory } from '../paths.js';
 
 /**
  * Discover all Claude Code session transcript files on disk.
  *
- * Claude Code writes to ~/.claude/projects/<sanitized-cwd>/<uuid>.jsonl
+ * Claude Code writes to ~/.claude/projects/<sanitized-cwd>/<uuid>.jsonl.
  * There is also a same-named sibling directory <uuid>/ next to the .jsonl file,
- * so we glob *.jsonl specifically to avoid picking up directories.
+ * so discovery intentionally inspects exactly one project-directory level and
+ * accepts regular files ending in .jsonl only.
  *
  * @returns {Promise<Array<{sessionId: string, projectDirName: string, filePath: string, mtimeMs: number, size: number}>>}
  */
 export async function discoverSessionFiles() {
   const projectsRoot = resolveProjectsDirectory();
 
-  let files;
+  let projectEntries;
   try {
-    // Glob patterns always use forward slashes, including on Windows. Keep the
-    // OS-native absolute path in `cwd` so backslashes and literal glob
-    // metacharacters in the home directory are not parsed as pattern syntax.
-    files = await glob('*/*.jsonl', {
-      cwd: projectsRoot,
-      absolute: true,
-      nodir: true,
-    });
-  } catch (err) {
+    projectEntries = fs.readdirSync(projectsRoot, { withFileTypes: true });
+  } catch {
     // Projects dir may not exist yet (fresh install / never used Claude Code).
     return [];
   }
 
   const results = [];
-  for (const filePath of files) {
-    let stat;
+  for (const projectEntry of projectEntries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!projectEntry.isDirectory()) continue;
+
+    const projectPath = path.join(projectsRoot, projectEntry.name);
+    let transcriptEntries;
     try {
-      stat = fs.statSync(filePath);
+      transcriptEntries = fs.readdirSync(projectPath, { withFileTypes: true });
     } catch {
-      // File may have been removed between glob and stat — skip.
+      // A project directory may disappear or become unreadable during discovery.
       continue;
     }
 
-    const projectDirName = path.basename(path.dirname(filePath));
-    const sessionId = path.basename(filePath, '.jsonl');
+    for (const transcriptEntry of transcriptEntries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!transcriptEntry.isFile() || path.extname(transcriptEntry.name) !== '.jsonl') continue;
 
-    results.push({
-      sessionId,
-      projectDirName,
-      filePath,
-      mtimeMs: stat.mtimeMs,
-      size: stat.size,
-    });
+      const filePath = path.join(projectPath, transcriptEntry.name);
+      let stat;
+      try {
+        stat = fs.statSync(filePath);
+      } catch {
+        // File may have been removed between directory enumeration and stat.
+        continue;
+      }
+
+      results.push({
+        sessionId: path.basename(transcriptEntry.name, '.jsonl'),
+        projectDirName: projectEntry.name,
+        filePath,
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+      });
+    }
   }
 
   return results;
