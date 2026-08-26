@@ -56,7 +56,6 @@
     "cost-estimation"
   ],
   "dependencies": {
-    "glob": "^13.0.6",
     "open": "^11.0.1"
   }
 }
