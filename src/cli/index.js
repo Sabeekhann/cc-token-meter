@@ -121,9 +121,7 @@ function parseArgs(argv) {
         opts.version = true;
         break;
       default:
-        // Unknown flag — ignore rather than hard-fail, to stay forgiving
-        // for forward-compat / accidental extra args.
-        break;
+        throw new Error(`unknown argument: ${arg}`);
     }
   }
 
