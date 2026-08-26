@@ -3,10 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const REQUIRED_PACKAGE_FILES = ['bin', 'src', 'public', 'README.md', 'LICENSE', 'NOTICE'];
-const EXPECTED_REPOSITORY = 'https://github.com/Sabeekhann/cc-token-meter.git';
+const REQUIRED_PACKAGE_FILES = ['bin', 'src', 'public', 'README.md', 'LICENSE', 'NOTICE', 'REUSE.toml'];
+const EXPECTED_REPOSITORY = 'git+https://github.com/Sabeekhann/cc-token-meter.git';
 const EXPECTED_REGISTRY = 'https://registry.npmjs.org';
 const EXPECTED_LICENSE = 'Apache-2.0';
+const EXPECTED_BIN = 'bin/cc-token-meter.js';
 
 export function validateRelease({ tag, packageJson, changelog }) {
   const failures = [];
@@ -33,6 +34,12 @@ export function validateRelease({ tag, packageJson, changelog }) {
   }
   if (packageJson.publishConfig?.registry !== EXPECTED_REGISTRY) {
     failures.push(`package.json publishConfig.registry must equal ${EXPECTED_REGISTRY}`);
+  }
+  if (packageJson.bin?.['cc-token-meter'] !== EXPECTED_BIN) {
+    failures.push(`package.json bin.cc-token-meter must equal ${EXPECTED_BIN}`);
+  }
+  if (packageJson.engines?.node !== '>=20') {
+    failures.push('package.json engines.node must equal >=20 until the documented support floor changes');
   }
 
   const publishedFiles = new Set(packageJson.files || []);
