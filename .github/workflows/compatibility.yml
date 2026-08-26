@@ -25,6 +25,8 @@ jobs:
             node-version: 20.x
           - os: ubuntu-latest
             node-version: 22.x
+          - os: ubuntu-latest
+            node-version: 26.x
           - os: macos-latest
             node-version: 24.x
           - os: windows-latest
@@ -45,5 +47,5 @@ jobs:
       - name: Exercise packed release lifecycle
         run: npm run test:lifecycle
       - name: Enforce large-history performance budgets
-        if: matrix.node-version == '20.x' || matrix.node-version == '24.x'
+        if: matrix.node-version == '20.x' || matrix.node-version == '24.x' || matrix.node-version == '26.x'
         run: npm run benchmark:large
