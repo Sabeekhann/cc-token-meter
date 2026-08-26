@@ -14,7 +14,7 @@ const PURE_PATHS = [
   'src/ingest/aggregate.js',
   'src/ingest/retention.js',
 ];
-const ALLOWED_RUNTIME_DEPENDENCIES = new Set(['glob', 'open']);
+const ALLOWED_RUNTIME_DEPENDENCIES = new Set(['open']);
 const CODE_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 
 const failures = [];
