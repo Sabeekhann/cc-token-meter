@@ -8,7 +8,7 @@
   "homepage": "https://github.com/Sabeekhann/cc-token-meter#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Sabeekhann/cc-token-meter.git"
+    "url": "git+https://github.com/Sabeekhann/cc-token-meter.git"
   },
   "bugs": {
     "url": "https://github.com/Sabeekhann/cc-token-meter/issues"
@@ -22,7 +22,7 @@
     "node": ">=20"
   },
   "bin": {
-    "cc-token-meter": "./bin/cc-token-meter.js"
+    "cc-token-meter": "bin/cc-token-meter.js"
   },
   "files": [
     "bin",

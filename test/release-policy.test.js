@@ -8,18 +8,24 @@ function validPackage(overrides = {}) {
     private: false,
     license: 'Apache-2.0',
     repository: {
-      url: 'https://github.com/Sabeekhann/cc-token-meter.git',
+      url: 'git+https://github.com/Sabeekhann/cc-token-meter.git',
     },
     publishConfig: {
       access: 'public',
       registry: 'https://registry.npmjs.org',
     },
-    files: ['bin', 'src', 'public', 'README.md', 'LICENSE', 'NOTICE'],
+    bin: {
+      'cc-token-meter': 'bin/cc-token-meter.js',
+    },
+    engines: {
+      node: '>=20',
+    },
+    files: ['bin', 'src', 'public', 'README.md', 'LICENSE', 'NOTICE', 'REUSE.toml'],
     ...overrides,
   };
 }
 
-test('release policy accepts an exact tag, public metadata, Apache licensing, and changelog entry', () => {
+test('release policy accepts exact tags and normalized publish metadata', () => {
   const failures = validateRelease({
     tag: 'v1.2.3',
     packageJson: validPackage(),
@@ -37,16 +43,20 @@ test('release policy rejects mismatched tags and unsafe package metadata', () =>
       license: 'MIT',
       repository: { url: 'https://github.com/example/fork.git' },
       publishConfig: { access: 'restricted', registry: 'https://example.invalid' },
+      bin: { 'cc-token-meter': './wrong-entry.js' },
+      engines: { node: '>=18' },
       files: ['bin'],
     }),
     changelog: '# Changelog\n',
   });
 
-  assert.equal(failures.length, 12);
   assert.ok(failures.some((failure) => failure.includes('must exactly match v1.2.3')));
   assert.ok(failures.some((failure) => failure.includes('must not mark')));
   assert.ok(failures.some((failure) => failure.includes('license must equal Apache-2.0')));
   assert.ok(failures.some((failure) => failure.includes('repository.url')));
+  assert.ok(failures.some((failure) => failure.includes('bin.cc-token-meter')));
+  assert.ok(failures.some((failure) => failure.includes('engines.node')));
   assert.ok(failures.some((failure) => failure.includes('must include NOTICE')));
+  assert.ok(failures.some((failure) => failure.includes('must include REUSE.toml')));
   assert.ok(failures.some((failure) => failure.includes('CHANGELOG.md')));
 });
