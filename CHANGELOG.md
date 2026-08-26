@@ -5,6 +5,24 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.3] — 2026-08-26
+
+Correctness patch for Claude Code compact-session detection, with stronger CI visibility.
+
+### Fixed
+- Detect explicit compact-boundary events, literal `/compact` commands, and
+  Claude Code command-tag records during streaming ingestion.
+- Preserve a privacy-safe tri-state compact signal across full scans and
+  incremental updates so compacted sessions no longer receive false
+  “long session without `/compact`” recommendations.
+- Treat legacy cached sessions without compact evidence as unknown, preventing
+  unsupported warnings until fresh evidence is available.
+
+### Changed
+- Added informational Codecov reporting to the required CI workflow using
+  GitHub OIDC; coverage uploads and thresholds remain non-blocking.
+- Added Product Hunt and Socket badges plus repository-maintenance automation.
+
 ## [1.1.2] — 2026-08-25
 
 Licensing and release-alignment patch for the Apache-2.0 transition.
