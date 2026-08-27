@@ -22,6 +22,15 @@
     view: 'overview',
     insightFilter: 'all',
     projectQuery: '',
+    projectSummary: null,
+    projectRange: 'all',
+    projectModel: '',
+    projectFrom: '',
+    projectTo: '',
+    projectLoading: false,
+    projectError: '',
+    projectRefreshTimer: null,
+    projectRequestId: 0,
     expandedProject: null,
     selectedSessionId: null,
     settingsHydrated: false,
@@ -35,10 +44,17 @@
     liveNavDot: byId('liveNavDot'),
     insightNavCount: byId('insightNavCount'),
     projectSearch: byId('projectSearch'),
+    projectModel: byId('projectModel'),
+    projectFrom: byId('projectFrom'),
+    projectTo: byId('projectTo'),
+    customRangeFields: byId('customRangeFields'),
+    projectFilterSummary: byId('projectFilterSummary'),
+    clearProjectFilters: byId('clearProjectFilters'),
     budgetForm: byId('budgetForm'),
     toast: byId('toast')
   };
 
+  hydrateProjectFilterState();
   bindNavigation();
   bindFilters();
   bindSettings();
@@ -90,6 +106,39 @@
     dom.projectSearch.addEventListener('input', function () {
       state.projectQuery = dom.projectSearch.value.trim().toLowerCase();
       if (state.view === 'projects') renderProjects();
+    });
+
+    var rangeButtons = Array.from(document.querySelectorAll('[data-project-range]'));
+    rangeButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        state.projectRange = button.getAttribute('data-project-range') || 'all';
+        if (state.projectRange !== 'custom') {
+          state.projectFrom = '';
+          state.projectTo = '';
+        }
+        projectFiltersChanged();
+      });
+    });
+
+    dom.projectModel.addEventListener('change', function () {
+      state.projectModel = dom.projectModel.value;
+      projectFiltersChanged();
+    });
+    dom.projectFrom.addEventListener('change', function () {
+      state.projectFrom = dom.projectFrom.value;
+      projectFiltersChanged();
+    });
+    dom.projectTo.addEventListener('change', function () {
+      state.projectTo = dom.projectTo.value;
+      projectFiltersChanged();
+    });
+    dom.clearProjectFilters.addEventListener('click', function () {
+      state.projectRange = 'all';
+      state.projectModel = '';
+      state.projectFrom = '';
+      state.projectTo = '';
+      state.projectError = '';
+      projectFiltersChanged();
     });
 
     var filterButtons = Array.from(document.querySelectorAll('[data-insight-filter]'));
@@ -186,7 +235,14 @@
       panel.hidden = !active;
     });
 
-    if (updateHash) history.replaceState(null, '', '#' + view);
+    if (updateHash) {
+      var nextUrl = new URL(window.location.href);
+      nextUrl.hash = view;
+      history.replaceState(null, '', nextUrl.pathname + nextUrl.search + nextUrl.hash);
+    }
+    if (view === 'projects' && state.summary && projectFiltersActive() && !state.projectSummary) {
+      scheduleProjectRefresh();
+    }
     renderCurrentView();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (focusHeading) dom.viewTitle.focus({ preventScroll: true });
@@ -195,6 +251,13 @@
   function receiveSummary(summary) {
     if (!summary || typeof summary !== 'object') return;
     state.summary = summary;
+    hydrateProjectModelOptions(summary);
+    if (!projectFiltersActive()) {
+      state.projectSummary = summary;
+      state.projectError = '';
+    } else if (state.view === 'projects') {
+      scheduleProjectRefresh();
+    }
     updateGlobalChrome(summary);
     renderCurrentView();
   }
@@ -587,18 +650,26 @@
   }
 
   function renderProjects() {
-    var projects = Array.isArray(state.summary.byProject) ? state.summary.byProject.slice() : [];
+    renderProjectFilterControls();
+    var projectSummary = state.projectSummary || state.summary;
+    var projects = Array.isArray(projectSummary.byProject) ? projectSummary.byProject.slice() : [];
     projects.sort(function (a, b) { return (b.costUsd || 0) - (a.costUsd || 0); });
     if (state.projectQuery) {
       projects = projects.filter(function (project) {
         return String(project.project || '').toLowerCase().indexOf(state.projectQuery) !== -1;
       });
     }
-    var allProjectCost = (state.summary.byProject || []).reduce(function (sum, project) { return sum + (project.costUsd || 0); }, 0);
+    var allProjectCost = (projectSummary.byProject || []).reduce(function (sum, project) { return sum + (project.costUsd || 0); }, 0);
     var table = byId('projectsTable');
+    renderProjectFilterSummary(projectSummary);
 
-    if (projects.length === 0) {
-      table.innerHTML = '<div class="empty-state">' + (state.projectQuery ? 'No projects match “' + escapeHtml(state.projectQuery) + '”.' : 'No project usage has been recorded yet.') + '</div>';
+    if (state.projectLoading && !state.projectSummary) {
+      table.innerHTML = '<div class="empty-state compact">Updating filtered local usage…</div>';
+    } else if (projects.length === 0) {
+      var emptyCopy = state.projectQuery
+        ? 'No projects match “' + escapeHtml(state.projectQuery) + '” in this usage scope.'
+        : 'No project usage matches the selected filters.';
+      table.innerHTML = '<div class="empty-state">' + emptyCopy + '</div>';
     } else {
       var rows = projects.map(function (project) {
         var expanded = state.expandedProject === project.project;
@@ -614,7 +685,6 @@
           '<span class="share-cell"><span class="share-bar"><span style="width:' + (share * 100).toFixed(2) + '%"></span></span><span class="table-number">' + escapeHtml(formatPercent(share)) + '</span></span>' +
         '</button>' + sessions;
       }).join('');
-
       table.innerHTML = '<div class="table-head"><span>Project</span><span>Sessions</span><span>Tokens</span><span>Est. cost</span><span>Cost share</span></div>' + rows;
       table.querySelectorAll('[data-project-row]').forEach(function (row) {
         row.addEventListener('click', function () {
@@ -624,16 +694,15 @@
         });
       });
     }
-
-    renderBranches();
+    renderBranches(projectSummary);
   }
 
-  function renderBranches() {
-    var branches = Array.isArray(state.summary.byBranch) ? state.summary.byBranch.slice() : [];
+  function renderBranches(projectSummary) {
+    var branches = projectSummary && Array.isArray(projectSummary.byBranch) ? projectSummary.byBranch.slice() : [];
     branches.sort(function (a, b) { return (b.costUsd || 0) - (a.costUsd || 0); });
     var target = byId('branchBreakdown');
     if (branches.length === 0) {
-      target.innerHTML = '<div class="empty-state compact">Branch attribution appears when Claude Code records branch metadata.</div>';
+      target.innerHTML = '<div class="empty-state compact">No branch usage matches the selected scope.</div>';
       return;
     }
     target.innerHTML = branches.slice(0, 9).map(function (branch) {
@@ -696,6 +765,183 @@
 
   function setInputValue(id, value) {
     byId(id).value = value == null ? '' : String(value);
+  }
+
+  function hydrateProjectFilterState() {
+    var params = new URLSearchParams(window.location.search);
+    var range = params.get('range');
+    if (['all', '7d', '30d', '90d', 'custom'].indexOf(range) !== -1) state.projectRange = range;
+    state.projectModel = (params.get('model') || '').trim();
+    state.projectFrom = validLocalDate(params.get('from')) ? params.get('from') : '';
+    state.projectTo = validLocalDate(params.get('to')) ? params.get('to') : '';
+    if ((state.projectFrom || state.projectTo) && state.projectRange === 'all') state.projectRange = 'custom';
+  }
+
+  function hydrateProjectModelOptions(summary) {
+    if (!dom.projectModel) return;
+    var models = new Set();
+    (Array.isArray(summary.sessions) ? summary.sessions : []).forEach(function (session) {
+      (Array.isArray(session.models) ? session.models : []).forEach(function (model) {
+        if (model) models.add(String(model));
+      });
+    });
+    var values = Array.from(models).sort(function (a, b) { return a.localeCompare(b); });
+    if (state.projectModel && values.indexOf(state.projectModel) === -1) values.unshift(state.projectModel);
+    dom.projectModel.replaceChildren();
+    var allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = 'All models';
+    dom.projectModel.appendChild(allOption);
+    values.forEach(function (model) {
+      var option = document.createElement('option');
+      option.value = model;
+      option.textContent = model;
+      dom.projectModel.appendChild(option);
+    });
+    dom.projectModel.value = state.projectModel;
+    renderProjectFilterControls();
+  }
+
+  function projectFiltersChanged() {
+    state.expandedProject = null;
+    state.projectError = '';
+    renderProjectFilterControls();
+    syncProjectFilterUrl();
+    refreshProjectSummary();
+  }
+
+  function renderProjectFilterControls() {
+    document.querySelectorAll('[data-project-range]').forEach(function (button) {
+      var active = button.getAttribute('data-project-range') === state.projectRange;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (dom.projectModel) dom.projectModel.value = state.projectModel;
+    if (dom.projectFrom) dom.projectFrom.value = state.projectFrom;
+    if (dom.projectTo) dom.projectTo.value = state.projectTo;
+    if (dom.customRangeFields) dom.customRangeFields.classList.toggle('hidden', state.projectRange !== 'custom');
+    if (dom.clearProjectFilters) dom.clearProjectFilters.disabled = !projectFiltersActive();
+  }
+
+  function projectFiltersActive() {
+    return state.projectRange !== 'all' || Boolean(state.projectModel);
+  }
+
+  function projectFilterParams() {
+    var params = new URLSearchParams();
+    var dates = projectDateBounds();
+    if (dates.from) params.set('from', dates.from);
+    if (dates.to) params.set('to', dates.to);
+    if (state.projectModel) params.set('model', state.projectModel);
+    return params;
+  }
+
+  function projectDateBounds() {
+    if (state.projectRange === 'custom') return { from: state.projectFrom || '', to: state.projectTo || '' };
+    var days = state.projectRange === '7d' ? 7 : state.projectRange === '30d' ? 30 : state.projectRange === '90d' ? 90 : 0;
+    if (!days) return { from: '', to: '' };
+    var end = new Date();
+    end.setHours(12, 0, 0, 0);
+    var start = new Date(end.getTime());
+    start.setDate(start.getDate() - (days - 1));
+    return { from: localDateString(start), to: localDateString(end) };
+  }
+
+  function localDateString(date) {
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
+
+  function validLocalDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
+    var parsed = new Date(value + 'T12:00:00');
+    return !Number.isNaN(parsed.getTime()) && localDateString(parsed) === value;
+  }
+
+  function syncProjectFilterUrl() {
+    var url = new URL(window.location.href);
+    ['range', 'model', 'from', 'to'].forEach(function (key) { url.searchParams.delete(key); });
+    if (state.projectRange !== 'all') url.searchParams.set('range', state.projectRange);
+    if (state.projectModel) url.searchParams.set('model', state.projectModel);
+    if (state.projectRange === 'custom') {
+      if (state.projectFrom) url.searchParams.set('from', state.projectFrom);
+      if (state.projectTo) url.searchParams.set('to', state.projectTo);
+    }
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }
+
+  function scheduleProjectRefresh() {
+    window.clearTimeout(state.projectRefreshTimer);
+    state.projectRefreshTimer = window.setTimeout(refreshProjectSummary, 220);
+  }
+
+  async function refreshProjectSummary() {
+    if (!state.summary) return;
+    var requestId = ++state.projectRequestId;
+    var params = projectFilterParams();
+    if (state.projectRange === 'custom' && state.projectFrom && state.projectTo && state.projectFrom > state.projectTo) {
+      state.projectError = 'Start date must not be after end date.';
+      state.projectLoading = false;
+      renderProjects();
+      return;
+    }
+    if (params.toString() === '') {
+      state.projectSummary = state.summary;
+      state.projectLoading = false;
+      state.projectError = '';
+      renderProjects();
+      return;
+    }
+    state.projectLoading = true;
+    state.projectError = '';
+    if (state.view === 'projects') renderProjects();
+    try {
+      var response = await fetch('/api/summary?' + params.toString(), { cache: 'no-store' });
+      if (!response.ok) throw new Error('Filtered summary request failed');
+      var nextSummary = await response.json();
+      if (requestId !== state.projectRequestId) return;
+      state.projectSummary = nextSummary;
+    } catch (error) {
+      if (requestId === state.projectRequestId) {
+        state.projectError = 'Could not refresh this local usage scope.';
+      }
+    } finally {
+      if (requestId === state.projectRequestId) {
+        state.projectLoading = false;
+        if (state.view === 'projects') renderProjects();
+      }
+    }
+  }
+
+  function renderProjectFilterSummary(projectSummary) {
+    if (!dom.projectFilterSummary) return;
+    if (state.projectError) {
+      dom.projectFilterSummary.className = 'explorer-summary error';
+      dom.projectFilterSummary.textContent = state.projectError;
+      return;
+    }
+    if (state.projectLoading) {
+      dom.projectFilterSummary.className = 'explorer-summary';
+      dom.projectFilterSummary.textContent = 'Updating filtered local usage…';
+      return;
+    }
+    var totals = projectSummary && projectSummary.allTime ? projectSummary.allTime : {};
+    var projectCount = projectSummary && Array.isArray(projectSummary.byProject) ? projectSummary.byProject.length : 0;
+    var estimated = projectSummary && Array.isArray(projectSummary.sessions) && projectSummary.sessions.some(function (session) {
+      return session.estimatedCostUsed === true;
+    });
+    var rangeLabels = { all: 'All local usage', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', custom: 'Custom range' };
+    var scope = rangeLabels[state.projectRange] || 'All local usage';
+    if (state.projectRange === 'custom') {
+      if (state.projectFrom && state.projectTo) scope += ' · ' + state.projectFrom + ' to ' + state.projectTo;
+      else if (state.projectFrom) scope += ' · from ' + state.projectFrom;
+      else if (state.projectTo) scope += ' · through ' + state.projectTo;
+      else scope += ' · choose dates to narrow usage';
+    }
+    if (state.projectModel) scope += ' · ' + state.projectModel;
+    dom.projectFilterSummary.className = 'explorer-summary' + (estimated ? ' estimated' : '');
+    dom.projectFilterSummary.textContent = scope + ' · ' + projectCount + ' project' + (projectCount === 1 ? '' : 's') +
+      ' · ' + formatNumber(totals.tokenTotal || 0) + ' tokens · ' + formatCost(totals.costUsd || 0) +
+      (estimated ? ' · some cost uses fallback pricing' : '');
   }
 
   function rankedTips(tips) {

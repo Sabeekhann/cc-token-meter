@@ -211,11 +211,11 @@
         </section>
 
         <section id="view-projects" class="view" data-view-panel="projects" aria-labelledby="viewTitle" hidden>
-          <div class="page-heading-row">
+          <div class="page-heading-row projects-heading">
             <div>
               <p class="section-kicker">PROJECT & BRANCH ATTRIBUTION</p>
               <h2>Compare the work that drives usage.</h2>
-              <p>Costs and tokens are calculated locally from message-level records.</p>
+              <p>Explore exact local usage by date range and model without changing the rest of the dashboard.</p>
             </div>
             <label class="search-field">
               <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg>
@@ -223,6 +223,34 @@
               <input id="projectSearch" type="search" placeholder="Search projects…" autocomplete="off" />
             </label>
           </div>
+
+          <div class="projects-explorer" aria-label="Projects usage explorer">
+            <div class="range-filter" role="group" aria-label="Usage date range">
+              <button class="range-button active" type="button" data-project-range="all" aria-pressed="true">All</button>
+              <button class="range-button" type="button" data-project-range="7d" aria-pressed="false">7 days</button>
+              <button class="range-button" type="button" data-project-range="30d" aria-pressed="false">30 days</button>
+              <button class="range-button" type="button" data-project-range="90d" aria-pressed="false">90 days</button>
+              <button class="range-button" type="button" data-project-range="custom" aria-pressed="false">Custom</button>
+            </div>
+            <label class="explorer-field model-field">
+              <span>Model</span>
+              <select id="projectModel" aria-label="Filter Projects by model">
+                <option value="">All models</option>
+              </select>
+            </label>
+            <div id="customRangeFields" class="custom-range hidden">
+              <label class="explorer-field">
+                <span>From</span>
+                <input id="projectFrom" type="date" aria-label="Projects usage start date" />
+              </label>
+              <label class="explorer-field">
+                <span>To</span>
+                <input id="projectTo" type="date" aria-label="Projects usage end date" />
+              </label>
+            </div>
+            <button id="clearProjectFilters" class="clear-filter-button" type="button" disabled>Clear filters</button>
+          </div>
+          <p id="projectFilterSummary" class="explorer-summary" role="status" aria-live="polite">All local usage.</p>
           <article class="panel table-panel">
             <div id="projectsTable" class="data-table"></div>
           </article>
