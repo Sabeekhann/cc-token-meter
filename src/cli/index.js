@@ -43,6 +43,7 @@ function parseArgs(argv) {
     from: null,
     to: null,
     project: null,
+    model: null,
     help: false,
     version: false,
     setBudgetUsd: null,
@@ -111,6 +112,9 @@ function parseArgs(argv) {
         break;
       case '--project':
         opts.project = parseRequiredString('--project', argv[++i]);
+        break;
+      case '--model':
+        opts.model = parseRequiredString('--model', argv[++i]);
         break;
       case '--help':
       case '-h':
@@ -210,7 +214,7 @@ export async function main(argv) {
     return;
   }
 
-  const filters = { from: opts.from, to: opts.to, project: opts.project };
+  const filters = { from: opts.from, to: opts.to, project: opts.project, model: opts.model };
 
   if (opts.csvPath !== null) {
     try {

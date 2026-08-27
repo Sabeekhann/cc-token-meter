@@ -22,6 +22,7 @@ Options:
   --from <date>    Include usage on/after local date YYYY-MM-DD (summary/JSON/CSV)
   --to <date>      Include usage on/before local date YYYY-MM-DD (summary/JSON/CSV)
   --project <text> Filter project paths by case-insensitive substring (summary/JSON/CSV)
+  --model <id>     Filter by exact model identifier, case-insensitive (summary/JSON/CSV)
   --group-by <n>   CSV rows: day, project, branch, or session (default: day)
 
 Examples:
@@ -30,11 +31,12 @@ Examples:
   npx cc-token-meter --no-cache
   npx cc-token-meter --summary
   npx cc-token-meter --summary --from 2026-08-01 --project my-app
+  npx cc-token-meter --summary --model claude-sonnet-5
   npx cc-token-meter --json
   npx cc-token-meter --doctor
   npx cc-token-meter --doctor --json
   npx cc-token-meter --csv usage.csv --from 2026-08-01 --group-by project
-  npx cc-token-meter --csv - --project my-app --group-by session
+  npx cc-token-meter --csv - --project my-app --model claude-sonnet-5 --group-by session
   npx cc-token-meter --set-budget-usd 20
 `;
 

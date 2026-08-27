@@ -2,45 +2,60 @@ import { localDateKey } from '../ingest/aggregate.js';
 import { computeCost } from '../pricing/cost.js';
 
 /**
- * Normalize the filter object exposed by CLI JSON/CSV exports. Date strings
- * are inclusive local calendar dates (YYYY-MM-DD); project is a
- * case-insensitive substring match against the authoritative cwd/fallback.
+ * Normalize the filter object exposed by CLI JSON/CSV exports and the local
+ * summary API. Date strings are inclusive local calendar dates (YYYY-MM-DD);
+ * project is a case-insensitive substring match; model is an exact,
+ * case-insensitive model identifier match.
  */
 export function normalizeSummaryFilters(filters = {}) {
   return {
     from: filters.from || null,
     to: filters.to || null,
     project: filters.project ? String(filters.project).trim() || null : null,
+    model: filters.model ? String(filters.model).trim() || null : null,
   };
 }
 
 /**
  * Return a filtered, re-aggregated session snapshot without mutating the
- * store's canonical sessions. When a date range is active, every session
- * total is rebuilt from exact daily rollups plus recent per-message records
- * inside that range.
+ * store's canonical sessions. When date/model filtering is active, every
+ * session total is rebuilt from exact daily rollups plus recent per-message
+ * records inside that scope.
  */
 export function filterSessions(sessions, filters = {}) {
   const normalized = normalizeSummaryFilters(filters);
   const safeSessions = Array.isArray(sessions) ? sessions : [];
   const projectNeedle = normalized.project ? normalized.project.toLowerCase() : null;
+  const modelNeedle = normalized.model ? normalized.model.toLowerCase() : null;
   const hasDateFilter = Boolean(normalized.from || normalized.to);
+  const hasUnitFilter = hasDateFilter || Boolean(modelNeedle);
 
   return safeSessions.flatMap((session) => {
     const project = session.projectCwd || session.projectDirNameFallback || 'unknown';
     if (projectNeedle && !project.toLowerCase().includes(projectNeedle)) return [];
-    if (!hasDateFilter) return [session];
+    if (!hasUnitFilter) return [session];
 
     const records = Array.isArray(session.usageRecords)
-      ? session.usageRecords.filter((record) => dateMatches(record.timestamp, normalized))
+      ? session.usageRecords.filter((record) => unitMatches(record, normalized, modelNeedle, false))
       : [];
     const rollups = Array.isArray(session.dailyRollups)
-      ? session.dailyRollups.filter((rollup) => dateKeyMatches(rollup.date, normalized))
+      ? session.dailyRollups.filter((rollup) => unitMatches(rollup, normalized, modelNeedle, true))
       : [];
     if (records.length === 0 && rollups.length === 0) return [];
 
     return [rebuildSession(session, records, rollups, normalized)];
   });
+}
+
+function unitMatches(unit, filters, modelNeedle, isRollup) {
+  if (modelNeedle) {
+    const model = typeof unit.model === 'string' ? unit.model.toLowerCase() : '';
+    if (model !== modelNeedle) return false;
+  }
+
+  if (!filters.from && !filters.to) return true;
+  if (isRollup) return dateKeyMatches(unit.date, filters);
+  return dateMatches(unit.timestamp, filters);
 }
 
 function rebuildSession(session, records, rollups, filters) {
@@ -91,9 +106,15 @@ function rebuildSession(session, records, rollups, filters) {
     return earliest;
   }, null);
   const lastUnit = timestampedUnits[timestampedUnits.length - 1] || null;
-  const toolEvents = Array.isArray(session.toolEvents)
-    ? session.toolEvents.filter((event) => dateMatches(event.timestamp, filters))
-    : [];
+
+  // Tool events do not carry model attribution, so a model-scoped summary
+  // intentionally omits them rather than attaching unrelated tool activity.
+  // Date-only summaries retain the existing correlated-tool behavior.
+  const toolEvents = filters.model
+    ? []
+    : Array.isArray(session.toolEvents)
+      ? session.toolEvents.filter((event) => dateMatches(event.timestamp, filters))
+      : [];
 
   return {
     ...session,
