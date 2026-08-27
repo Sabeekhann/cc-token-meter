@@ -58,7 +58,15 @@ test('publishing is isolated to a maintainer-created GitHub release and uses OID
   assert.match(publishWorkflow, /package-manager-cache: false/);
   assert.match(publishWorkflow, /verify-release\.mjs/);
   assert.match(publishWorkflow, /npm publish --access public/);
-  assert.doesNotMatch(publishWorkflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
+  const workflowHeader = publishWorkflow.split('\njobs:')[0];
+  const [npmPublishJob, githubPackagesJob = ''] = publishWorkflow.split('\n  github-packages:');
+
+  assert.doesNotMatch(workflowHeader, /id-token: write|packages: write/);
+  assert.doesNotMatch(publishWorkflow, /NPM_TOKEN/);
+  assert.doesNotMatch(npmPublishJob, /NODE_AUTH_TOKEN/);
+  assert.match(githubPackagesJob, /packages: write/);
+  assert.match(githubPackagesJob, /registry-url: https:\/\/npm\.pkg\.github\.com/);
+  assert.match(githubPackagesJob, /NODE_AUTH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
 });
 
 test('community health files cover conduct and private security reporting', () => {

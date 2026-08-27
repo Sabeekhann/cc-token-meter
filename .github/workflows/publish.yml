@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: publish-${{ github.event.release.tag_name }}
@@ -18,6 +17,9 @@ jobs:
     if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,3 +42,50 @@ jobs:
         run: npm pack --dry-run
       - name: Publish public package with trusted provenance
         run: npm publish --access public
+
+  github-packages:
+    name: GitHub Packages
+    if: github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          registry-url: https://npm.pkg.github.com
+          scope: '@sabeekhann'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify release tag and package metadata
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node .github/scripts/verify-release.mjs "$RELEASE_TAG"
+      - name: Run the full local gate
+        run: npm run ci
+      - name: Prepare GitHub Packages metadata
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.name = '@sabeekhann/cc-token-meter';
+          pkg.publishConfig = {
+            access: 'public',
+            registry: 'https://npm.pkg.github.com'
+          };
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+      - name: Verify publishable package contents
+        run: npm pack --dry-run
+      - name: Publish public package to GitHub Packages
+        run: npm publish --access public --registry=https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
