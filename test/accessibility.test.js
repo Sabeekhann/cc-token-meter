@@ -21,6 +21,10 @@ test('dashboard has semantic landmarks, a skip link, and labeled controls', () =
   for (const id of ['projectSearch', 'dailyTokenCap', 'dailyCostCapUsd', 'sessionCostCapUsd', 'warnThresholdPct']) {
     assert.match(html, new RegExp(`<label[\\s\\S]*?<input id="${id}"`));
   }
+  assert.match(html, /<label class="explorer-field model-field">[\s\S]*?<select id="projectModel"/);
+  assert.match(html, /<label class="explorer-field">[\s\S]*?<input id="projectFrom"/);
+  assert.match(html, /<label class="explorer-field">[\s\S]*?<input id="projectTo"/);
+  assert.match(html, /id="projectFilterSummary"[^>]+aria-live="polite"/);
   assert.match(js, /<label><span class="sr-only">Select session<\/span><select id="sessionPicker"/);
 });
 
@@ -36,10 +40,11 @@ test('keyboard interaction covers navigation, filters, expandable rows, and sess
 
 test('focus and interactive target styles meet the 44 CSS-pixel contract', () => {
   assert.match(css, /focus-visible[^\{]*\{[^}]*outline:3px solid #3959dc/s);
-  for (const selector of ['secondary-button', 'primary-button', 'metric-link', 'text-button', 'session-picker', 'search-field', 'filter-button', 'session-button']) {
+  for (const selector of ['secondary-button', 'primary-button', 'metric-link', 'text-button', 'session-picker', 'search-field', 'filter-button', 'session-button', 'range-button', 'clear-filter-button']) {
     assert.match(css, new RegExp(`\\.${selector}[^\\{]*\\{[^}]*min-height:44px`, 's'));
   }
   assert.match(css, /\.form-grid input[^\{]*\{[^}]*height:44px/s);
+  assert.match(css, /\.explorer-field select,\.explorer-field input[^\{]*\{[^}]*min-height:44px/s);
 });
 
 test('responsive rules cover the 1440, 1024, 768, and 390 pixel matrix', () => {
@@ -49,6 +54,7 @@ test('responsive rules cover the 1440, 1024, 768, and 390 pixel matrix', () => {
   assert.match(css, /\.metric-grid \{ grid-template-columns:1fr; \}/);
   assert.match(css, /\.branch-grid \{ grid-template-columns:1fr; \}/);
   assert.match(css, /\.burn-chart \{ min-height:190px;overflow-x:auto; \}/);
+  assert.match(css, /\.projects-explorer \{ display:grid;grid-template-columns:1fr;margin-top:0; \}/);
 });
 
 test('charts have text summaries and histories stay bounded', () => {
