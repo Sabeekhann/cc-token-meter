@@ -42,6 +42,7 @@ function formatScope(filters) {
     parts.push(`${filters.from || 'beginning'} to ${filters.to || 'today'}`);
   }
   if (filters.project) parts.push(`project contains "${filters.project}"`);
+  if (filters.model) parts.push(`model is "${filters.model}"`);
   return parts.length > 0 ? parts.join(' · ') : 'all local history';
 }
 

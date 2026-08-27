@@ -10,7 +10,7 @@ import { rankAndDedupeInsights } from './contract.js';
 // its tool-event count) has changed since the last computation — this
 // avoids re-running all 5 heuristics every ~1.5s poll tick for sessions
 // that are currently idle.
-const heuristicsCache = new Map(); // sessionId -> { lastComputedAtMessageCount, lastComputedAtToolEventCount, compactDetectionState, tips }
+const heuristicsCache = new Map(); // sessionId -> { contextKey, lastComputedAtMessageCount, lastComputedAtToolEventCount, compactDetectionState, tips }
 
 /**
  * Run all 5 heuristics against a single session and return the combined
@@ -21,6 +21,8 @@ const heuristicsCache = new Map(); // sessionId -> { lastComputedAtMessageCount,
  * @param {Array<object>} toolEvents
  * @param {Array<object>} allSessionsHistory
  * @param {Array<object>} [rawLines] optional raw parsed lines (for longSessionNoCompact's compact detection)
+ * @param {{contextKey?: string|number|null}} [options] cache namespace for the
+ * current store revision and filter scope
  * @returns {Array<{
  *   id: string,
  *   sessionId: string,
@@ -30,15 +32,23 @@ const heuristicsCache = new Map(); // sessionId -> { lastComputedAtMessageCount,
  *   estimatedSavingsUsd: number|null,
  * }>} Tip[]
  */
-export function runHeuristics(sessionRecord, toolEvents, allSessionsHistory, rawLines = []) {
+export function runHeuristics(
+  sessionRecord,
+  toolEvents,
+  allSessionsHistory,
+  rawLines = [],
+  options = {},
+) {
   const sessionId = sessionRecord.sessionId;
   const messageCount = sessionRecord.messageCount || 0;
   const toolEventCount = toolEvents.length;
   const compactDetectionState = detectCompactEvent(rawLines, sessionRecord.compactDetected);
+  const contextKey = options.contextKey ?? null;
 
   const cached = heuristicsCache.get(sessionId);
   if (
     cached &&
+    cached.contextKey === contextKey &&
     cached.lastComputedAtMessageCount === messageCount &&
     cached.lastComputedAtToolEventCount === toolEventCount &&
     cached.compactDetectionState === compactDetectionState
@@ -55,6 +65,7 @@ export function runHeuristics(sessionRecord, toolEvents, allSessionsHistory, raw
   ]);
 
   heuristicsCache.set(sessionId, {
+    contextKey,
     lastComputedAtMessageCount: messageCount,
     lastComputedAtToolEventCount: toolEventCount,
     compactDetectionState,

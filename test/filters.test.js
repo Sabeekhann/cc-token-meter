@@ -233,6 +233,53 @@ test('summary exposes normalized filters and a filtered message count', () => {
   assert.equal(summary.byDay[0].date, '2026-08-02');
 });
 
+test('summary does not reuse heuristic results across equal-sized date scopes', () => {
+  const scopedSession = session({
+    messageCount: 6,
+    compactDetected: false,
+    usageRecords: [
+      record('2026-08-01T12:00:00.000Z'),
+      record('2026-08-01T12:01:00.000Z'),
+      record('2026-08-01T12:02:00.000Z'),
+      record('2026-08-02T12:00:00.000Z'),
+      record('2026-08-02T12:01:00.000Z'),
+      record('2026-08-02T12:02:00.000Z'),
+    ],
+    toolEvents: [
+      { kind: 'tool_use', name: 'Read', filePath: '/work/a.js', timestamp: '2026-08-01T12:00:01.000Z' },
+      { kind: 'tool_use', name: 'Read', filePath: '/work/a.js', timestamp: '2026-08-01T12:01:01.000Z' },
+      { kind: 'tool_use', name: 'Read', filePath: '/work/a.js', timestamp: '2026-08-01T12:02:01.000Z' },
+      { kind: 'tool_use', name: 'Read', filePath: '/work/a.js', timestamp: '2026-08-02T12:00:01.000Z' },
+      { kind: 'tool_use', name: 'Edit', filePath: '/work/a.js', timestamp: '2026-08-02T12:01:01.000Z' },
+      { kind: 'tool_use', name: 'Read', filePath: '/work/a.js', timestamp: '2026-08-02T12:02:01.000Z' },
+    ],
+  });
+  const store = {
+    getSnapshot() {
+      return { revision: 1, sessions: [scopedSession], totalIngestedMessages: 6 };
+    },
+  };
+  const config = {
+    dailyTokenCap: null,
+    dailyCostCapUsd: null,
+    sessionTokenCap: null,
+    sessionCostCapUsd: null,
+    warnThresholdPct: 80,
+  };
+
+  const firstDay = buildSummary(store, {
+    filters: { from: '2026-08-01', to: '2026-08-01' },
+    config,
+  });
+  const secondDay = buildSummary(store, {
+    filters: { from: '2026-08-02', to: '2026-08-02' },
+    config,
+  });
+
+  assert.ok(firstDay.tips.some((tip) => tip.id.startsWith('repeatedReads:')));
+  assert.equal(secondDay.tips.some((tip) => tip.id.startsWith('repeatedReads:')), false);
+});
+
 test('filter normalization uses explicit nulls for reproducible JSON output', () => {
   assert.deepEqual(normalizeSummaryFilters({}), {
     from: null,

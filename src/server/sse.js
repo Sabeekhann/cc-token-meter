@@ -9,7 +9,7 @@ const SSE_PUSH_INTERVAL_MS = 1500;
 /**
  * Handle a GET /api/stream SSE connection. Sends a full summary snapshot
  * immediately, then again after every ingestion cycle that changed
- * something (detected via the store's totalIngestedMessages counter).
+ * something (detected through the store's monotonic revision counter).
  * Cleans up its interval/listener on client disconnect.
  *
  * @param {import('node:http').IncomingMessage} req
@@ -34,14 +34,18 @@ export function handleSseConnection(req, res, store, sessionToken) {
     'X-Accel-Buffering': 'no',
   });
 
-  let lastSentMessageCount = -1;
+  let lastSentRevision = -1;
 
   function pushSnapshot(force = false) {
-    const summary = buildSummary(store);
-    if (!force && summary.totalIngestedMessages === lastSentMessageCount) {
+    const snapshot = store.getSnapshot();
+    const revision = Number.isInteger(snapshot.revision)
+      ? snapshot.revision
+      : snapshot.totalIngestedMessages;
+    if (!force && revision === lastSentRevision) {
       return;
     }
-    lastSentMessageCount = summary.totalIngestedMessages;
+    const summary = buildSummary(store);
+    lastSentRevision = revision;
     res.write(`event: message\ndata: ${JSON.stringify(summary)}\n\n`);
   }
 

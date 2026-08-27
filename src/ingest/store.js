@@ -30,7 +30,11 @@ export function createStore({
 
   let lastRegLobTime = 0;
   let hasColdScanned = false;
-  let totalIngestedMessages = 0; // cheap change-detection counter for SSE
+  let totalIngestedMessages = 0;
+  // Monotonic in-memory change counter. Unlike the message total, this also
+  // changes when a transcript is replaced with different content but the same
+  // number of messages.
+  let revision = 0;
 
   restoreIndex();
 
@@ -342,8 +346,11 @@ export function createStore({
     }
 
     hasColdScanned = true;
-    if (changed) persistCurrentIndex();
-    return { totalIngestedMessages };
+    if (changed) {
+      revision += 1;
+      persistCurrentIndex();
+    }
+    return { totalIngestedMessages, revision };
   }
 
   function removeSessionsForFile(filePath, state) {
@@ -387,6 +394,7 @@ export function createStore({
 
   function getSnapshot() {
     return {
+      revision,
       sessions: Array.from(sessions.values()).map((agg) => ({
         ...agg,
         models: Array.from(agg.models),

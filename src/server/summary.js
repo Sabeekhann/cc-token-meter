@@ -17,6 +17,9 @@ import { buildUsageIntelligence } from '../analytics/overview.js';
 import { filterSessions, normalizeSummaryFilters } from '../analytics/filters.js';
 import { PRICING_VERIFIED_ON } from '../pricing/models.js';
 
+const storeCacheNamespaces = new WeakMap();
+let nextStoreCacheNamespace = 1;
+
 /**
  * Build the full summary object served by GET /api/summary and streamed by
  * GET /api/stream. Also reused directly by the `--json` CLI command so the
@@ -30,6 +33,7 @@ export function buildSummary(store, options = {}) {
   const snapshot = store.getSnapshot();
   const filters = normalizeSummaryFilters(options.filters);
   const sessions = filterSessions(snapshot.sessions, filters);
+  const heuristicContextKey = buildHeuristicContextKey(store, snapshot, filters);
   const generatedAt = new Date().toISOString();
 
   const config = options.config ?? readConfig();
@@ -102,7 +106,13 @@ export function buildSummary(store, options = {}) {
 
   const tips = [];
   for (const s of sessions) {
-    const sessionTips = runHeuristics(s, s.toolEvents || [], sessions);
+    const sessionTips = runHeuristics(
+      s,
+      s.toolEvents || [],
+      sessions,
+      [],
+      { contextKey: heuristicContextKey },
+    );
     tips.push(...sessionTips);
   }
 
@@ -156,4 +166,18 @@ export function buildSummary(store, options = {}) {
         ? sessions.reduce((sum, session) => sum + (session.messageCount || 0), 0)
         : snapshot.totalIngestedMessages,
   };
+}
+
+function buildHeuristicContextKey(store, snapshot, filters) {
+  let namespace = storeCacheNamespaces.get(store);
+  if (!namespace) {
+    namespace = nextStoreCacheNamespace;
+    nextStoreCacheNamespace += 1;
+    storeCacheNamespaces.set(store, namespace);
+  }
+
+  const revision = Number.isInteger(snapshot.revision)
+    ? snapshot.revision
+    : snapshot.totalIngestedMessages || 0;
+  return `${namespace}:${revision}:${JSON.stringify(filters)}`;
 }
