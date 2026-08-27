@@ -4,6 +4,9 @@
 import { buildSummary } from './summary.js';
 import { writeConfig } from '../budget/config.js';
 
+const MAX_PROJECT_FILTER_LENGTH = 1024;
+const MAX_MODEL_FILTER_LENGTH = 256;
+
 /**
  * Handle /api/* routes. Returns true if the request was handled, false if
  * the caller should fall through to static file serving / 404.
@@ -16,7 +19,14 @@ import { writeConfig } from '../budget/config.js';
  */
 export async function handleApiRoute(req, res, url, store) {
   if (url.pathname === '/api/summary' && req.method === 'GET') {
-    const summary = buildSummary(store);
+    let filters;
+    try {
+      filters = parseSummaryQuery(url);
+    } catch (err) {
+      sendJson(res, 400, { error: 'Invalid summary filters', detail: String(err && err.message) });
+      return true;
+    }
+    const summary = buildSummary(store, { filters });
     sendJson(res, 200, summary);
     return true;
   }
@@ -53,6 +63,44 @@ export async function handleApiRoute(req, res, url, store) {
   }
 
   return false;
+}
+
+export function parseSummaryQuery(url) {
+  const from = readSingleQueryValue(url.searchParams, 'from', 10);
+  const to = readSingleQueryValue(url.searchParams, 'to', 10);
+  const project = readSingleQueryValue(url.searchParams, 'project', MAX_PROJECT_FILTER_LENGTH);
+  const model = readSingleQueryValue(url.searchParams, 'model', MAX_MODEL_FILTER_LENGTH);
+
+  if (from) validateDate('from', from);
+  if (to) validateDate('to', to);
+  if (from && to && from > to) {
+    throw new Error(`from (${from}) must not be after to (${to})`);
+  }
+
+  return { from, to, project, model };
+}
+
+function readSingleQueryValue(searchParams, name, maxLength) {
+  const values = searchParams.getAll(name);
+  if (values.length > 1) throw new Error(`${name} must be provided at most once`);
+  if (values.length === 0) return null;
+
+  const value = values[0].trim();
+  if (!value) return null;
+  if (value.length > maxLength) {
+    throw new Error(`${name} exceeds the maximum length of ${maxLength} characters`);
+  }
+  return value;
+}
+
+function validateDate(name, value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${name} requires YYYY-MM-DD, got: ${value}`);
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${name} requires a real calendar date, got: ${value}`);
+  }
 }
 
 function sendJson(res, statusCode, data) {

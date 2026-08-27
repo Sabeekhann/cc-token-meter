@@ -23,7 +23,7 @@ import { PRICING_VERIFIED_ON } from '../pricing/models.js';
  * shape is identical between the CLI and the dashboard.
  *
  * @param {ReturnType<import('../ingest/store.js').createStore>} store
- * @param {{filters?: {from?: string|null, to?: string|null, project?: string|null}, config?: object}} [options]
+ * @param {{filters?: {from?: string|null, to?: string|null, project?: string|null, model?: string|null}, config?: object}} [options]
  * @returns {object}
  */
 export function buildSummary(store, options = {}) {
@@ -152,7 +152,7 @@ export function buildSummary(store, options = {}) {
     alerts,
     config,
     totalIngestedMessages:
-      filters.from || filters.to || filters.project
+      filters.from || filters.to || filters.project || filters.model
         ? sessions.reduce((sum, session) => sum + (session.messageCount || 0), 0)
         : snapshot.totalIngestedMessages,
   };
