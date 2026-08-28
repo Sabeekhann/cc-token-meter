@@ -121,26 +121,83 @@ function connectCdp(url) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url);
     let nextId = 1;
+    let connectionSettled = false;
+    let closed = false;
     const pending = new Map();
-    ws.addEventListener('open', () => resolve({
-      send(method, params = {}) {
-        const id = nextId++;
-        return new Promise((res, rej) => {
-          pending.set(id, { res, rej });
-          ws.send(JSON.stringify({ id, method, params }));
-        });
-      },
-      close() { ws.close(); },
-    }));
-    ws.addEventListener('message', (event) => {
+
+    const rejectPending = (error) => {
+      for (const { rej } of pending.values()) rej(error);
+      pending.clear();
+    };
+    const cleanup = () => {
+      ws.removeEventListener('open', handleOpen);
+      ws.removeEventListener('message', handleMessage);
+      ws.removeEventListener('error', handleError);
+      ws.removeEventListener('close', handleClose);
+    };
+    const failConnection = (error) => {
+      rejectPending(error);
+      if (!connectionSettled) {
+        connectionSettled = true;
+        reject(error);
+      }
+    };
+    const handleOpen = () => {
+      connectionSettled = true;
+      resolve({
+        send(method, params = {}) {
+          if (closed || ws.readyState !== WebSocket.OPEN) {
+            return Promise.reject(new Error('Chrome DevTools connection is not open'));
+          }
+          const id = nextId++;
+          return new Promise((res, rej) => {
+            pending.set(id, { res, rej });
+            try {
+              ws.send(JSON.stringify({ id, method, params }));
+            } catch (error) {
+              pending.delete(id);
+              rej(error);
+            }
+          });
+        },
+        close() {
+          if (closed) return;
+          closed = true;
+          rejectPending(new Error('Chrome DevTools connection closed by client'));
+          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
+          else cleanup();
+        },
+      });
+    };
+    const handleMessage = (event) => {
       const message = JSON.parse(String(event.data));
       if (!message.id || !pending.has(message.id)) return;
       const { res, rej } = pending.get(message.id);
       pending.delete(message.id);
       if (message.error) rej(new Error(message.error.message || 'CDP command failed'));
       else res(message.result || {});
-    });
-    ws.addEventListener('error', () => reject(new Error('Could not connect to Chrome DevTools')));
+    };
+    const handleError = () => {
+      const error = new Error(connectionSettled
+        ? 'Chrome DevTools connection failed'
+        : 'Could not connect to Chrome DevTools');
+      failConnection(error);
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
+      else {
+        closed = true;
+        cleanup();
+      }
+    };
+    const handleClose = () => {
+      closed = true;
+      failConnection(new Error('Chrome DevTools connection closed'));
+      cleanup();
+    };
+
+    ws.addEventListener('open', handleOpen);
+    ws.addEventListener('message', handleMessage);
+    ws.addEventListener('error', handleError);
+    ws.addEventListener('close', handleClose);
   });
 }
 
