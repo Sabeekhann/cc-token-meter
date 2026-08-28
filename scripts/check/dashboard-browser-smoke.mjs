@@ -84,6 +84,18 @@ async function getJson(url) {
 }
 
 async function withBrowser(run) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await withBrowserAttempt(run);
+    } catch (error) {
+      const startupFailure = String(error?.message || '').startsWith('Chrome did not expose DevTools:');
+      if (!startupFailure || attempt === 2) throw error;
+      console.warn('[dashboard-browser] Chrome startup did not expose DevTools; retrying once.');
+    }
+  }
+}
+
+async function withBrowserAttempt(run) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-chrome-'));
   const child = spawn(chrome, [
     '--headless=new',

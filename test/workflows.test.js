@@ -60,23 +60,40 @@ test('PR governance checks out trusted base code instead of PR head code', () =>
   assert.doesNotMatch(governanceWorkflow, /pull_request\.head\.sha/);
 });
 
-test('publishing is isolated to a maintainer-created GitHub release and uses OIDC', () => {
+test('publishing supports explicit maintainer dispatch and GitHub releases with least privilege', () => {
   assert.match(publishWorkflow, /release:\n    types: \[published\]/);
+  assert.match(publishWorkflow, /workflow_dispatch:/);
+  assert.match(publishWorkflow, /tag:[\s\S]*required: true/);
+  assert.match(publishWorkflow, /commit_sha:[\s\S]*required: true/);
   assert.doesNotMatch(publishWorkflow, /\n  pull_request:/);
-  assert.doesNotMatch(publishWorkflow, /workflow_dispatch:/);
+  assert.match(publishWorkflow, /git merge-base --is-ancestor/);
+  assert.match(publishWorkflow, /CURRENT_MAIN/);
+  assert.match(publishWorkflow, /gh release create/);
+  assert.match(publishWorkflow, /RELEASE_NOTES_/);
   assert.match(publishWorkflow, /id-token: write/);
   assert.match(publishWorkflow, /package-manager-cache: false/);
   assert.match(publishWorkflow, /verify-release\.mjs/);
   assert.match(publishWorkflow, /npm publish --access public/);
+  assert.match(publishWorkflow, /already-published matching version/);
   const workflowHeader = publishWorkflow.split('\njobs:')[0];
-  const [npmPublishJob, githubPackagesJob = ''] = publishWorkflow.split('\n  github-packages:');
+  const [beforeNpmJob, npmAndAfter = ''] = publishWorkflow.split('\n  npm:');
+  const [npmPublishJob, githubPackagesJob = ''] = npmAndAfter.split('\n  github-packages:');
 
-  assert.doesNotMatch(workflowHeader, /id-token: write|packages: write/);
+  assert.doesNotMatch(workflowHeader, /id-token: write|packages: write|contents: write/);
   assert.doesNotMatch(publishWorkflow, /NPM_TOKEN/);
   assert.doesNotMatch(npmPublishJob, /NODE_AUTH_TOKEN/);
+  assert.match(npmPublishJob, /id-token: write/);
   assert.match(githubPackagesJob, /packages: write/);
   assert.match(githubPackagesJob, /registry-url: https:\/\/npm\.pkg\.github\.com/);
   assert.match(githubPackagesJob, /NODE_AUTH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(beforeNpmJob, /create-release:[\s\S]*contents: write/);
+});
+
+test('dashboard browser contract retries only Chrome startup discovery once', () => {
+  const browserSmoke = fs.readFileSync('scripts/check/dashboard-browser-smoke.mjs', 'utf8');
+  assert.match(browserSmoke, /attempt <= 2/);
+  assert.match(browserSmoke, /startsWith\('Chrome did not expose DevTools:'\)/);
+  assert.match(browserSmoke, /retrying once/);
 });
 
 test('community health files cover conduct and private security reporting', () => {

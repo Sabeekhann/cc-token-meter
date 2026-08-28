@@ -91,11 +91,8 @@ function validatePullRequest({ title, body, draft = false, automation = false })
     if (!/-\s*\[[xX]\]\s+I have performed a self-review/i.test(readiness)) {
       errors.push('Check “I have performed a self-review” before requesting review.');
     }
-    if (!/-\s*\[[xX]\]\s+This PR is ready for human review/i.test(readiness)) {
-      errors.push('Check “This PR is ready for human review” before requesting review.');
-    }
   } else {
-    warnings.push('Draft PRs may leave Review Readiness unchecked until the implementation is complete.');
+    warnings.push('Draft PRs may defer self-review until implementation and testing are complete. GitHub Draft/Ready state is authoritative.');
   }
 
   return { valid: errors.length === 0, errors, warnings };

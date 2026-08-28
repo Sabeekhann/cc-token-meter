@@ -33,7 +33,8 @@ Do not create or store an `NPM_TOKEN` in this repository.
 
 1. Update `package.json` and `package-lock.json` to the same version.
 2. Move relevant entries from `Unreleased` into a versioned section in
-   `CHANGELOG.md` using `## [x.y.z]`.
+   `CHANGELOG.md` using `## [x.y.z]`, and add
+   `docs/RELEASE_NOTES_vx.y.z.md`.
 3. Run:
 
    ```bash
@@ -43,10 +44,20 @@ Do not create or store an `NPM_TOKEN` in this repository.
    node .github/scripts/verify-release.mjs vx.y.z
    ```
 
-4. Merge the release change through the protected `main` branch.
-5. Create a non-prerelease GitHub Release with tag `vx.y.z` from that exact
-   commit.
-6. Confirm both publish jobs pass:
+4. Merge the release change through protected `main` and record the exact merged
+   commit SHA.
+5. Publish with one of the two maintainer-controlled paths:
+
+   - **Preferred explicit path:** open **Actions → Publish → Run workflow**, enter
+     tag `vx.y.z` and the exact current `main` commit SHA, and run it. The
+     workflow refuses a malformed/stale SHA or conflicting tag/release state,
+     creates the GitHub Release from the checked release-notes file, then publishes
+     both registries in the same run.
+   - **GitHub Release path:** create a non-prerelease GitHub Release with tag
+     `vx.y.z` from the exact release commit. The `release: published` event starts
+     the same registry validation/publish jobs.
+
+6. Confirm both registry jobs pass:
    - **Publish / npm** publishes `cc-token-meter@x.y.z` with provenance linked
      to this repository.
    - **Publish / GitHub Packages** publishes
@@ -59,11 +70,17 @@ Do not create or store an `NPM_TOKEN` in this repository.
    npx cc-token-meter@x.y.z --help
    ```
 
+Manual dispatch is deliberately bound to the exact current `main` SHA. If a
+matching GitHub Release/tag already exists at that SHA, the workflow treats it as a
+safe resume rather than creating a second release. Registry jobs detect matching
+already-published versions and verify them instead of attempting a duplicate publish.
+A conflicting tag or release state fails preflight.
+
 The workflow rejects a tag that differs from `package.json`, a missing
-changelog section, private/restricted npm publishing, the wrong repository, or
-an incomplete package file list. The GitHub Packages job changes only its
-temporary checkout metadata to the scoped package name; committed npm metadata
-remains unchanged.
+changelog/release-notes section, private/restricted npm publishing, the wrong
+repository, or an incomplete package file list. The GitHub Packages job changes
+only its temporary checkout metadata to the scoped package name; committed npm
+metadata remains unchanged.
 
 ## Failed or incorrect release
 

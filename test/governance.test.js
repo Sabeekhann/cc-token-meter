@@ -34,7 +34,6 @@ Make live cache health easier to understand without exposing transcripts.
 ## Review Readiness
 
 - [x] I have performed a self-review
-- [x] This PR is ready for human review
 `;
 
 test('governance accepts a complete ready-for-review PR', () => {
@@ -62,7 +61,6 @@ test('governance reports template placeholders and an invalid title', () => {
 - [ ] Unit tests pass
 ## Review Readiness
 - [ ] I have performed a self-review
-- [ ] This PR is ready for human review
 `,
     draft: false,
   });
@@ -72,13 +70,12 @@ test('governance reports template placeholders and an invalid title', () => {
   assert.ok(result.errors.some((error) => error.includes('Description placeholder')));
   assert.ok(result.errors.some((error) => error.includes('Type of Change')));
   assert.ok(result.errors.some((error) => error.includes('tests that ran')));
-  assert.ok(result.errors.some((error) => error.includes('ready for human review')));
+  assert.ok(result.errors.some((error) => error.includes('self-review')));
 });
 
 test('draft PRs can defer readiness checkboxes', () => {
   const draftBody = READY_BODY
-    .replace('- [x] I have performed a self-review', '- [ ] I have performed a self-review')
-    .replace('- [x] This PR is ready for human review', '- [ ] This PR is ready for human review');
+    .replace('- [x] I have performed a self-review', '- [ ] I have performed a self-review');
   const result = validatePullRequest({
     title: 'feat(dashboard): add cache health summary',
     body: draftBody,
@@ -87,6 +84,17 @@ test('draft PRs can defer readiness checkboxes', () => {
 
   assert.equal(result.valid, true);
   assert.equal(result.warnings.length, 1);
+});
+
+test('GitHub Draft/Ready state is authoritative without a duplicate readiness checkbox', () => {
+  const result = validatePullRequest({
+    title: 'feat(dashboard): add cache health summary',
+    body: READY_BODY,
+    draft: false,
+  });
+
+  assert.equal(result.valid, true);
+  assert.doesNotMatch(READY_BODY, /This PR is ready for human review/);
 });
 
 test('an unchecked Not tested option is not testing evidence', () => {

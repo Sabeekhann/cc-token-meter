@@ -43,7 +43,8 @@
 ## Review Readiness
 
 - [ ] I have performed a self-review
-- [ ] This PR is ready for human review
+
+<!-- GitHub's Draft/Ready state is authoritative for whether human review is requested. -->
 
 ## Additional Notes
 
