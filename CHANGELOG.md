@@ -5,6 +5,22 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-28
+
+Feature release adding exact, local-only usage exploration by model and date,
+with correctness and release-gate hardening.
+
+### Added
+- Add exact, case-insensitive model filtering to compact summaries, JSON/CSV
+  exports, and the authenticated localhost summary API. Model filters compose
+  with inclusive local-date and project filters.
+- Add a Projects usage explorer with all-time, 7-day, 30-day, 90-day, and
+  custom ranges; an exact model selector; scoped project/session/branch
+  attribution; URL-preserved filter state; and explicit estimated-pricing
+  disclosure.
+- Publish future stable releases to GitHub Packages as
+  `@sabeekhann/cc-token-meter` alongside the existing public npm package.
+
 ### Fixed
 - Invalidate cached usage insights when local transcript data or the selected
   date, project, or model scope changes, preventing recommendations from a
@@ -12,6 +28,19 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Refresh the live dashboard after same-size transcript replacements by using
   a monotonic local-store revision instead of message count alone.
 - Include the active model filter in compact CLI summary scope labels.
+
+### Changed
+- Exercise date, project, and model filtering in the rolling synthetic
+  dashboard preview through the production summary pipeline.
+- Validate GitHub Actions workflows with checksum-verified actionlint.
+- Run the packed-artifact operating-system/Node compatibility matrix after a
+  pull request leaves Draft and summarize it through the stable
+  `Compatibility gate` merge status.
+
+### Security
+- Preserve the read-only, loopback-only runtime: no transcript, prompt, tool
+  output, project path, or usage upload; no telemetry or analytics; no
+  Anthropic API call; and no new production dependency.
 
 ## [1.1.4] — 2026-08-26
 

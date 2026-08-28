@@ -1,7 +1,7 @@
 # Releasing Claude Code Token Meter
 
 Releases are maintainer-controlled. Pull requests never publish packages, and
-the publish workflow has no long-lived npm token.
+the publish workflow has no long-lived registry token.
 
 ## Before the first npm release
 
@@ -46,9 +46,13 @@ Do not create or store an `NPM_TOKEN` in this repository.
 4. Merge the release change through the protected `main` branch.
 5. Create a non-prerelease GitHub Release with tag `vx.y.z` from that exact
    commit.
-6. Confirm the **Publish / npm** workflow passes and the npm package shows
-   provenance linked to this repository.
-7. Smoke-test from a clean temporary directory:
+6. Confirm both publish jobs pass:
+   - **Publish / npm** publishes `cc-token-meter@x.y.z` with provenance linked
+     to this repository.
+   - **Publish / GitHub Packages** publishes
+     `@sabeekhann/cc-token-meter@x.y.z` with the short-lived repository token.
+7. Confirm both registry pages show the exact release version. Smoke-test the
+   public npm package from a clean temporary directory:
 
    ```bash
    npx cc-token-meter@x.y.z --version
@@ -56,8 +60,10 @@ Do not create or store an `NPM_TOKEN` in this repository.
    ```
 
 The workflow rejects a tag that differs from `package.json`, a missing
-changelog section, private/restricted publishing, the wrong repository, or an
-incomplete package file list.
+changelog section, private/restricted npm publishing, the wrong repository, or
+an incomplete package file list. The GitHub Packages job changes only its
+temporary checkout metadata to the scoped package name; committed npm metadata
+remains unchanged.
 
 ## Failed or incorrect release
 

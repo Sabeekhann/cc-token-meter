@@ -15,7 +15,7 @@ light, cross-platform, and straightforward to review.
 | Compatibility / Compatibility gate | Ready-for-review PRs, pushes to `main`, manual | Node 20/22/26 on Linux and Node 24 on macOS/Windows; unit tests plus packed-artifact lifecycle, with large-history budgets on Node 20/24/26 and one stable gate result |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
-| Publish | Published, non-prerelease GitHub Releases | Re-validates the package and publishes to npm through trusted OIDC authentication |
+| Publish | Published, non-prerelease GitHub Releases | Re-validates the package, publishes `cc-token-meter` to npm through trusted OIDC, and publishes `@sabeekhann/cc-token-meter` to GitHub Packages with the short-lived repository token |
 | Dependabot | Weekly | npm and GitHub Actions update PRs |
 
 GitHub-maintained actions are pinned to immutable release commit SHAs.
@@ -97,12 +97,12 @@ active **Protect main** ruleset targeted the default branch and enforced:
 - dismissal of stale approvals after new commits;
 - Code Owner review required;
 - resolution of all review conversations;
-- `Required CI` and `Corgea: Security Scan` as required statuses;
+- `Required CI`, `Compatibility gate`, and `Corgea: Security Scan` as required
+  statuses;
 - blocked force pushes and branch deletion.
 
-After this workflow change is merged and `Compatibility gate` has reported once
-on `main`, add that exact status name to the ruleset's required checks. Require
-only the stable gate, not every operating-system matrix job.
+Require only the stable `Compatibility gate`, not every operating-system
+matrix job.
 
 The review requirements need a second eligible reviewer because GitHub does not
 allow PR authors to approve their own work. In a solo-maintainer repository,
@@ -131,7 +131,7 @@ Normal merges should still wait for required checks and resolved feedback.
 - Leave automatic Dependabot merging disabled; a maintainer reviews dependency
   changes.
 
-### 4. npm trusted publisher
+### 4. Package publishing
 
 The npm trusted publisher is configured for:
 
@@ -143,9 +143,13 @@ Allowed action: npm publish
 ```
 
 The publish workflow runs only for a published, non-prerelease GitHub Release,
-requires the release tag to equal `v<package.json version>`, repeats the local
-gate, and publishes with short-lived OIDC authentication. It contains no
-`NPM_TOKEN` and does not run on pull requests. See
+requires the release tag to equal `v<package.json version>`, and repeats the
+local gate independently for both registries. The npm job publishes the
+unscoped public package with short-lived OIDC authentication and no
+`NPM_TOKEN`. The GitHub Packages job temporarily scopes the package name to
+`@sabeekhann/cc-token-meter` and publishes with the short-lived repository
+`GITHUB_TOKEN`; it does not change the committed npm metadata. Neither job runs
+on pull requests. See
 [`RELEASING.md`](RELEASING.md) for release and rollback procedures.
 
 ## Project policy gate

@@ -14,7 +14,7 @@
     <a href="https://app.codecov.io/github/Sabeekhann/cc-token-meter"><img alt="Codecov coverage" src="https://codecov.io/github/Sabeekhann/cc-token-meter/graph/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
-    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.1.4"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.1.4" /></a>
+    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.2.0"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.2.0" /></a>
     <img alt="Corgea scanned" src="https://img.shields.io/badge/Corgea-scanned-ff6b2c" />
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
     <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-f3b33d" /></a>
@@ -58,11 +58,11 @@ It requires no API key, makes no Anthropic API call, works retroactively, and tr
 > [!IMPORTANT]
 > Dollar values are local estimates, not an Anthropic bill. Pricing rules can change; verify important decisions against [Anthropic's official pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing).
 
-## Current release
+## Release status
 
-The current published version is **v1.1.4**. It adds model-ID correctness, CSV formula hardening, stricter configuration and CLI validation, Node.js 26 compatibility, and a smaller runtime dependency surface while preserving the local-only dashboard and privacy guarantees.
+The prepared **v1.2.0** release adds exact model/date usage exploration in the CLI, local API, and Projects dashboard; scoped attribution across recent and compacted history; and stronger cross-platform release gates while preserving the local-only privacy model.
 
-See the [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/latest) and [`CHANGELOG.md`](CHANGELOG.md) for the version-by-version history. Work merged after v1.1.4 remains unreleased until a maintainer explicitly prepares and publishes a later release.
+The [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/latest) and npm version badge above are the authoritative published versions. Updating repository package metadata does not publish a package; release publication remains an explicit maintainer action. See [`CHANGELOG.md`](CHANGELOG.md) for the version-by-version history.
 
 ## What you get
 
