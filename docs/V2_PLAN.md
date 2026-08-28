@@ -134,10 +134,11 @@ All five delivery phases have substantial implementations on `main`.
   Codecov/dependency review, Security workflows, and npm trusted publishing are
   in place.
 
-Compatibility currently covers Node 20, 22, 24, and 26 across Linux, macOS, and
-Windows. Large-history budgets run on Node 20, 24, and 26. The shipped runtime
-remains local-only and loopback-only, and the maintenance stack is reducing the
-runtime dependency footprint to `open` only.
+Compatibility covers Node 20, 22, 24, and 26 across Linux, macOS, and Windows
+after a PR leaves Draft and again after merge. Its stable gate summarizes the
+matrix, while large-history budgets run on Node 20, 24, and 26. The shipped
+runtime remains local-only and loopback-only, with `open` as its only production
+dependency.
 
 This document is now a product/architecture plan and status reference rather
 than a description of a separate working branch. Future v2 work should be

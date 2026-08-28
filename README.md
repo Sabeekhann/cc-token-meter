@@ -281,11 +281,12 @@ browser-security, and no-remote-assets boundaries.
 
 The repository also includes:
 
-- a draft-first PR flow with `Required CI` and `Corgea: Security Scan`
-  required before normal merges;
+- a draft-first PR flow with `Required CI`, ready-review `Compatibility gate`,
+  and `Corgea: Security Scan` required before normal merges;
 - a separate informational Codecov coverage job and advisory dependency review;
-- multi-platform Compatibility across Node 20, 22, 24, and 26 plus CodeQL,
-  gitleaks, and dependency auditing after merge, on schedule, or manually;
+- multi-platform Compatibility across Node 20, 22, 24, and 26 after a PR leaves
+  Draft and again after merge, plus scheduled/manual CodeQL, gitleaks, and
+  dependency auditing;
 - Conventional Commit PR-title and template checks;
 - automated area, size, and readiness labels;
 - release-tag validation and token-free npm publishing through a trusted

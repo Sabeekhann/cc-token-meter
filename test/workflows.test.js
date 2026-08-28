@@ -24,10 +24,20 @@ test('pull requests have one fast required CI job', () => {
   assert.match(codecovConfig, /project:[\s\S]*informational: true/);
   assert.match(codecovConfig, /patch:[\s\S]*informational: true/);
   assert.match(ciWorkflow, /Reject unresolved merge-conflict markers/);
+  assert.match(ciWorkflow, /version=1\.7\.12/);
+  assert.match(ciWorkflow, /actionlint_\$\{version\}_linux_amd64\.tar\.gz/);
+  assert.match(ciWorkflow, /8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8/);
+  assert.match(ciWorkflow, /sha256sum --check/);
+  assert.match(ciWorkflow, /actionlint" -no-color/);
 });
 
-test('cross-platform compatibility runs only after merge or manually', () => {
-  assert.doesNotMatch(compatibilityWorkflow, /\n  pull_request:/);
+test('cross-platform compatibility becomes a stable gate after draft review', () => {
+  assert.match(compatibilityWorkflow, /\n  pull_request:/);
+  assert.match(compatibilityWorkflow, /types: \[opened, ready_for_review, reopened, synchronize\]/);
+  assert.match(compatibilityWorkflow, /github\.event\.pull_request\.draft == false/);
+  assert.match(compatibilityWorkflow, /gate:\n    name: Compatibility gate/);
+  assert.match(compatibilityWorkflow, /needs: \[test\]/);
+  assert.match(compatibilityWorkflow, /MATRIX_RESULT: \$\{\{ needs\.test\.result \}\}/);
   assert.match(compatibilityWorkflow, /ubuntu-latest/);
   assert.match(compatibilityWorkflow, /macos-latest/);
   assert.match(compatibilityWorkflow, /windows-latest/);

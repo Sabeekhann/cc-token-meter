@@ -273,17 +273,18 @@ Useful for scripting/CI-adjacent local checks.
   template, self-review, local validation, and requested changes.
 - `.github/workflows/tests.yml` runs the Ubuntu/Node 24 `Required CI` gate
   on PRs, pushes to `main`, and manual dispatches. It covers project policy,
-  tests, production audit, packaging, CLI smoke checks, conflict markers, and
-  an informational Codecov upload through GitHub OIDC.
+  checksum-verified workflow linting, tests, production audit, packaging, CLI
+  smoke checks, conflict markers, and an informational Codecov upload through
+  GitHub OIDC.
 - `Corgea: Security Scan` is a separate required PR status reported by the
-  Corgea GitHub App. It is not a step in Required CI. Both required statuses
-  must pass before a normal merge.
+  Corgea GitHub App. It is not a step in Required CI.
 - `.github/workflows/pr-governance.yml` uses trusted base-branch code on
   `pull_request_target` to validate titles/templates, apply labels, and update
   one bot comment without executing PR head code.
-- `.github/workflows/compatibility.yml` runs after pushes to `main` or
-  manually across Node 20/22 on Linux and Node 24 on macOS/Windows, including
-  packed-release lifecycle and large-history performance validation.
+- `.github/workflows/compatibility.yml` stays skipped for draft PRs, then runs
+  when a PR is ready, after pushes to `main`, or manually across Node 20/22/26
+  on Linux and Node 24 on macOS/Windows. Its stable `Compatibility gate`,
+  `Required CI`, and `Corgea: Security Scan` must pass before a normal merge.
 - `.github/workflows/security.yml` runs after pushes to `main`, weekly, or
   manually with production dependency audit, CodeQL, and checksum-verified
   gitleaks.
