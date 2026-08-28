@@ -3,18 +3,151 @@ name: Publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v1.3.0
+        required: true
+        type: string
+      commit_sha:
+        description: Exact 40-character current main commit SHA
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-${{ github.event.release.tag_name }}
+  group: publish-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    name: Release preflight
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.release.outputs.version }}
+      notes: ${{ steps.release.outputs.notes }}
+      release_exists: ${{ steps.release.outputs.release_exists }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          package-manager-cache: false
+      - name: Resolve and validate release identity
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_SHA: ${{ inputs.commit_sha }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RELEASE_TAG="$INPUT_TAG"
+            RELEASE_SHA="$INPUT_SHA"
+          else
+            RELEASE_TAG="$EVENT_TAG"
+            RELEASE_SHA="$(git rev-parse HEAD)"
+          fi
+
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Release tag must be vX.Y.Z" >&2; exit 1; }
+          [[ "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "commit_sha must be exactly 40 hexadecimal characters" >&2; exit 1; }
+          RELEASE_SHA="${RELEASE_SHA,,}"
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$RELEASE_SHA" || { echo "Checked-out commit does not match requested release SHA" >&2; exit 1; }
+
+          git fetch origin main --depth=1
+          CURRENT_MAIN="$(git rev-parse origin/main)"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            test "$RELEASE_SHA" = "$CURRENT_MAIN" || { echo "Manual publication must target the exact current main SHA: $CURRENT_MAIN" >&2; exit 1; }
+          else
+            git merge-base --is-ancestor "$RELEASE_SHA" "$CURRENT_MAIN" || { echo "Release tag is not reachable from main" >&2; exit 1; }
+          fi
+
+          VERSION="${RELEASE_TAG#v}"
+          NOTES="docs/RELEASE_NOTES_${RELEASE_TAG}.md"
+          test -f "$NOTES" || { echo "Missing $NOTES" >&2; exit 1; }
+          node .github/scripts/verify-release.mjs "$RELEASE_TAG"
+
+          RELEASE_EXISTS=false
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            RELEASE_EXISTS=true
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+            TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
+            test "$TAG_SHA" = "$RELEASE_SHA" || { echo "Existing tag points to $TAG_SHA instead of $RELEASE_SHA" >&2; exit 1; }
+          elif [ "$RELEASE_EXISTS" = true ]; then
+            echo "Release exists without its expected tag" >&2
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$RELEASE_EXISTS" != true ] && npm view "cc-token-meter@$VERSION" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
+            echo "npm version $VERSION already exists without a matching GitHub Release; refusing ambiguous publication" >&2
+            exit 1
+          fi
+
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "sha=$RELEASE_SHA"
+            echo "version=$VERSION"
+            echo "notes=$NOTES"
+            echo "release_exists=$RELEASE_EXISTS"
+          } >> "$GITHUB_OUTPUT"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Run the full local gate
+        run: npm run ci
+      - name: Verify publishable package contents
+        run: npm pack --dry-run
+
+  create-release:
+    name: Create GitHub Release
+    needs: [preflight]
+    if: github.event_name == 'workflow_dispatch' && needs.preflight.outputs.release_exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - name: Create release from verified commit
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
+          RELEASE_NOTES: ${{ needs.preflight.outputs.notes }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TITLE="$(sed -n 's/^# //p' "$RELEASE_NOTES" | head -n 1)"
+          test -n "$TITLE" || TITLE="CC Token Meter $RELEASE_TAG"
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_SHA" \
+            --title "$TITLE" \
+            --notes-file "$RELEASE_NOTES" \
+            --latest
+
   npm:
     name: npm
-    if: github.event.release.prerelease == false
+    needs: [preflight, create-release]
+    if: always() && needs.preflight.result == 'success' && (github.event_name == 'release' || needs.preflight.outputs.release_exists == 'true' || needs.create-release.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -23,7 +156,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.preflight.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -34,18 +167,35 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Verify release tag and package metadata
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
         run: node .github/scripts/verify-release.mjs "$RELEASE_TAG"
       - name: Run the full local gate
         run: npm run ci
       - name: Verify publishable package contents
         run: npm pack --dry-run
+      - name: Check npm publication state
+        id: npm-state
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          if npm view "cc-token-meter@$VERSION" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "already-published matching version detected; publication will be verified without a duplicate publish"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish public package with trusted provenance
+        if: steps.npm-state.outputs.exists != 'true'
         run: npm publish --access public
+      - name: Verify npm publication
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: test "$(npm view "cc-token-meter@$VERSION" version --registry=https://registry.npmjs.org)" = "$VERSION"
 
   github-packages:
     name: GitHub Packages
-    if: github.event.release.prerelease == false
+    needs: [preflight, create-release]
+    if: always() && needs.preflight.result == 'success' && (github.event_name == 'release' || needs.preflight.outputs.release_exists == 'true' || needs.create-release.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -54,7 +204,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.preflight.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -66,7 +216,7 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Verify release tag and package metadata
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
         run: node .github/scripts/verify-release.mjs "$RELEASE_TAG"
       - name: Run the full local gate
         run: npm run ci
@@ -77,15 +227,30 @@ jobs:
           const path = 'package.json';
           const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
           pkg.name = '@sabeekhann/cc-token-meter';
-          pkg.publishConfig = {
-            access: 'public',
-            registry: 'https://npm.pkg.github.com'
-          };
-          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          pkg.publishConfig = { access: 'public', registry: 'https://npm.pkg.github.com' };
+          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
           NODE
       - name: Verify publishable package contents
         run: npm pack --dry-run
+      - name: Check GitHub Packages publication state
+        id: ghp-state
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if npm view "@sabeekhann/cc-token-meter@$VERSION" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "already-published matching version detected; publication will be verified without a duplicate publish"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish public package to GitHub Packages
+        if: steps.ghp-state.outputs.exists != 'true'
         run: npm publish --access public --registry=https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify GitHub Packages publication
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: test "$(npm view "@sabeekhann/cc-token-meter@$VERSION" version --registry=https://npm.pkg.github.com)" = "$VERSION"

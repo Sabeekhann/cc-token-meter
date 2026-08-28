@@ -268,7 +268,7 @@ Open substantial changes as draft pull requests. While the PR is a draft:
 3. address automated findings and human review comments;
 4. perform a self-review and remove debugging or unrelated changes;
 5. confirm the branch contains no sensitive data and run `npm run ci`;
-6. check **This PR is ready for human review** in the PR body.
+6. mark the PR ready in GitHub only when implementation, testing evidence, and self-review are complete.
 
 After marking the PR ready for review, do not merge until all required statuses
 have passed:
@@ -314,9 +314,10 @@ Cross-platform Compatibility starts when a PR leaves Draft and runs again after
 merge or manually. CodeQL and full secret scanning run after merge, on schedule,
 or manually. These workflows and automated services do not replace human review.
 
-Publishing is not part of the pull-request path. Only a maintainer-created
-GitHub Release can start the npm publishing workflow, and the release tag must
-exactly match the version in `package.json`.
+Publishing is not part of the pull-request path. A maintainer can either publish a
+GitHub Release directly or explicitly dispatch the permanent Publish workflow with
+the exact release tag and current `main` commit SHA. Both paths revalidate the
+release and keep registry credentials short-lived; see `docs/RELEASING.md`.
 
 Maintainers review for:
 

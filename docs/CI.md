@@ -15,7 +15,7 @@ light, cross-platform, and straightforward to review.
 | Compatibility / Compatibility gate | Ready-for-review PRs, pushes to `main`, manual | Node 20/22/26 on Linux and Node 24 on macOS/Windows; unit tests plus packed-artifact lifecycle, with large-history budgets on Node 20/24/26 and one stable gate result |
 | PR Governance | PR metadata/activity | Conventional title and template validation, area/size/status labels, one updated bot comment |
 | Security | Pushes to `main`, Mondays, manual | Production `npm audit`, CodeQL, and full-history gitleaks scan |
-| Publish | Published, non-prerelease GitHub Releases | Re-validates the package, publishes `cc-token-meter` to npm through trusted OIDC, and publishes `@sabeekhann/cc-token-meter` to GitHub Packages with the short-lived repository token |
+| Publish | Published, non-prerelease GitHub Releases; explicit maintainer dispatch | Re-validates the exact release commit, can create the GitHub Release from the current `main` SHA, publishes `cc-token-meter` to npm through trusted OIDC, and publishes `@sabeekhann/cc-token-meter` to GitHub Packages with the short-lived repository token |
 | Dependabot | Weekly | npm and GitHub Actions update PRs |
 
 GitHub-maintained actions are pinned to immutable release commit SHAs.
@@ -130,6 +130,8 @@ Normal merges should still wait for required checks and resolved feedback.
   a focused PR in release history.
 - Leave automatic Dependabot merging disabled; a maintainer reviews dependency
   changes.
+- Enable **Automatically delete head branches** so merged feature branches are
+  removed without cleanup workflows or stale branch clutter.
 
 ### 4. Package publishing
 
@@ -142,15 +144,17 @@ Workflow filename: publish.yml
 Allowed action: npm publish
 ```
 
-The publish workflow runs only for a published, non-prerelease GitHub Release,
-requires the release tag to equal `v<package.json version>`, and repeats the
-local gate independently for both registries. The npm job publishes the
-unscoped public package with short-lived OIDC authentication and no
-`NPM_TOKEN`. The GitHub Packages job temporarily scopes the package name to
-`@sabeekhann/cc-token-meter` and publishes with the short-lived repository
-`GITHUB_TOKEN`; it does not change the committed npm metadata. Neither job runs
-on pull requests. See
-[`RELEASING.md`](RELEASING.md) for release and rollback procedures.
+The publish workflow supports two maintainer-controlled entry points: a published,
+non-prerelease GitHub Release, or an explicit `workflow_dispatch` carrying the
+release tag and exact current `main` commit SHA. Manual dispatch validates the
+SHA, tag/version/changelog/release-notes contract and existing release state before
+it can create the GitHub Release. Registry jobs then re-run the local gate and are
+idempotent for an already-published matching version, which makes failed-job retries
+safe. The npm job publishes the unscoped public package with short-lived OIDC
+authentication and no `NPM_TOKEN`. The GitHub Packages job temporarily scopes the
+package name to `@sabeekhann/cc-token-meter` and publishes with the short-lived
+repository `GITHUB_TOKEN`; it does not change committed npm metadata. Neither path
+runs on pull requests. See [`RELEASING.md`](RELEASING.md) for the full procedure.
 
 ## Project policy gate
 
@@ -172,8 +176,9 @@ the same change. Do not bypass the check with an unexplained exception.
 ## PR Governance behavior
 
 The governance bot is deterministic and tested in `test/governance.test.js`.
-It validates the exact PR template, accepts incomplete readiness only while a
-PR is a draft, skips human-template enforcement for bot accounts, and manages
+It validates the exact PR template, uses GitHub's Draft/Ready state as the
+authoritative review-readiness signal, requires self-review once a PR is Ready,
+skips human-template enforcement for bot accounts, and manages
 only its own label namespaces:
 
 ```text

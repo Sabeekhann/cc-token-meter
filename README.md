@@ -60,7 +60,7 @@ It requires no API key, makes no Anthropic API call, works retroactively, and tr
 
 ## Release status
 
-The prepared **v1.2.0** release adds exact model/date usage exploration in the CLI, local API, and Projects dashboard; scoped attribution across recent and compacted history; and stronger cross-platform release gates while preserving the local-only privacy model.
+The current **v1.2.0** release adds exact model/date usage exploration in the CLI, local API, and Projects dashboard; scoped attribution across recent and compacted history; and stronger cross-platform release gates while preserving the local-only privacy model.
 
 The [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/latest) and npm version badge above are the authoritative published versions. Updating repository package metadata does not publish a package; release publication remains an explicit maintainer action. See [`CHANGELOG.md`](CHANGELOG.md) for the version-by-version history.
 
