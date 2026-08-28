@@ -41,11 +41,15 @@ test('dashboard assets remain fully local and connect only to local API paths', 
   assert.doesNotMatch(css, /https?:\/\//i);
   assert.doesNotMatch(js, /fetch\(['"]https?:\/\//i);
   assert.match(js, /fetch\('\/api\/summary'/);
-  assert.match(js, /fetch\('\/api\/summary\?' \+ params\.toString\(\)/);
+  assert.match(js, /fetch\('\/api\/summary\?' \+ filterKey/);
   assert.match(js, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(js, /history\.replaceState\(null, '', url\.pathname \+ url\.search \+ url\.hash\)/);
   assert.match(js, /view === 'projects' && state\.summary && projectFiltersActive\(\) && !state\.projectSummary/);
   assert.match(js, /requestId !== state\.projectRequestId/);
+  assert.match(js, /projectSummaryKey/);
+  assert.match(js, /projectScopePending/);
+  assert.match(js, /state\.projectSummaryKey = null/);
+  assert.match(js, /state\.projectSummaryKey = filterKey/);
   assert.match(js, /fetch\('\/api\/budget'/);
   assert.match(js, /new EventSource\('\/api\/stream'\)/);
 });
