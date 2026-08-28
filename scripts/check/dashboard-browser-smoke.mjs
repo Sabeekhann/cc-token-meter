@@ -38,6 +38,25 @@ try {
     assert.match(emptyState.summary, /Custom range · 2999-01-01 to 2999-01-02 · 0 projects · 0 tokens · \$0\.00/);
     assert.match(emptyState.table, /No project usage matches the selected filters/);
     assert.doesNotMatch(emptyState.summary, /Updating filtered local usage/);
+
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+    await inspectProjects(
+      cdp,
+      `${base}/?model=${encodeURIComponent(model)}#projects`,
+      [model, `${modelSummary.byProject.length} project`],
+    );
+    const mobile = await cdp.send('Runtime.evaluate', {
+      expression: `JSON.stringify((()=>{const nav=[...document.querySelectorAll('.nav-item')];const row=document.querySelector('.project-table-row');const cells=row?[...row.children]:[];return{innerWidth,scrollWidth:document.documentElement.scrollWidth,nav:nav.map(el=>({text:el.textContent.trim(),left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right})),tokens:cells[2]?getComputedStyle(cells[2]).display:'missing',cost:cells[3]?getComputedStyle(cells[3]).display:'missing'};})())`,
+      returnByValue: true,
+    });
+    const mobileState = JSON.parse(mobile.result.value || '{}');
+    assert.ok(mobileState.scrollWidth <= mobileState.innerWidth, `390px dashboard overflows horizontally: ${mobileState.scrollWidth} > ${mobileState.innerWidth}`);
+    assert.equal(mobileState.nav.length, 5);
+    for (const item of mobileState.nav) {
+      assert.ok(item.left >= 0 && item.right <= mobileState.innerWidth, `Navigation item is off-screen: ${item.text}`);
+    }
+    assert.notEqual(mobileState.tokens, 'none');
+    assert.notEqual(mobileState.cost, 'none');
   });
 
   console.log('[dashboard-browser] settled model/date Projects scopes passed');
