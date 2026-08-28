@@ -152,9 +152,9 @@ read this file before starting any development or design task in this repo.
     `renderInsights()` ranks/filters evidence and deep-links to sessions.
   - The Settings form posts to `/api/budget`, then refetches `/api/summary`
     so config changes appear even when no transcript message changed.
-  - `test/dashboard-demo-server.js` + `dashboard-summary.json` provide a
-    synthetic UI preview through `npm run preview:dashboard`; they never read
-    personal transcripts.
+  - `test/dashboard-demo-server.js` + `dashboard-sessions.js` provide a
+    rolling synthetic UI preview through `npm run preview:dashboard`; they
+    never read personal transcripts and exercise the real summary filters.
   - All dynamic text goes through `escapeHtml`/`escapeHtmlAttr` before
     `innerHTML` — keep doing this for any new dynamic content.
   - `dashboard.css` defines the offline system-font visual system: dark

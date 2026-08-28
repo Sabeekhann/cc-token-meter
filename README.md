@@ -149,7 +149,11 @@ npm ci
 npm run preview:dashboard
 ```
 
-Open `http://127.0.0.1:4318`. This preview uses clearly synthetic fixture data and never reads personal Claude Code transcripts, so it is the best way to explore or work on the interface from source.
+Open `http://127.0.0.1:4318`. This preview uses clearly synthetic, rolling
+fixture dates and never reads personal Claude Code transcripts. Its date,
+project, and model queries run through the same summary/filtering code as the
+local dashboard, so it is the best way to explore or work on the interface
+from source.
 
 ## Privacy by design
 
@@ -205,6 +209,7 @@ Common filters:
 --from <date>    Include usage on/after local date YYYY-MM-DD
 --to <date>      Include usage on/before local date YYYY-MM-DD
 --project <text> Match project paths by case-insensitive substring
+--model <id>     Match an exact model identifier (case-insensitive)
 --group-by <n>   CSV rows: day, project, branch, or session
 ```
 
@@ -212,7 +217,7 @@ Examples:
 
 ```bash
 cc-token-meter --port 5000 --no-open
-cc-token-meter --summary --from 2026-08-01 --project my-app
+cc-token-meter --summary --from 2026-08-01 --project my-app --model claude-sonnet-5
 cc-token-meter --json --no-cache
 cc-token-meter --csv usage.csv --group-by project
 cc-token-meter --doctor --json

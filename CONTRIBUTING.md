@@ -103,7 +103,9 @@ Run the synthetic dashboard during UI work:
 npm run preview:dashboard
 ```
 
-Then open `http://127.0.0.1:4318`. The preview does not read your personal Claude Code history.
+Then open `http://127.0.0.1:4318`. The preview does not read your personal
+Claude Code history, and its rolling synthetic data exercises the production
+date, project, and model filtering path.
 
 To exercise the CLI against your own local data:
 
