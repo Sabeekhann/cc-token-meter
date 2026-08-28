@@ -23,6 +23,7 @@
     insightFilter: 'all',
     projectQuery: '',
     projectSummary: null,
+    projectSummaryKey: null,
     projectRange: 'all',
     projectModel: '',
     projectFrom: '',
@@ -254,6 +255,7 @@
     hydrateProjectModelOptions(summary);
     if (!projectFiltersActive()) {
       state.projectSummary = summary;
+      state.projectSummaryKey = '';
       state.projectError = '';
     } else if (state.view === 'projects') {
       scheduleProjectRefresh();
@@ -651,19 +653,23 @@
 
   function renderProjects() {
     renderProjectFilterControls();
-    var projectSummary = state.projectSummary || state.summary;
-    var projects = Array.isArray(projectSummary.byProject) ? projectSummary.byProject.slice() : [];
+    var currentProjectKey = projectFilterParams().toString();
+    var projectScopePending = projectFiltersActive() && state.projectSummaryKey !== currentProjectKey;
+    var projectSummary = projectFiltersActive()
+      ? (projectScopePending ? null : state.projectSummary)
+      : state.summary;
+    var projects = projectSummary && Array.isArray(projectSummary.byProject) ? projectSummary.byProject.slice() : [];
     projects.sort(function (a, b) { return (b.costUsd || 0) - (a.costUsd || 0); });
     if (state.projectQuery) {
       projects = projects.filter(function (project) {
         return String(project.project || '').toLowerCase().indexOf(state.projectQuery) !== -1;
       });
     }
-    var allProjectCost = (projectSummary.byProject || []).reduce(function (sum, project) { return sum + (project.costUsd || 0); }, 0);
+    var allProjectCost = (projectSummary && projectSummary.byProject || []).reduce(function (sum, project) { return sum + (project.costUsd || 0); }, 0);
     var table = byId('projectsTable');
     renderProjectFilterSummary(projectSummary);
 
-    if (state.projectLoading && !state.projectSummary) {
+    if ((state.projectLoading || projectScopePending) && !projectSummary) {
       table.innerHTML = '<div class="empty-state compact">Updating filtered local usage…</div>';
     } else if (projects.length === 0) {
       var emptyCopy = state.projectQuery
@@ -804,6 +810,7 @@
 
   function projectFiltersChanged() {
     state.expandedProject = null;
+    state.projectSummaryKey = null;
     state.projectError = '';
     renderProjectFilterControls();
     syncProjectFilterUrl();
@@ -825,6 +832,10 @@
 
   function projectFiltersActive() {
     return state.projectRange !== 'all' || Boolean(state.projectModel);
+  }
+
+  function projectScopePending() {
+    return projectFiltersActive() && state.projectSummaryKey !== projectFilterParams().toString();
   }
 
   function projectFilterParams() {
@@ -878,14 +889,16 @@
     if (!state.summary) return;
     var requestId = ++state.projectRequestId;
     var params = projectFilterParams();
+    var filterKey = params.toString();
     if (state.projectRange === 'custom' && state.projectFrom && state.projectTo && state.projectFrom > state.projectTo) {
       state.projectError = 'Start date must not be after end date.';
       state.projectLoading = false;
       renderProjects();
       return;
     }
-    if (params.toString() === '') {
+    if (filterKey === '') {
       state.projectSummary = state.summary;
+      state.projectSummaryKey = '';
       state.projectLoading = false;
       state.projectError = '';
       renderProjects();
@@ -895,11 +908,12 @@
     state.projectError = '';
     if (state.view === 'projects') renderProjects();
     try {
-      var response = await fetch('/api/summary?' + params.toString(), { cache: 'no-store' });
+      var response = await fetch('/api/summary?' + filterKey, { cache: 'no-store' });
       if (!response.ok) throw new Error('Filtered summary request failed');
       var nextSummary = await response.json();
       if (requestId !== state.projectRequestId) return;
       state.projectSummary = nextSummary;
+      state.projectSummaryKey = filterKey;
     } catch (error) {
       if (requestId === state.projectRequestId) {
         state.projectError = 'Could not refresh this local usage scope.';
@@ -919,7 +933,7 @@
       dom.projectFilterSummary.textContent = state.projectError;
       return;
     }
-    if (state.projectLoading) {
+    if (state.projectLoading || projectScopePending()) {
       dom.projectFilterSummary.className = 'explorer-summary';
       dom.projectFilterSummary.textContent = 'Updating filtered local usage…';
       return;

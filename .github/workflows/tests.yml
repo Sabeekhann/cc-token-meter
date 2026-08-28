@@ -45,6 +45,8 @@ jobs:
         run: npm run check
       - name: Run unit and contract tests
         run: npm test
+      - name: Verify settled dashboard filters in a real browser
+        run: node scripts/check/dashboard-browser-smoke.mjs
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Verify publishable package contents
