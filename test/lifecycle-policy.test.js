@@ -9,10 +9,12 @@ const runner = fs.readFileSync(path.join(root, 'test', 'release-lifecycle.mjs'),
 const requiredWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'tests.yml'), 'utf8');
 const compatibilityWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'compatibility.yml'), 'utf8');
 
-test('packed lifecycle remains a post-merge compatibility gate', () => {
+test('packed lifecycle remains outside fast CI and runs in ready-review compatibility', () => {
   assert.doesNotMatch(requiredWorkflow, /test:lifecycle/);
   assert.match(compatibilityWorkflow, /npm run test:lifecycle/);
-  assert.doesNotMatch(compatibilityWorkflow, /pull_request:/);
+  assert.match(compatibilityWorkflow, /pull_request:/);
+  assert.match(compatibilityWorkflow, /ready_for_review/);
+  assert.match(compatibilityWorkflow, /pull_request\.draft == false/);
 });
 
 test('packed lifecycle covers isolated install, upgrade, recovery, export, and offline runtime', () => {
@@ -32,6 +34,8 @@ test('packed lifecycle covers isolated install, upgrade, recovery, export, and o
   assert.match(runner, /127\.0\.0\.1/);
   assert.match(runner, /network-guard\.cjs/);
   assert.match(runner, /os\.EOL/);
+  assert.match(runner, /fs\.constants\.R_OK \| fs\.constants\.W_OK/);
+  assert.match(runner, /'_cacache', 'tmp'/);
 });
 
 test('the isolated home override is explicit and does not change normal defaults', async () => {

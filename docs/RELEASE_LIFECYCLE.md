@@ -1,9 +1,10 @@
 # Packed release lifecycle
 
 `npm run test:lifecycle` validates the package users actually install rather
-than importing files from the checkout. It is intentionally a heavier,
-post-merge Compatibility check; the single required pull-request job stays
-fast and verifies only the harness contract.
+than importing files from the checkout. It is intentionally a heavier
+Compatibility check that stays skipped during draft iteration, then runs when
+a pull request is ready for review and again after merge. The single fast
+`Required CI` job verifies only the harness contract.
 
 The lifecycle runner:
 

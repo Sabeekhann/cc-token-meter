@@ -264,16 +264,18 @@ Open substantial changes as draft pull requests. While the PR is a draft:
 
 1. keep the diff focused and push follow-up corrections to the same branch;
 2. review Required CI, PR Governance, and informational Codecov results;
+   Compatibility remains skipped until the PR leaves Draft;
 3. address automated findings and human review comments;
 4. perform a self-review and remove debugging or unrelated changes;
 5. confirm the branch contains no sensitive data and run `npm run ci`;
 6. check **This PR is ready for human review** in the PR body.
 
-After marking the PR ready for review, do not merge until both required statuses
+After marking the PR ready for review, do not merge until all required statuses
 have passed:
 
 ```text
 Required CI
+Compatibility gate
 Corgea: Security Scan
 ```
 
@@ -296,19 +298,21 @@ If a proposed feature needs outbound networking, telemetry, transcript mutation,
 
 ## Review process
 
-Every pull request has two required merge-gate statuses. `Required CI` runs
-project policy, tests, the production dependency audit, packaging, CLI smoke
-behavior, and conflict-marker detection. `Corgea: Security Scan` is reported
-independently by the Corgea GitHub App. Both must pass before merge.
+Every ready-for-review pull request has three required merge-gate statuses.
+`Required CI` runs workflow linting, project policy, tests, the production
+dependency audit, packaging, CLI smoke behavior, and conflict-marker detection.
+`Compatibility gate` summarizes the complete operating-system/Node matrix.
+`Corgea: Security Scan` is reported independently by the Corgea GitHub App. All
+three must pass before merge.
 
 Required CI also uploads a privacy-safe source coverage report to Codecov.
 Codecov project and patch results are informational and do not replace either
 required gate. PR Governance separately validates metadata and maintains
 labels.
 
-Cross-platform Compatibility, CodeQL, and full secret scanning run after merge,
-on schedule, or manually so contributor feedback stays fast. These workflows
-and automated services do not replace human review.
+Cross-platform Compatibility starts when a PR leaves Draft and runs again after
+merge or manually. CodeQL and full secret scanning run after merge, on schedule,
+or manually. These workflows and automated services do not replace human review.
 
 Publishing is not part of the pull-request path. Only a maintainer-created
 GitHub Release can start the npm publishing workflow, and the release tag must

@@ -124,13 +124,27 @@ function runNpm(args, options = {}) {
 
 function npmEnvironment() {
   const configured = process.env.npm_config_cache || process.env.NPM_CONFIG_CACHE;
-  const cache = configured && fs.existsSync(configured) ? configured : temporaryNpmCache;
+  const cache = writableNpmCache(configured) ? configured : temporaryNpmCache;
   fs.mkdirSync(cache, { recursive: true });
   return {
     ...process.env,
     npm_config_cache: cache,
     npm_config_update_notifier: 'false',
   };
+}
+
+function writableNpmCache(directory) {
+  if (!directory) return false;
+  try {
+    const probeRoot = path.join(directory, '_cacache', 'tmp');
+    fs.mkdirSync(probeRoot, { recursive: true });
+    fs.accessSync(probeRoot, fs.constants.R_OK | fs.constants.W_OK);
+    const probe = fs.mkdtempSync(path.join(probeRoot, 'cc-token-meter-'));
+    fs.rmSync(probe, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function runCli(binary, args) {

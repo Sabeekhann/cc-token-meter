@@ -35,7 +35,8 @@ parse exactly one.
 
 The limits are deliberately above normal developer-machine results so shared
 CI variance does not create noise, while still catching unbounded-history or
-full-reparse regressions. Compatibility enforces them on Node 20 and Node 24.
+full-reparse regressions. Compatibility enforces them on Node 20, Node 24, and
+Node 26 after a PR leaves Draft and again after merge.
 The JSON result includes the Node version, platform, fixture dimensions,
 budgets, and measured values for comparison.
 
