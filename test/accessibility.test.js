@@ -55,6 +55,18 @@ test('responsive rules cover the 1440, 1024, 768, and 390 pixel matrix', () => {
   assert.match(css, /\.branch-grid \{ grid-template-columns:1fr; \}/);
   assert.match(css, /\.burn-chart \{ min-height:190px;overflow-x:auto; \}/);
   assert.match(css, /\.projects-explorer \{ display:grid;grid-template-columns:1fr;margin-top:0; \}/);
+  assert.match(css, /\.nav-list \{ display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\);/);
+  assert.match(css, /\.table-head>\*:nth-child\(2\),\.project-table-row>\*:nth-child\(2\) \{ display:none; \}/);
+  assert.match(css, /\.project-table-row>\*:nth-child\(3\) \{ grid-area:tokens;display:block; \}/);
+  assert.match(css, /\.project-table-row>\*:nth-child\(4\) \{ grid-area:cost;display:block;text-align:right; \}/);
+});
+
+test('functional secondary text uses the strengthened readable palette', () => {
+  assert.match(css, /--muted:#5f6b82;/);
+  assert.match(css, /--faint:#657087;/);
+  assert.match(css, /\.table-head[^\{]*\{[^}]*font-size:10\.5px/s);
+  assert.match(css, /\.explorer-field[^\{]*\{[^}]*font-size:10\.5px/s);
+  assert.match(css, /\.empty-state\.compact[^\{]*\{[^}]*font-size:12px/s);
 });
 
 test('charts have text summaries and histories stay bounded', () => {
