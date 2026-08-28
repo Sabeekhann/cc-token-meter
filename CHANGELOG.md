@@ -5,6 +5,14 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Invalidate cached usage insights when local transcript data or the selected
+  date, project, or model scope changes, preventing recommendations from a
+  previous scope from appearing in filtered summaries.
+- Refresh the live dashboard after same-size transcript replacements by using
+  a monotonic local-store revision instead of message count alone.
+- Include the active model filter in compact CLI summary scope labels.
+
 ## [1.1.4] — 2026-08-26
 
 Maintenance, correctness, security, and compatibility improvements following

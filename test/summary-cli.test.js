@@ -4,7 +4,12 @@ import { formatCompactSummary } from '../src/cli/commands/summary.js';
 
 test('compact summary reports decision-oriented local usage without raw transcript data', () => {
   const output = formatCompactSummary({
-    filters: { from: '2026-08-01', to: null, project: 'token-meter' },
+    filters: {
+      from: '2026-08-01',
+      to: null,
+      project: 'token-meter',
+      model: 'claude-sonnet-5',
+    },
     pricing: { verifiedOn: '2026-08-21' },
     today: { tokenTotal: 428_640, costUsd: 6.84 },
     allTime: { tokenTotal: 12_400_000, costUsd: 194.28 },
@@ -18,7 +23,10 @@ test('compact summary reports decision-oriented local usage without raw transcri
     },
   });
 
-  assert.match(output, /Scope: 2026-08-01 to today · project contains "token-meter"/);
+  assert.match(
+    output,
+    /Scope: 2026-08-01 to today · project contains "token-meter" · model is "claude-sonnet-5"/,
+  );
   assert.match(output, /Selected: 12,400,000 tokens · \$194\.28/);
   assert.match(output, /Cache: 57% reuse · \$31\.42 estimated input cost avoided/);
   assert.match(output, /Top project: work\/cc-token-meter/);

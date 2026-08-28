@@ -215,12 +215,14 @@ test('store rebuilds a replaced transcript with the same size instead of double-
   });
 
   await store.ingestNewData();
+  const originalRevision = store.getSnapshot().revision;
   const replacementPath = path.join(dir, 'replacement.jsonl');
   fs.writeFileSync(replacementPath, `${replacement}\n`, 'utf8');
   fs.renameSync(replacementPath, filePath);
   await store.ingestNewData();
 
   const snapshot = store.getSnapshot();
+  assert.ok(snapshot.revision > originalRevision);
   assert.equal(snapshot.totalIngestedMessages, 1);
   assert.equal(snapshot.sessions[0].messageCount, 1);
   assert.equal(snapshot.sessions[0].inputTokens, 900);

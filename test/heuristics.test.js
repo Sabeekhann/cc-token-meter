@@ -137,6 +137,37 @@ test('runHeuristics invalidates cached warnings when compact evidence changes', 
   clearHeuristicsCache();
 });
 
+test('runHeuristics invalidates equal-count results when the summary scope changes', () => {
+  clearHeuristicsCache();
+  const base = {
+    sessionId: 'scoped-cache',
+    messageCount: 3,
+    models: ['claude-sonnet-5'],
+    usageRecords: [{ inputTokens: 100 }, { inputTokens: 100 }, { inputTokens: 100 }],
+  };
+  const repeated = [
+    toolUse('Read', '/a.js', '2026-01-01T00:00:01.000Z'),
+    toolUse('Read', '/a.js', '2026-01-01T00:00:02.000Z'),
+    toolUse('Read', '/a.js', '2026-01-01T00:00:03.000Z'),
+  ];
+  const edited = [
+    toolUse('Read', '/a.js', '2026-01-01T00:00:01.000Z'),
+    toolUse('Edit', '/a.js', '2026-01-01T00:00:02.000Z'),
+    toolUse('Read', '/a.js', '2026-01-01T00:00:03.000Z'),
+  ];
+
+  assert.ok(
+    runHeuristics(base, repeated, [base], [], { contextKey: 'model:sonnet' })
+      .some((tip) => tip.id.startsWith('repeatedReads:')),
+  );
+  assert.equal(
+    runHeuristics(base, edited, [base], [], { contextKey: 'model:opus' })
+      .some((tip) => tip.id.startsWith('repeatedReads:')),
+    false,
+  );
+  clearHeuristicsCache();
+});
+
 test('longSessionNoCompact: true negative — 60+ messages but a /compact line is present', () => {
   const session = { sessionId: 's7', messageCount: 70 };
   const rawLines = [
