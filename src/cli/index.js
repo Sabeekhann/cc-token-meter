@@ -4,13 +4,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startCommand } from './commands/start.js';
-import { jsonCommand } from './commands/json.js';
-import { csvCommand } from './commands/csv.js';
-import { doctorCommand } from './commands/doctor.js';
-import { summaryCommand } from './commands/summary.js';
-import { setBudgetCommand } from './commands/setBudget.js';
 import { helpCommand, USAGE } from './commands/help.js';
+
+// Commands are loaded on demand so short-lived modes such as --statusline,
+// which Claude Code runs on every status refresh, don't pay to load the
+// dashboard server and browser launcher.
+const loadCommand = (name) => import(`./commands/${name}.js`);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +37,8 @@ function parseArgs(argv) {
     json: false,
     summary: false,
     doctor: false,
+    statusline: false,
+    statuslineConfig: false,
     csvPath: null,
     groupBy: 'day',
     from: null,
@@ -93,6 +94,12 @@ function parseArgs(argv) {
       case '--doctor':
         opts.doctor = true;
         break;
+      case '--statusline':
+        opts.statusline = true;
+        break;
+      case '--statusline-config':
+        opts.statuslineConfig = true;
+        break;
       case '--csv':
         opts.csvPath = parseRequiredString('--csv', argv[++i]);
         break;
@@ -138,9 +145,11 @@ function parseArgs(argv) {
     opts.summary,
     opts.csvPath !== null,
     opts.json && !opts.doctor,
+    opts.statusline,
+    opts.statuslineConfig,
   ].filter(Boolean).length;
   if (outputModeCount > 1) {
-    throw new Error('choose only one output mode: --summary, --json, --csv, or --doctor');
+    throw new Error('choose only one output mode: --summary, --json, --csv, --doctor, --statusline, or --statusline-config');
   }
 
   return opts;
@@ -195,21 +204,37 @@ export async function main(argv) {
   }
 
   if (opts.setBudgetUsd !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
     await setBudgetCommand({ dailyCostCapUsd: opts.setBudgetUsd });
     return;
   }
 
   if (opts.setBudgetTokens !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
     await setBudgetCommand({ dailyTokenCap: opts.setBudgetTokens });
     return;
   }
 
   if (opts.setSessionBudgetUsd !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
     await setBudgetCommand({ sessionCostCapUsd: opts.setSessionBudgetUsd });
     return;
   }
 
+  if (opts.statusline) {
+    const { statuslineCommand } = await loadCommand('statusline');
+    await statuslineCommand();
+    return;
+  }
+
+  if (opts.statuslineConfig) {
+    const { statuslineConfigCommand } = await loadCommand('statusline');
+    await statuslineConfigCommand();
+    return;
+  }
+
   if (opts.doctor) {
+    const { doctorCommand } = await loadCommand('doctor');
     await doctorCommand({ json: opts.json });
     return;
   }
@@ -218,6 +243,7 @@ export async function main(argv) {
 
   if (opts.csvPath !== null) {
     try {
+      const { csvCommand } = await loadCommand('csv');
       await csvCommand({
         cache: opts.cache,
         outputPath: opts.csvPath,
@@ -232,15 +258,18 @@ export async function main(argv) {
   }
 
   if (opts.json) {
+    const { jsonCommand } = await loadCommand('json');
     await jsonCommand({ cache: opts.cache, filters });
     return;
   }
 
   if (opts.summary) {
+    const { summaryCommand } = await loadCommand('summary');
     await summaryCommand({ cache: opts.cache, filters });
     return;
   }
 
+  const { startCommand } = await loadCommand('start');
   await startCommand({ port: opts.port, open: opts.open, cache: opts.cache });
 }
 

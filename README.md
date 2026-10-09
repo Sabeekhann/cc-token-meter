@@ -155,6 +155,43 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
+## Claude Code status line
+
+See usage without leaving Claude Code. Install globally, then add the command
+to `~/.claude/settings.json`:
+
+```bash
+npm install --global cc-token-meter
+```
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "cc-token-meter --statusline"
+  }
+}
+```
+
+Claude Code then shows a line like:
+
+```text
+◆ $2.41 session · 182K tok · cache 74% · ctx 50% · today $8.20/$20.00 (41%)
+```
+
+| Segment | Meaning |
+| --- | --- |
+| `session` | Estimated cost of the current session (`≈` when fallback pricing was used; shown against your session cap when one is set). |
+| `tok` | Total tokens in the current session. |
+| `cache` | Share of prompt tokens served from cache. |
+| `ctx` | Latest prompt size against the estimated context window (amber from 60%, red from 80%). |
+| `today` | Today's estimated cost, against your daily cost or token cap when one is set. A trailing `+` means more than 20 transcripts changed today and the total is a lower bound. |
+
+The status line finds the session through local transcript discovery, never
+opens a path supplied on stdin, writes no files, and never edits your Claude
+Code settings. Set `NO_COLOR=1` to disable colors. Use a global install rather
+than `npx`, which adds startup time to every refresh.
+
 ## Privacy by design
 
 Claude Code Token Meter reads session transcripts from:
@@ -195,6 +232,8 @@ The commands below assume a global install. For one-off use, replace
 | `cc-token-meter --json` | Print a machine-readable summary and exit. |
 | `cc-token-meter --csv <path\|->` | Export filtered usage as CSV. Use `-` for stdout. |
 | `cc-token-meter --doctor` | Diagnose the local setup and private state. |
+| `cc-token-meter --statusline` | Print one usage line for Claude Code's status line (reads session JSON on stdin). |
+| `cc-token-meter --statusline-config` | Show how to enable the status line. |
 | `cc-token-meter --set-budget-usd <n>` | Set a daily estimated-cost cap. |
 | `cc-token-meter --set-budget-tokens <n>` | Set a daily token cap. |
 | `cc-token-meter --set-session-budget-usd <n>` | Set a per-session estimated-cost cap. |

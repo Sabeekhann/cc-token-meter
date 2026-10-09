@@ -21,8 +21,11 @@ read this file before starting any development or design task in this repo.
   dashboard server), `--json` (restore/index, print summary, exit),
   `--summary` (compact human-readable usage), `--csv` (private filtered
   export), `--doctor` (local setup diagnostics),
+  `--statusline` (one line for Claude Code's `statusLine` command),
+  `--statusline-config` (print setup instructions),
   `--set-budget-usd`/`--set-budget-tokens`/`--set-session-budget-usd`,
-  `--port`, `--no-open`, `--help`, `--version`.
+  `--port`, `--no-open`, `--help`, `--version`. `src/cli/index.js` loads
+  each command module on demand so `--statusline` starts fast.
 - **100% local.** No outbound network calls other than serving the local
   dashboard itself. Never add analytics, telemetry, or phone-home checks.
 
@@ -67,6 +70,8 @@ read this file before starting any development or design task in this repo.
     heatmap), `getTodayTotal(sessions)`, `localDateKey`.
 - `src/analytics/overview.js` — pure active-session, recent velocity, cache
   health/savings, model-mix, and data-quality intelligence.
+- `src/analytics/statusline.js` — pure `summarizeUsageRecords()` (session and
+  local-today totals from parser records) and `formatStatusline()`.
 - `src/pricing/`
   - `models.js` — exports `PRICING_TABLE` (array of `{ id,
     matchSubstrings[], inputPerMTok, outputPerMTok, effectiveFrom,
@@ -111,6 +116,13 @@ read this file before starting any development or design task in this repo.
     branch, or session; supports the same date/project filters as JSON.
   - `commands/doctor.js` — checks runtime compatibility, transcript access,
     private index/config health, and local-state permissions.
+  - `commands/statusline.js` — reads Claude Code's statusLine JSON from
+    stdin (bounded size and time), locates the session only through
+    `discoverSessionFiles()` (never a stdin-supplied path), parses that
+    transcript plus at most 20 transcripts modified today, prints one line,
+    and writes nothing. It never throws: failures print a neutral line and
+    exit 0. Also prints the `--statusline-config` instructions; it never
+    edits Claude Code settings.
   - `commands/setBudget.js` — handles the three `--set-*-budget-*` flags.
   - `commands/help.js` — `--help` output.
 - `src/heuristics/` — 5 pure one-function-per-file tip generators, each
@@ -225,6 +237,8 @@ cc-token-meter --summary                      Print a compact local usage summar
 cc-token-meter --json                         Load/index history, print JSON summary, exit
 cc-token-meter --csv <path|->                 Export filtered usage as CSV, exit
 cc-token-meter --doctor                       Diagnose local setup and private state, exit
+cc-token-meter --statusline                   Print one line for Claude Code's status line
+cc-token-meter --statusline-config            Show status line setup instructions, exit
 cc-token-meter --set-budget-usd <n>           Set daily cost cap (USD) and exit
 cc-token-meter --set-budget-tokens <n>        Set daily token cap and exit
 cc-token-meter --set-session-budget-usd <n>   Set per-session cost cap (USD) and exit
