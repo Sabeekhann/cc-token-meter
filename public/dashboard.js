@@ -1181,23 +1181,28 @@
     var observedMax = usage.reduce(function (max, point) { return Math.max(max, promptSize(point)); }, 0);
     var windowSize = contextWindowFor(last.model, observedMax);
     var ratio = Math.min(1, current / windowSize);
-    var radius = 26;
+    var radius = 50;
     var circumference = 2 * Math.PI * radius;
-    var level = ratio >= .8 ? 'danger' : ratio >= .6 ? 'warn' : '';
+    var level = ratio >= .8 ? 'danger' : ratio >= .6 ? 'warn' : 'ok';
     var advice = ratio >= .8
       ? 'Close to the limit. Run /compact or start a focused session before quality drops.'
       : ratio >= .6
         ? 'Context is filling up. Plan a /compact at the next natural break.'
         : 'Plenty of room in the current context.';
-    return '<div class="context-card"><div class="gauge-row">' +
-      '<svg viewBox="0 0 64 64" role="img" aria-label="' + escapeHtmlAttr(formatPercent(ratio) + ' of the estimated context window used') + '">' +
-        '<circle class="gauge-track" cx="32" cy="32" r="' + radius + '"></circle>' +
-        '<circle class="gauge-fill ' + level + '" cx="32" cy="32" r="' + radius + '" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - ratio)).toFixed(2) + '"></circle>' +
-        '<text class="gauge-text" x="32" y="37" text-anchor="middle">' + escapeHtml(Math.round(ratio * 100) + '%') + '</text>' +
-      '</svg>' +
-      '<div><span>Context window · latest message</span><strong>' + escapeHtml(formatCompact(current) + ' of ' + formatCompact(windowSize)) + '</strong>' +
-      '<small>' + escapeHtml(advice) + ' Window size is estimated from the model and observed prompts.</small></div>' +
-    '</div></div>';
+    var dash = ratio > 0 ? Math.max(.012, ratio) : 0;
+    return '<div class="context-gauge ' + level + '">' +
+      '<div class="ctx-ring">' +
+        '<svg viewBox="0 0 120 120" role="img" aria-label="' + escapeHtmlAttr(formatPercent(ratio) + ' of the estimated context window used') + '">' +
+          '<defs><linearGradient id="ctxRingGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="ctx-stop-a"></stop><stop offset="1" class="ctx-stop-b"></stop></linearGradient></defs>' +
+          '<circle class="ctx-ring-track" cx="60" cy="60" r="' + radius + '"></circle>' +
+          '<circle class="ctx-ring-fill" cx="60" cy="60" r="' + radius + '" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - dash)).toFixed(2) + '"></circle>' +
+        '</svg>' +
+        '<div class="ctx-ring-value" aria-hidden="true"><strong>' + escapeHtml(Math.round(ratio * 100)) + '<span>%</span></strong><small>used</small></div>' +
+      '</div>' +
+      '<div class="ctx-copy"><span>Latest message</span><strong>' + escapeHtml(formatCompact(current)) + ' <em>of ' + escapeHtml(formatCompact(windowSize)) + '</em></strong>' +
+      '<p>' + escapeHtml(advice) + '</p></div>' +
+      '<small class="ctx-note">Window size is estimated from the model and observed prompts.</small>' +
+    '</div>';
   }
 
   function estimateBadge(flag) {
@@ -1375,37 +1380,68 @@
       return '<option value="' + escapeHtmlAttr(item.sessionId) + '"' + (item.sessionId === session.sessionId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
     }).join('');
 
+    var tokens = finiteOr0(session.tokenTotal);
+    var cost = finiteOr0(session.costUsd);
+    var messages = finiteOr0(session.messageCount);
+    var shortName = shortProjectName(session.project);
+    var slash = shortName.lastIndexOf('/');
+    var projectHtml = slash > 0
+      ? '<span class="live-project-parent">' + escapeHtml(shortName.slice(0, slash + 1)) + '</span>' + escapeHtml(shortName.slice(slash + 1))
+      : escapeHtml(shortName);
+    var gauge = renderContextGauge(session);
+
     byId('liveSessionContent').innerHTML =
       '<article class="live-hero">' +
         '<div class="live-hero-head">' +
           '<div class="live-identity"><span class="live-status ' + (isActive ? '' : 'inactive') + '"><i></i>' + (isActive ? 'Active now' : 'Recent session') + '</span>' +
-          '<h2>' + escapeHtml(shortProjectName(session.project)) + '</h2><p>' + escapeHtml(session.gitBranch || '(no branch)') + ' · ' + escapeHtml(currentModel) + ' · updated ' + escapeHtml(formatRelative(session.lastTimestamp, summary.generatedAt)) + '</p></div>' +
-          '<label><span class="sr-only">Select session</span><select id="sessionPicker" class="session-picker">' + options + '</select></label>' +
+          '<h2 title="' + escapeHtmlAttr(session.project || 'unknown') + '">' + projectHtml + '</h2>' +
+          '<p class="live-tags">' +
+            '<span class="live-tag"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.6" /><circle cx="4.5" cy="12.5" r="1.6" /><circle cx="11.5" cy="5.5" r="1.6" /><path d="M4.5 5.1v5.8M11.5 7.1c0 2.4-2.2 2.8-5.6 4" /></svg>' + escapeHtml(session.gitBranch || '(no branch)') + '</span>' +
+            '<span class="live-tag"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5L8 1.8Z" /><path d="M2.8 5.2 8 8.3l5.2-3.1M8 8.3v5.6" /></svg>' + escapeHtml(currentModel) + '</span>' +
+            '<span class="live-tag quiet">updated ' + escapeHtml(formatRelative(session.lastTimestamp, summary.generatedAt)) + '</span>' +
+          '</p></div>' +
+          '<div class="live-picker"><span class="live-picker-label" aria-hidden="true">Viewing session</span>' +
+          '<label><span class="sr-only">Select session</span><select id="sessionPicker" class="session-picker">' + options + '</select></label></div>' +
         '</div>' +
         '<div class="live-metrics">' +
-          liveMetric('Total tokens', formatCompact(session.tokenTotal || 0)) +
-          liveMetric('Estimated cost', (session.estimatedCostUsed ? '≈ ' : '') + formatCost(session.costUsd || 0)) +
-          liveMetric('Messages', formatNumber(session.messageCount || 0)) +
-          liveMetric('Session span', formatDuration(session.firstTimestamp, session.lastTimestamp)) +
+          liveMetric('Total tokens', formatCompact(tokens), formatNumber(tokens) + ' exact', 'featured') +
+          liveMetric('Estimated cost', (session.estimatedCostUsed ? '≈ ' : '') + formatCost(cost), messages > 0 ? formatCost(cost / messages) + ' per message' : 'No priced messages yet') +
+          liveMetric('Messages', formatNumber(messages), messages > 0 ? formatCompact(tokens / messages) + ' tokens on average' : 'Waiting for the first reply') +
+          liveMetric('Session span', formatDuration(session.firstTimestamp, session.lastTimestamp), 'Started ' + formatDay(session.firstTimestamp)) +
         '</div>' +
       '</article>' +
       '<div class="live-grid">' +
-        '<article class="panel live-timeline-panel"><div class="panel-header"><div><p class="panel-kicker">MESSAGE TIMELINE</p><h3>Token burn and tool activity</h3></div><span class="panel-total">' + escapeHtml(formatNumber(session.messageCount || 0)) + ' messages</span></div>' +
+        '<article class="panel live-timeline-panel"><div class="panel-header"><div><p class="panel-kicker">MESSAGE TIMELINE</p><h3>Token burn and tool activity</h3></div>' +
+          '<div class="chart-legend live-legend" aria-hidden="true"><span><i class="legend-bar"></i>Per message</span><span><i class="legend-line"></i>Cumulative</span><span><i class="legend-tool"></i>Tool call</span></div></div>' +
         '<div class="session-chart">' + renderSessionTimeline(session.timeline) + '</div></article>' +
-        '<article class="panel session-detail-panel"><div class="panel-header"><div><p class="panel-kicker">SESSION DETAILS</p><h3>Current context</h3></div></div>' +
+        '<div class="live-side">' +
+          '<article class="panel context-panel"><div class="panel-header"><div><p class="panel-kicker">CONTEXT WINDOW</p><h3>Latest prompt size</h3></div></div>' +
+          (gauge || '<div class="empty-state compact">Context use appears once this session has message-level usage.</div>') + '</article>' +
+          '<article class="velocity-card"><div class="velocity-head"><span>Workspace velocity · last ' + escapeHtml(velocity.windowMinutes || 15) + ' min</span><i aria-hidden="true"></i></div>' +
+          '<strong><b>' + escapeHtml(formatCompact(velocity.tokensPerMinute || 0)) + '</b> tokens/min</strong>' +
+          '<small>' + escapeHtml(formatCost(velocity.costPerHour || 0)) + '/hour if this short-term pace continues</small></article>' +
+        '</div>' +
+      '</div>' +
+      '<article class="panel session-detail-panel"><div class="panel-header"><div><p class="panel-kicker">SESSION DETAILS</p><h3>Current context</h3></div><span class="panel-total">' + escapeHtml(formatNumber(messages)) + ' messages</span></div>' +
         '<dl class="session-detail-list">' +
           detailRow('Session ID', '<code>' + escapeHtml(session.sessionId) + '</code>') +
           detailRow('Project', '<code>' + escapeHtml(session.project || 'unknown') + '</code>') +
           detailRow('Branch', '<code>' + escapeHtml(session.gitBranch || '(no branch)') + '</code>') +
           detailRow('Model' + (models.length > 1 ? 's' : ''), escapeHtml(models.join(', ') || 'Unknown')) +
           detailRow('Claude Code version', escapeHtml(session.version || 'Not recorded')) +
-          detailRow('Pricing quality', session.estimatedCostUsed ? 'Fallback estimate used' : 'Recognized local pricing rows') +
+          detailRow('Pricing quality', session.estimatedCostUsed ? '<span class="detail-flag warn">Fallback estimate used</span>' : '<span class="detail-flag good">Recognized local pricing rows</span>') +
           detailRow('Subagents', subagentSummary(session)) +
         '</dl>' +
-        renderContextGauge(session) +
-        '<div class="velocity-card"><span>Workspace velocity · last ' + (velocity.windowMinutes || 15) + ' min</span><strong>' + escapeHtml(formatCompact(velocity.tokensPerMinute || 0)) + ' tokens/min</strong><small>' + escapeHtml(formatCost(velocity.costPerHour || 0)) + '/hour if this short-term pace continues</small></div>' +
-        '</article>' +
-      '</div>';
+      '</article>';
+
+    // Redraw the timeline at the panel's real width so axis text stays at
+    // its intended pixel size instead of shrinking with the viewBox.
+    var chartHost = document.querySelector('#liveSessionContent .session-chart');
+    if (chartHost && chartHost.clientWidth > 0) {
+      var chartNote = chartHost.querySelector('.chart-summary');
+      var chartHeight = chartHost.clientHeight - (chartNote ? chartNote.offsetHeight + 14 : 0);
+      chartHost.innerHTML = renderSessionTimeline(session.timeline, chartHost.clientWidth, chartHeight);
+    }
 
     byId('sessionPicker').addEventListener('change', function (event) {
       state.selectedSessionId = event.target.value;
@@ -1426,61 +1462,97 @@
       formatCompact(session.subagentTokenTotal || 0) + ' tokens · ' + formatCost(session.subagentCostUsd || 0) + ' on top of this session');
   }
 
-  function liveMetric(label, value) {
-    return '<div class="live-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></div>';
+  function liveMetric(label, value, note, modifier) {
+    return '<div class="live-metric' + (modifier ? ' ' + modifier : '') + '"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong>' +
+      (note ? '<small>' + escapeHtml(note) + '</small>' : '') + '</div>';
   }
 
   function detailRow(label, htmlValue) {
     return '<div><dt>' + escapeHtml(label) + '</dt><dd>' + htmlValue + '</dd></div>';
   }
 
-  function renderSessionTimeline(timeline) {
+  function renderSessionTimeline(timeline, measuredWidth, measuredHeight) {
     var usage = timeline && Array.isArray(timeline.usage) ? timeline.usage : [];
     var tools = timeline && Array.isArray(timeline.tools) ? timeline.tools : [];
     if (usage.length === 0) return '<div class="empty-state compact">No message-level timeline is available for this session.</div>';
 
-    var width = 720;
-    var height = 250;
-    var padX = 18;
-    var padTop = 15;
-    var padBottom = 29;
-    var plotW = width - padX * 2;
-    var plotH = height - padTop - padBottom;
+    // The viewBox matches the rendered width, so 1 unit = 1 CSS pixel and
+    // axis labels keep their real 11-12px size at every breakpoint.
+    var width = Math.round(Math.min(1600, Math.max(300, measuredWidth || 720)));
+    var height = Math.round(Math.min(520, Math.max(276, measuredHeight || 276)));
+    var padL = 50;
+    var padR = 54;
+    var padTop = 14;
+    var plotBottom = height - 62;
+    var plotW = width - padL - padR;
+    var plotH = plotBottom - padTop;
+    var laneY = plotBottom + 14;
+    var laneH = 16;
     var maxPoint = Math.max.apply(null, usage.map(function (p) { return p.tokenTotal || 0; })) || 1;
     var cumulative = [];
     var running = 0;
     usage.forEach(function (point) { running += point.tokenTotal || 0;cumulative.push(running); });
     var maxCumulative = running || 1;
     var slot = plotW / usage.length;
-    var barWidth = Math.max(1, Math.min(8, slot * .66));
+    var barWidth = Math.max(1.5, Math.min(18, slot * .62));
+    var barRadius = Math.min(4, barWidth / 2);
     var bars = '';
     var points = [];
+    var xs = [];
 
     usage.forEach(function (point, index) {
-      var x = padX + slot * index + slot / 2;
-      var barH = ((point.tokenTotal || 0) / maxPoint) * plotH;
-      var y = padTop + plotH - barH;
-      bars += '<rect class="session-bar" x="' + (x - barWidth / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(1, barH).toFixed(1) + '" rx="2"><title>' + escapeHtml(formatTime(point.timestamp) + ' · ' + formatNumber(point.tokenTotal || 0) + ' tokens · ' + formatCost(point.costUsd || 0)) + '</title></rect>';
-      var lineY = padTop + plotH - (cumulative[index] / maxCumulative) * plotH;
+      var x = padL + slot * index + slot / 2;
+      var barH = Math.max(2, ((point.tokenTotal || 0) / maxPoint) * plotH);
+      var y = plotBottom - barH;
+      bars += '<rect class="session-bar' + (index === usage.length - 1 ? ' latest' : '') + '" x="' + (x - barWidth / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + barH.toFixed(1) + '" rx="' + barRadius.toFixed(1) + '"><title>' + escapeHtml(formatTime(point.timestamp) + ' · ' + formatNumber(point.tokenTotal || 0) + ' tokens · ' + formatCost(point.costUsd || 0)) + '</title></rect>';
+      var lineY = plotBottom - (cumulative[index] / maxCumulative) * plotH;
+      xs.push(x);
       points.push(x.toFixed(1) + ',' + lineY.toFixed(1));
     });
+
+    var grid = [0, .25, .5, .75, 1].map(function (fraction) {
+      var y = (plotBottom - fraction * plotH).toFixed(1);
+      return '<line class="chart-grid-line' + (fraction === 0 ? ' base' : ' dashed') + '" x1="' + padL + '" y1="' + y + '" x2="' + (width - padR) + '" y2="' + y + '"></line>' +
+        '<text class="chart-label" text-anchor="end" x="' + (padL - 10) + '" y="' + (Number(y) + 4) + '">' + escapeHtml(formatCompact(maxPoint * fraction)) + '</text>' +
+        '<text class="chart-label cumulative" x="' + (width - padR + 10) + '" y="' + (Number(y) + 4) + '">' + escapeHtml(formatCompact(maxCumulative * fraction)) + '</text>';
+    }).join('');
+
+    var lastX = xs[xs.length - 1];
+    var lastY = plotBottom - plotH;
+    var area = 'M' + xs[0].toFixed(1) + ',' + plotBottom + ' L' + points.join(' L') + ' L' + lastX.toFixed(1) + ',' + plotBottom + ' Z';
 
     var firstTs = timestampOf(usage[0].timestamp);
     var lastTs = timestampOf(usage[usage.length - 1].timestamp);
     var span = Math.max(1, lastTs - firstTs);
     var ticks = tools.map(function (tool) {
       var ratio = Number.isFinite(timestampOf(tool.timestamp)) ? (timestampOf(tool.timestamp) - firstTs) / span : 0;
-      var x = padX + Math.min(1, Math.max(0, ratio)) * plotW;
-      return '<line class="tool-tick" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + (height - padBottom + 3) + '" y2="' + (height - 8) + '"><title>' + escapeHtml((tool.name || 'tool') + ' · ' + formatTime(tool.timestamp)) + '</title></line>';
+      var x = padL + Math.min(1, Math.max(0, ratio)) * plotW;
+      return '<rect class="tool-tick" x="' + (x - 1.5).toFixed(1) + '" y="' + (laneY + 3) + '" width="3" height="' + (laneH - 6) + '" rx="1.5"><title>' + escapeHtml((tool.name || 'tool') + ' · ' + formatTime(tool.timestamp)) + '</title></rect>';
     }).join('');
 
+    var timeY = height - 10;
+    var mid = Math.floor(usage.length / 2);
+    var midLabel = usage.length > 2 && plotW > 360
+      ? '<text class="chart-label" text-anchor="middle" x="' + xs[mid].toFixed(1) + '" y="' + timeY + '">' + escapeHtml(formatTime(usage[mid].timestamp)) + '</text>'
+      : '';
+
     var summary = usage.length + ' messages shown, ' + formatNumber(running) + ' cumulative tokens, and ' + tools.length + ' tool event' + (tools.length === 1 ? '' : 's') + '.';
-    return '<p class="chart-summary">' + escapeHtml(summary) + '</p><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Per-message tokens with cumulative burn and tool markers">' +
-      '<line class="chart-grid-line" x1="' + padX + '" y1="' + (padTop + plotH) + '" x2="' + (width - padX) + '" y2="' + (padTop + plotH) + '"></line>' +
-      '<line class="chart-grid-line" x1="' + padX + '" y1="' + (padTop + plotH / 2) + '" x2="' + (width - padX) + '" y2="' + (padTop + plotH / 2) + '"></line>' +
-      bars + '<polyline class="session-line" points="' + points.join(' ') + '"></polyline>' + ticks +
-      '<text class="chart-label" x="' + padX + '" y="' + (height - 7) + '">' + escapeHtml(formatTime(usage[0].timestamp)) + '</text>' +
-      '<text class="chart-label" text-anchor="end" x="' + (width - padX) + '" y="' + (height - 7) + '">' + escapeHtml(formatTime(usage[usage.length - 1].timestamp)) + '</text>' +
+    return '<p class="chart-summary">' + escapeHtml(summary) + '</p><svg class="session-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Per-message tokens with cumulative burn and tool markers">' +
+      '<defs>' +
+        '<linearGradient id="liveBarGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="tl-stop-bar-a"></stop><stop offset="1" class="tl-stop-bar-b"></stop></linearGradient>' +
+        '<linearGradient id="liveAreaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="tl-stop-area"></stop><stop offset="1" class="tl-stop-area-end"></stop></linearGradient>' +
+      '</defs>' +
+      grid + bars +
+      '<path class="session-area" d="' + area + '"></path>' +
+      '<polyline class="session-line" points="' + points.join(' ') + '"></polyline>' +
+      '<circle class="session-dot-halo" cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="8"></circle>' +
+      '<circle class="session-dot" cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="4"></circle>' +
+      '<rect class="tool-lane" x="' + padL + '" y="' + laneY + '" width="' + plotW.toFixed(1) + '" height="' + laneH + '" rx="' + (laneH / 2) + '"></rect>' +
+      '<text class="chart-label" text-anchor="end" x="' + (padL - 10) + '" y="' + (laneY + laneH - 4) + '">Tools</text>' +
+      (tools.length ? ticks : '<text class="chart-label lane-empty" x="' + (padL + 12) + '" y="' + (laneY + laneH - 4) + '">No tool calls recorded for this session</text>') +
+      '<text class="chart-label" x="' + padL + '" y="' + timeY + '">' + escapeHtml(formatTime(usage[0].timestamp)) + '</text>' +
+      midLabel +
+      '<text class="chart-label" text-anchor="end" x="' + (width - padR) + '" y="' + timeY + '">' + escapeHtml(formatTime(usage[usage.length - 1].timestamp)) + '</text>' +
     '</svg>';
   }
 
@@ -1513,15 +1585,21 @@
       var rows = projects.map(function (project) {
         var expanded = state.expandedProject === project.project;
         var share = allProjectCost > 0 ? (project.costUsd || 0) / allProjectCost : 0;
-        var sessions = expanded ? '<div class="project-session-details">' + project.sessions.slice(0, 8).map(function (session) {
-          return '<div class="project-session-row"><code>' + escapeHtml(String(session.sessionId || '').slice(0, 12)) + '</code><span>' + escapeHtml(formatCompact(session.tokenTotal || 0)) + ' tokens</span><strong>' + escapeHtml(formatCost(session.costUsd || 0)) + estimateBadge(session.estimatedCostUsed) + '</strong></div>';
+        var shownSessions = expanded ? project.sessions.slice(0, 8) : [];
+        var topSessionCost = shownSessions.reduce(function (max, session) { return Math.max(max, finiteOr0(session.costUsd)); }, 0) || 1;
+        var sessions = expanded ? '<div class="project-session-details">' +
+          '<div class="project-session-head"><span>Sessions in this project</span><span>' + escapeHtml(project.sessions.length > shownSessions.length ? 'Showing ' + shownSessions.length + ' of ' + project.sessions.length : project.sessions.length + ' total') + '</span></div>' +
+          shownSessions.map(function (session) {
+          return '<div class="project-session-row"><span class="ps-id"><code title="' + escapeHtmlAttr(session.sessionId || '') + '">' + escapeHtml(String(session.sessionId || '').slice(0, 12)) + '</code><small>' + escapeHtml(formatNumber(session.messageCount || 0) + ' messages · ' + formatRelative(session.lastTimestamp, (projectSummary || state.summary).generatedAt)) + '</small></span>' +
+            '<span class="ps-bar" aria-hidden="true"><span style="width:' + ((finiteOr0(session.costUsd) / topSessionCost) * 100).toFixed(1) + '%"></span></span>' +
+            '<span>' + escapeHtml(formatCompact(session.tokenTotal || 0)) + ' tokens</span><strong>' + escapeHtml(formatCost(session.costUsd || 0)) + estimateBadge(session.estimatedCostUsed) + '</strong></div>';
         }).join('') + '</div>' : '';
-        return '<button type="button" class="project-table-row" data-project-row="' + escapeHtmlAttr(project.project) + '" aria-expanded="' + expanded + '">' +
-          '<span class="project-name-cell"><i class="project-avatar">' + escapeHtml(projectInitial(project.project)) + '</i><span><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + escapeHtml(project.project) + '</span></span></span>' +
+        return '<button type="button" class="project-table-row' + (expanded ? ' expanded' : '') + '" data-project-row="' + escapeHtmlAttr(project.project) + '" aria-expanded="' + expanded + '">' +
+          '<span class="project-name-cell"><i class="project-avatar tone-' + projectTone(project.project) + '">' + escapeHtml(projectInitial(project.project)) + '</i><span><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + escapeHtml(project.project) + '</span></span></span>' +
           '<span class="table-number">' + project.sessions.length + '</span>' +
           '<span class="table-number">' + escapeHtml(formatCompact(project.tokenTotal || 0)) + '</span>' +
           '<span class="table-number strong">' + escapeHtml(formatCost(project.costUsd || 0)) + estimateBadge(project.estimatedCostUsed) + '</span>' +
-          '<span class="share-cell"><span class="share-bar"><span style="width:' + (share * 100).toFixed(2) + '%"></span></span><span class="table-number">' + escapeHtml(formatPercent(share)) + '</span></span>' +
+          '<span class="share-cell"><span class="share-bar"><span style="width:' + (share * 100).toFixed(2) + '%"></span></span><span class="table-number">' + escapeHtml(formatPercent(share)) + '</span><i class="row-chevron" aria-hidden="true"></i></span>' +
         '</button>' + sessions;
       }).join('');
       table.innerHTML = '<div class="table-head"><span>Project</span><span>Sessions</span><span>Tokens</span><span>Est. cost</span><span>Cost share</span></div>' + rows;
@@ -1569,13 +1647,20 @@
 
     var actual = scope.actualCostUsd;
     var max = Math.max.apply(null, scope.costs.map(function (cost) { return finiteOr0(cost.costUsd); }).concat([actual])) || 1;
+    var baseline = ((actual / max) * 100).toFixed(1);
     var row = function (cls, title, subtitle, cost, delta) {
       return '<div class="whatif-row ' + cls + '" role="listitem">' +
-        '<div><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
-        '<div class="whatif-bar"><span style="width:' + Math.max(1, (cost / max) * 100).toFixed(1) + '%"></span></div>' +
+        '<div class="whatif-label"><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
+        '<div class="whatif-bar"><span style="width:' + Math.max(1, (cost / max) * 100).toFixed(1) + '%"></span><i class="whatif-marker" style="left:' + baseline + '%" aria-hidden="true"></i></div>' +
         '<span class="whatif-cost">' + escapeHtml(formatCost(cost)) + '</span>' + delta + '</div>';
     };
-    var rows = row('actual', 'Your actual mix', scope.estimated ? 'includes fallback pricing' : 'as recorded', actual,
+    var cheapest = scope.costs.reduce(function (best, cost) {
+      return typeof cost.deltaRatio === 'number' && cost.deltaRatio <= -.005 && (!best || cost.costUsd < best.costUsd) ? cost : best;
+    }, null);
+    var callout = cheapest
+      ? '<p class="whatif-callout good"><span><b>' + escapeHtml(cheapest.label) + '</b> would price these tokens at ' + escapeHtml(formatCost(cheapest.costUsd)) + ', ' + escapeHtml(formatCost(-cheapest.deltaUsd)) + ' less than your actual mix.</span></p>'
+      : '<p class="whatif-callout"><span>Your actual mix is already the lowest same-token price in this comparison.</span></p>';
+    var rows = callout + row('actual', 'Your actual mix', scope.estimated ? 'includes fallback pricing' : 'as recorded', actual,
       '<span class="whatif-delta same">baseline</span>');
     scope.costs.forEach(function (cost) {
       var ratio = typeof cost.deltaRatio === 'number' ? cost.deltaRatio : 0;
@@ -1595,8 +1680,16 @@
       target.innerHTML = '<div class="empty-state compact">No branch usage matches the selected scope.</div>';
       return;
     }
+    var branchCost = branches.reduce(function (sum, branch) { return sum + finiteOr0(branch.costUsd); }, 0);
     target.innerHTML = branches.slice(0, 9).map(function (branch) {
-      return '<div class="branch-card"><code title="' + escapeHtmlAttr(branch.branch) + '">' + escapeHtml(branch.branch) + '</code><div><span>' + branch.sessions.length + ' session' + (branch.sessions.length === 1 ? '' : 's') + '</span><strong>' + escapeHtml(formatCost(branch.costUsd || 0)) + '</strong></div><div><span>' + escapeHtml(formatCompact(branch.tokenTotal || 0)) + ' tokens</span><span>exact message split</span></div></div>';
+      var share = branchCost > 0 ? finiteOr0(branch.costUsd) / branchCost : 0;
+      return '<div class="branch-card">' +
+        '<div class="branch-card-head"><span class="branch-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.6" /><circle cx="4.5" cy="12.5" r="1.6" /><circle cx="11.5" cy="5.5" r="1.6" /><path d="M4.5 5.1v5.8M11.5 7.1c0 2.4-2.2 2.8-5.6 4" /></svg></span>' +
+        '<code title="' + escapeHtmlAttr(branch.branch) + '">' + escapeHtml(branch.branch) + '</code><span class="branch-share">' + escapeHtml(formatPercent(share)) + '</span></div>' +
+        '<strong class="branch-cost">' + escapeHtml(formatCost(branch.costUsd || 0)) + '</strong>' +
+        '<span class="share-bar branch-bar" aria-hidden="true"><span style="width:' + (share * 100).toFixed(2) + '%"></span></span>' +
+        '<p class="branch-meta"><span>' + branch.sessions.length + ' session' + (branch.sessions.length === 1 ? '' : 's') + '</span><span>' + escapeHtml(formatCompact(branch.tokenTotal || 0)) + ' tokens</span><span>exact message split</span></p>' +
+      '</div>';
     }).join('');
   }
 
@@ -1629,21 +1722,31 @@
       return;
     }
 
+    var icons = {
+      snooze: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8.5" r="5.5" /><path d="M8 5.8v2.9l1.9 1.2M5.2 1.8 2.8 3.6M10.8 1.8l2.4 1.8" /></svg>',
+      dismiss: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg>',
+      restore: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.6-3.7" /><path d="M2.8 2.2v2.6h2.6" /></svg>'
+    };
     list.innerHTML = filtered.map(function (tip) {
       var kind = tipKind(tip);
       var saving = savingText(tip);
       var id = escapeHtmlAttr(tip.id || '');
+      var warn = tip.severity === 'warn';
+      var hiddenStatus = showingHidden && tip.userState && tip.userState.status === 'snoozed' ? 'snoozed' : 'dismissed';
       var actions = showingHidden
-        ? '<span class="insight-hidden-note">' + escapeHtml(hiddenStateText(tip.userState)) + '</span>' +
-          '<button class="insight-action" type="button" data-insight-action="restore" data-insight-id="' + id + '">Restore</button>'
-        : '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="1" data-insight-id="' + id + '">Snooze 1 day</button>' +
-          '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="7" data-insight-id="' + id + '">Snooze 7 days</button>' +
-          '<button class="insight-action" type="button" data-insight-action="dismiss" data-insight-id="' + id + '">Dismiss</button>';
-      return '<article class="insight-card ' + (tip.severity === 'warn' ? 'warn' : '') + (showingHidden ? ' muted' : '') + '">' +
-        '<span class="insight-icon ' + (tip.severity === 'warn' ? 'warn' : '') + '">' + escapeHtml(kind.icon) + '</span>' +
-        '<div class="insight-copy"><h3>' + escapeHtml(kind.label) + '</h3><p>' + escapeHtml(tip.message || '') + '</p><div class="insight-meta"><span class="severity-badge ' + (tip.severity === 'warn' ? '' : 'info') + '">' + escapeHtml(tip.severity === 'warn' ? 'Attention' : 'Optimize') + '</span><span>Session ' + escapeHtml(String(tip.sessionId || '').slice(0, 12)) + '</span></div>' +
+        ? '<button class="insight-action restore" type="button" data-insight-action="restore" data-insight-id="' + id + '">' + icons.restore + 'Restore</button>'
+        : '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="1" data-insight-id="' + id + '">' + icons.snooze + 'Snooze 1 day</button>' +
+          '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="7" data-insight-id="' + id + '">' + icons.snooze + 'Snooze 7 days</button>' +
+          '<button class="insight-action subtle" type="button" data-insight-action="dismiss" data-insight-id="' + id + '">' + icons.dismiss + 'Dismiss</button>';
+      var stateChip = showingHidden ? '<span class="insight-hidden-note ' + hiddenStatus + '">' + escapeHtml(hiddenStateText(tip.userState) || 'Hidden') + '</span>' : '';
+      return '<article class="insight-card ' + (warn ? 'warn' : 'info') + (showingHidden ? ' muted' : '') + '">' +
+        '<span class="insight-icon ' + (warn ? 'warn' : '') + '" aria-hidden="true">' + insightIcon(tip, kind) + '</span>' +
+        '<div class="insight-copy"><div class="insight-title-row"><h3>' + escapeHtml(kind.label) + '</h3>' + stateChip + '</div><p>' + escapeHtml(tip.message || '') + '</p><div class="insight-meta"><span class="severity-badge ' + (warn ? '' : 'info') + '">' + escapeHtml(warn ? 'Attention' : 'Optimize') + '</span><span>Session ' + escapeHtml(String(tip.sessionId || '').slice(0, 12)) + '</span></div>' +
         '<div class="insight-actions" role="group" aria-label="' + escapeHtmlAttr('Manage ' + kind.label) + '">' + actions + '</div></div>' +
-        '<div class="insight-side">' + (saving ? '<strong>' + escapeHtml(saving) + '</strong><span>estimated opportunity</span>' : '<strong>Actionable</strong><span>impact not quantified</span>') + '<button class="session-button" type="button" data-view-session="' + escapeHtmlAttr(tip.sessionId || '') + '">View session</button></div>' +
+        '<div class="insight-side">' + (saving
+          ? '<strong class="savings-pill"><b>' + escapeHtml(saving.replace(/ potential$/, '')) + '</b> potential</strong><span>estimated opportunity</span>'
+          : '<strong class="savings-pill neutral">Actionable</strong><span>impact not quantified</span>') +
+        '<button class="session-button" type="button" data-view-session="' + escapeHtmlAttr(tip.sessionId || '') + '">View session<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M8.5 4l4 4-4 4" /></svg></button></div>' +
       '</article>';
     }).join('');
 
@@ -1658,6 +1761,21 @@
         updateInsight(button);
       });
     });
+  }
+
+  // Line icons for the Insights cards; unknown kinds keep their glyph.
+  var INSIGHT_ICON_PATHS = {
+    repeatedReads: '<path d="M16.5 7.5A6.5 6.5 0 0 0 4.6 6M3.5 12.5a6.5 6.5 0 0 0 11.9 1.5" /><path d="M4 2.8V6.2h3.4M16 17.2v-3.4h-3.4" />',
+    cacheRatio: '<ellipse cx="10" cy="5" rx="6" ry="2.5" /><path d="M4 5v5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5M4 10v5c0 1.4 2.7 2.5 6 2.5 1.1 0 2.1-.1 3-.4" />',
+    longSessionNoCompact: '<path d="M3 7V3h4M17 7V3h-4M3 13v4h4M17 13v4h-4" /><path d="M7.5 10h5" />',
+    outlierSessionTotal: '<path d="M3 15.5 8 10l3 3 6-7" /><path d="M13 6h4v4" />',
+    largeToolResultSpike: '<rect x="3" y="4" width="14" height="12" rx="2" /><path d="m6.5 8.5 2 1.8-2 1.8M10.5 12.5h3" />'
+  };
+
+  function insightIcon(tip, kind) {
+    var id = String(tip && tip.id || '');
+    var key = Object.keys(INSIGHT_ICON_PATHS).find(function (prefix) { return id.indexOf(prefix) === 0; });
+    return key ? '<svg viewBox="0 0 20 20">' + INSIGHT_ICON_PATHS[key] + '</svg>' : escapeHtml(kind.icon);
   }
 
   function hiddenStateText(userState) {
@@ -1928,9 +2046,18 @@
     return parts.length ? parts[parts.length - 1] : '';
   }
 
+  function projectTone(project) {
+    var text = String(project || '');
+    var hash = 0;
+    for (var i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+    return hash % 5;
+  }
+
   function projectInitial(project) {
-    var name = shortProjectName(project).replace(/^\//, '');
-    return name ? name.charAt(0).toUpperCase() : '?';
+    // Up to two initials from the folder name: "synthetic-alpha" -> "SA".
+    var words = lastPathSegment(project).split(/[-_.\s]+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    return (words[0].charAt(0) + (words.length > 1 ? words[words.length - 1].charAt(0) : words[0].charAt(1) || '')).toUpperCase();
   }
 
   function shortProjectName(project) {
@@ -1993,8 +2120,19 @@
     var minutes = Math.max(1, Math.round((end - start) / 60_000));
     if (minutes < 60) return minutes + 'm';
     var hours = Math.floor(minutes / 60);
+    if (hours >= 48) {
+      var days = Math.floor(hours / 24);
+      return days + 'd' + (hours % 24 ? ' ' + (hours % 24) + 'h' : '');
+    }
     var remaining = minutes % 60;
     return hours + 'h' + (remaining ? ' ' + remaining + 'm' : '');
+  }
+
+  function formatDay(timestamp) {
+    var date = new Date(timestamp);
+    return Number.isNaN(date.getTime())
+      ? 'at an unknown time'
+      : date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + formatTime(timestamp);
   }
 
   function finiteOr0(value) {
