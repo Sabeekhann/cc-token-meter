@@ -5,6 +5,65 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-09
+
+Feature release that corrects token accounting, counts subagents, and adds
+in-flow, plan-aware, and coaching features while staying local-only.
+
+### Fixed
+
+- **Token and cost totals were overcounted.** Current Claude Code versions
+  write one API response as several transcript lines (one per content block),
+  each repeating the response's full usage. Every line was counted, inflating
+  tokens and estimated cost (2.36× on one real session). Usage is now counted
+  once per response (`message.id` + `requestId`), including across incremental
+  reads.
+- **Subagent usage was missing.** Subagent transcripts in
+  `<session>/subagents/agent-*.jsonl` were never read. They are now counted in
+  every total and attributed to the session that started them.
+- Local indexes from earlier versions are rebuilt once from transcripts so the
+  corrected accounting applies to all history.
+
+### Added
+
+- Subagent attribution: usage by agent type, per-session subagent runs in Live
+  session details, and session cost caps that include subagents.
+- Tool attribution: calls and result size per tool, grouped by MCP server,
+  kept per local day so date filters stay exact.
+- `--summary` and `--json` include the attribution.
+- Dashboard refresh: dark theme (follows the system or a manual toggle), a
+  Ctrl/⌘+K command palette with `g`-key view shortcuts, metric sparklines, an
+  hour-of-week activity heatmap, a live context-window gauge, and "≈ est."
+  badges on rows priced with the fallback rate.
+- `--statusline` prints one line for Claude Code's `statusLine` command
+  (session and today's tokens and cost, cache reuse, budget share, and the
+  5-hour window in plan mode). `--statusline-config` prints setup steps; the
+  meter never edits Claude Code settings.
+- Pro/Max plan mode (`--set-plan`): estimated 5-hour windows with time to
+  reset and projected usage, recent windows, a rolling 7-day total, and
+  API-equivalent value against the plan price. Limits are user-set
+  (`--set-block-token-limit`, `--set-weekly-token-limit`) or compared with
+  your own largest recent window; no subscription limits are guessed.
+- What-if pricing: the same tokens repriced on other Claude models, overall
+  and per project, in Projects, `--summary`, and `--json`.
+- Budget and plan alerts on Overview, with opt-in desktop notifications from
+  the open dashboard tab (once per alert and level per day).
+- Insights can be snoozed (1 day or 1 week), dismissed, and restored. State
+  is stored in `config.json` under a one-way hash of the insight id.
+- Monthly budgets (`--set-monthly-budget-usd`, `--set-monthly-budget-tokens`)
+  with month-to-date progress, a month-end projection, on-pace alerts, and a
+  `--summary` Month line.
+- Weekly efficiency score (0–100 from cache reuse, open recommendations, and
+  long-session compaction) on Overview, and a weekly Markdown report
+  (`--report <path|->`, `GET /api/report`) with project names pseudonymized
+  unless `--show-names` is passed.
+
+### Changed
+
+- Local indexes now record an accounting revision. Indexes written by earlier
+  versions are rebuilt once from transcripts on first start, so expect
+  lower (corrected) totals and a one-time full scan.
+
 ## [1.2.0] — 2026-08-28
 
 Feature release adding exact, local-only usage exploration by model and date,

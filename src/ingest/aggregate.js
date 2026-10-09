@@ -256,6 +256,40 @@ export function aggregateByDay(sessions) {
   return Array.from(byDay.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+/**
+ * Bucket detailed usage records into a local weekday × hour-of-day grid for
+ * the dashboard activity heatmap. Only per-message usageRecords carry a
+ * timestamp precise enough for this; compacted dailyRollups are skipped, so
+ * the grid describes each session's bounded recent detail window rather
+ * than all-time history.
+ *
+ * Weekday indexes follow Date#getDay() (0 = Sunday) in the host machine's
+ * local timezone, matching localDateKey().
+ *
+ * @param {Array<object>} sessions
+ * @returns {{tokens: number[][], messages: number[][], recordCount: number}}
+ */
+export function aggregateByHourOfWeek(sessions) {
+  const tokens = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  const messages = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  let recordCount = 0;
+
+  for (const s of sessions) {
+    const records = Array.isArray(s.usageRecords) ? s.usageRecords : [];
+    for (const record of records) {
+      const d = new Date(record.timestamp);
+      if (!record.timestamp || !Number.isFinite(d.getTime())) continue;
+      const day = d.getDay();
+      const hour = d.getHours();
+      tokens[day][hour] += tokenTotal(record);
+      messages[day][hour] += 1;
+      recordCount += 1;
+    }
+  }
+
+  return { tokens, messages, recordCount };
+}
+
 function addUnitToDay(bucket, record, session) {
   bucket.inputTokens += record.inputTokens || 0;
   bucket.outputTokens += record.outputTokens || 0;
@@ -325,6 +359,42 @@ export function getTodayTotal(sessions) {
  *   projectedCostUsd: number,
  * }}
  */
+/**
+ * Month-to-date totals for the local calendar month containing `now`, plus a
+ * simple run-rate projection to month end: usage so far divided by the
+ * elapsed share of the month (at least one day, so the 1st of the month
+ * doesn't project wildly), times the days in the month.
+ *
+ * @param {Array<{date: string, tokenTotal?: number, costUsd?: number}>} dailyTotals aggregateByDay() output
+ * @param {Date|string|number} [now]
+ */
+export function getMonthToDate(dailyTotals, now = Date.now()) {
+  const current = new Date(now);
+  const todayKey = localDateKey(current.toISOString());
+  const month = todayKey ? todayKey.slice(0, 7) : null;
+  const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
+  const daysInMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
+  const elapsedDays = Math.max(1, (current.getTime() - monthStart.getTime()) / (24 * 60 * 60 * 1000));
+
+  let tokenTotal = 0;
+  let costUsd = 0;
+  for (const day of Array.isArray(dailyTotals) ? dailyTotals : []) {
+    if (!month || !day || typeof day.date !== 'string' || !day.date.startsWith(month) || day.date > todayKey) continue;
+    tokenTotal += day.tokenTotal || 0;
+    costUsd += day.costUsd || 0;
+  }
+
+  return {
+    month,
+    tokenTotal,
+    costUsd,
+    daysInMonth,
+    elapsedDays: Math.min(elapsedDays, daysInMonth),
+    projectedTokens: (tokenTotal / Math.min(elapsedDays, daysInMonth)) * daysInMonth,
+    projectedCostUsd: (costUsd / Math.min(elapsedDays, daysInMonth)) * daysInMonth,
+  };
+}
+
 export function forecastBurnRate(dailyTotals, options = {}) {
   const windowDays = options.windowDays || 7;
   const projectionDays = options.projectionDays || 30;

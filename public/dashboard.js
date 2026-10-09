@@ -9,6 +9,17 @@
     settings: 'Settings'
   };
 
+  var THEME_KEY = 'cc-token-meter.theme';
+  var NOTIFY_KEY = 'cc-token-meter.notify';
+  var NOTIFIED_KEY = 'cc-token-meter.notified';
+  var NOTIFIED_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+  var DEFAULT_CONTEXT_WINDOW = 200000;
+  var EXTENDED_CONTEXT_WINDOW = 1000000;
+  var WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var VIEW_SHORTCUTS = { o: 'overview', l: 'live', p: 'projects', i: 'insights', s: 'settings' };
+
+  applyTheme(readStoredTheme());
+
   var TIP_KINDS = [
     { prefix: 'repeatedReads', icon: '↻', label: 'Repeated file reads' },
     { prefix: 'cacheRatio', icon: '◐', label: 'Cache reuse dropped' },
@@ -34,8 +45,17 @@
     projectRequestId: 0,
     expandedProject: null,
     selectedSessionId: null,
+    whatIfProject: '',
+    whatIfOptionsKey: '',
     settingsHydrated: false,
-    toastTimer: null
+    toastTimer: null,
+    notifyEnabled: false,
+    notified: {},
+    paletteItems: [],
+    paletteIndex: 0,
+    paletteReturnFocus: null,
+    pendingGoKey: false,
+    pendingGoTimer: null
   };
 
   var dom = {
@@ -52,17 +72,243 @@
     projectFilterSummary: byId('projectFilterSummary'),
     clearProjectFilters: byId('clearProjectFilters'),
     budgetForm: byId('budgetForm'),
-    toast: byId('toast')
+    toast: byId('toast'),
+    themeToggle: byId('themeToggle'),
+    paletteTrigger: byId('paletteTrigger'),
+    paletteBackdrop: byId('paletteBackdrop'),
+    paletteInput: byId('paletteInput'),
+    paletteList: byId('paletteList')
   };
 
   hydrateProjectFilterState();
   bindNavigation();
   bindFilters();
   bindSettings();
+  bindTheme();
+  bindNotifications();
+  byId('downloadReport').addEventListener('click', function () { downloadWeeklyReport(false); });
+  byId('downloadReportNames').addEventListener('click', function () { downloadWeeklyReport(true); });
+  bindPalette();
+  bindShortcuts();
   connect();
 
   function byId(id) {
     return document.getElementById(id);
+  }
+
+  function readStoredTheme() {
+    try {
+      var stored = window.localStorage.getItem(THEME_KEY);
+      return stored === 'light' || stored === 'dark' ? stored : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function applyTheme(theme) {
+    if (theme) document.documentElement.setAttribute('data-theme', theme);
+    else document.documentElement.removeAttribute('data-theme');
+  }
+
+  function effectiveTheme() {
+    var explicit = document.documentElement.getAttribute('data-theme');
+    if (explicit === 'light' || explicit === 'dark') return explicit;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function bindTheme() {
+    syncThemeToggle();
+    dom.themeToggle.addEventListener('click', toggleTheme);
+    if (window.matchMedia) {
+      var query = window.matchMedia('(prefers-color-scheme: dark)');
+      if (query.addEventListener) query.addEventListener('change', syncThemeToggle);
+    }
+  }
+
+  function toggleTheme() {
+    var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try {
+      window.localStorage.setItem(THEME_KEY, next);
+    } catch {
+      // Theme still applies for this page view when storage is unavailable.
+    }
+    syncThemeToggle();
+  }
+
+  function syncThemeToggle() {
+    var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    dom.themeToggle.setAttribute('aria-label', 'Switch to ' + next + ' theme');
+    dom.themeToggle.title = 'Switch to ' + next + ' theme';
+    dom.themeToggle.innerHTML = next === 'light'
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" /></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" /></svg>';
+  }
+
+  function bindPalette() {
+    var isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+    var hint = dom.paletteTrigger.querySelector('kbd');
+    if (hint && !isMac) hint.textContent = 'Ctrl K';
+    dom.paletteTrigger.addEventListener('click', openPalette);
+    dom.paletteInput.addEventListener('input', function () {
+      state.paletteIndex = 0;
+      renderPalette();
+    });
+    dom.paletteInput.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        var count = state.paletteItems.length;
+        if (count === 0) return;
+        state.paletteIndex = (state.paletteIndex + (event.key === 'ArrowDown' ? 1 : -1) + count) % count;
+        renderPalette(true);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        runPaletteItem(state.paletteItems[state.paletteIndex]);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closePalette();
+      } else if (event.key === 'Tab') {
+        // The input is the only focusable control inside the modal dialog.
+        event.preventDefault();
+      }
+    });
+    dom.paletteBackdrop.addEventListener('mousedown', function (event) {
+      if (event.target === dom.paletteBackdrop) closePalette();
+    });
+    dom.paletteList.addEventListener('click', function (event) {
+      var item = event.target.closest('[data-palette-index]');
+      if (item) runPaletteItem(state.paletteItems[Number(item.getAttribute('data-palette-index'))]);
+    });
+  }
+
+  function paletteOpen() {
+    return !dom.paletteBackdrop.classList.contains('hidden');
+  }
+
+  function openPalette() {
+    if (paletteOpen()) return;
+    state.paletteReturnFocus = document.activeElement;
+    state.paletteIndex = 0;
+    dom.paletteInput.value = '';
+    dom.paletteBackdrop.classList.remove('hidden');
+    renderPalette();
+    dom.paletteInput.focus();
+  }
+
+  function closePalette() {
+    if (!paletteOpen()) return;
+    dom.paletteBackdrop.classList.add('hidden');
+    var target = state.paletteReturnFocus;
+    state.paletteReturnFocus = null;
+    if (target && typeof target.focus === 'function' && document.contains(target)) target.focus();
+  }
+
+  function paletteCommands() {
+    var commands = Object.keys(VIEW_TITLES).map(function (view) {
+      return { label: 'Go to ' + VIEW_TITLES[view], hint: 'View', run: function () { setView(view, true, true); } };
+    });
+    commands.push({
+      label: 'Switch to ' + (effectiveTheme() === 'dark' ? 'light' : 'dark') + ' theme',
+      hint: 'Appearance',
+      run: toggleTheme
+    });
+    var summary = state.summary || {};
+    (Array.isArray(summary.byProject) ? summary.byProject.slice() : [])
+      .sort(function (a, b) { return finiteOr0(b.costUsd) - finiteOr0(a.costUsd); })
+      .slice(0, 25)
+      .forEach(function (project) {
+        commands.push({
+          label: shortProjectName(project.project),
+          hint: 'Project · ' + formatCost(project.costUsd || 0),
+          search: String(project.project || ''),
+          run: function () {
+            dom.projectSearch.value = lastPathSegment(project.project);
+            state.projectQuery = dom.projectSearch.value.toLowerCase();
+            setView('projects', true, true);
+          }
+        });
+      });
+    (Array.isArray(summary.sessions) ? summary.sessions.slice() : [])
+      .sort(function (a, b) { return timestampOf(b.lastTimestamp) - timestampOf(a.lastTimestamp); })
+      .slice(0, 15)
+      .forEach(function (session) {
+        commands.push({
+          label: shortProjectName(session.project) + ' · ' + String(session.sessionId || '').slice(0, 8),
+          hint: 'Session · ' + formatRelative(session.lastTimestamp, summary.generatedAt),
+          search: String(session.sessionId || '') + ' ' + String(session.gitBranch || ''),
+          run: function () {
+            state.selectedSessionId = session.sessionId;
+            setView('live', true, true);
+          }
+        });
+      });
+    return commands;
+  }
+
+  function renderPalette(keepItems) {
+    if (!keepItems) {
+      var query = dom.paletteInput.value.trim().toLowerCase();
+      state.paletteItems = paletteCommands().filter(function (command) {
+        if (!query) return true;
+        return (command.label + ' ' + command.hint + ' ' + (command.search || '')).toLowerCase().indexOf(query) !== -1;
+      }).slice(0, 30);
+      state.paletteIndex = Math.min(state.paletteIndex, Math.max(0, state.paletteItems.length - 1));
+    }
+    if (state.paletteItems.length === 0) {
+      dom.paletteList.innerHTML = '<li class="palette-empty">No matching views, projects, or sessions.</li>';
+      dom.paletteInput.removeAttribute('aria-activedescendant');
+      return;
+    }
+    dom.paletteList.innerHTML = state.paletteItems.map(function (command, index) {
+      return '<li id="palette-item-' + index + '" class="palette-item" role="option" data-palette-index="' + index + '" aria-selected="' + (index === state.paletteIndex) + '">' +
+        '<span>' + escapeHtml(command.label) + '</span><small>' + escapeHtml(command.hint) + '</small></li>';
+    }).join('');
+    dom.paletteInput.setAttribute('aria-activedescendant', 'palette-item-' + state.paletteIndex);
+    var active = byId('palette-item-' + state.paletteIndex);
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function runPaletteItem(command) {
+    if (!command) return;
+    closePalette();
+    command.run();
+  }
+
+  function isTypingTarget(target) {
+    if (!target || !target.tagName) return false;
+    var tag = target.tagName.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  }
+
+  function bindShortcuts() {
+    document.addEventListener('keydown', function (event) {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && String(event.key).toLowerCase() === 'k') {
+        event.preventDefault();
+        if (paletteOpen()) closePalette();
+        else openPalette();
+        return;
+      }
+      if (paletteOpen() || event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
+
+      if (state.pendingGoKey) {
+        state.pendingGoKey = false;
+        window.clearTimeout(state.pendingGoTimer);
+        var view = VIEW_SHORTCUTS[String(event.key).toLowerCase()];
+        if (view) {
+          event.preventDefault();
+          setView(view, true, true);
+        }
+        return;
+      }
+      if (event.key === 'g') {
+        state.pendingGoKey = true;
+        state.pendingGoTimer = window.setTimeout(function () { state.pendingGoKey = false; }, 1200);
+      } else if (event.key === '/') {
+        event.preventDefault();
+        if (state.view !== 'projects') setView('projects', true, false);
+        dom.projectSearch.focus();
+      }
+    });
   }
 
   function bindNavigation() {
@@ -133,6 +379,10 @@
       state.projectTo = dom.projectTo.value;
       projectFiltersChanged();
     });
+    byId('whatIfProject').addEventListener('change', function (event) {
+      state.whatIfProject = event.target.value;
+      renderProjects();
+    });
     dom.clearProjectFilters.addEventListener('click', function () {
       state.projectRange = 'all';
       state.projectModel = '';
@@ -179,7 +429,13 @@
         dailyTokenCap: inputNumberOrNull('dailyTokenCap'),
         dailyCostCapUsd: inputNumberOrNull('dailyCostCapUsd'),
         sessionCostCapUsd: inputNumberOrNull('sessionCostCapUsd'),
-        warnThresholdPct: inputNumberOrNull('warnThresholdPct') || 80
+        monthlyCostCapUsd: inputNumberOrNull('monthlyCostCapUsd'),
+        monthlyTokenCap: inputNumberOrNull('monthlyTokenCap'),
+        warnThresholdPct: inputNumberOrNull('warnThresholdPct') || 80,
+        plan: byId('planSelect').value,
+        planMonthlyUsd: inputNumberOrNull('planMonthlyUsd'),
+        blockTokenLimit: inputNumberOrNull('blockTokenLimit'),
+        weeklyTokenLimit: inputNumberOrNull('weeklyTokenLimit')
       };
 
       submitButton.disabled = true;
@@ -261,6 +517,8 @@
       scheduleProjectRefresh();
     }
     updateGlobalChrome(summary);
+    renderAlertStrip(summary.alerts);
+    notifyAlerts(summary.alerts);
     renderCurrentView();
   }
 
@@ -332,10 +590,57 @@
 
     byId('allTimeCost').textContent = formatCost(allTime.costUsd || 0) + ' all time';
     renderBurnChart(summary.byDay || []);
+    renderSparkline('tokenSpark', summary.byDay || [], 'tokenTotal');
+    renderSparkline('costSpark', summary.byDay || [], 'costUsd');
+    renderHeatmap(summary.byHourOfWeek);
+    renderPlan(summary.plan);
+    renderEfficiency(summary.efficiency, summary.week);
     renderForecast(summary.forecast || {}, config);
+    renderMonthBudget(summary.month, config);
     renderTokenMix(allTime);
     renderTopProjects(projects);
     renderTopInsights(tips);
+    renderAttribution(summary.attribution);
+  }
+
+  function renderAttribution(attribution) {
+    var subagents = attribution && attribution.subagents;
+    var types = subagents && Array.isArray(subagents.byType) ? subagents.byType : [];
+    byId('subagentShare').textContent = subagents && subagents.runs > 0
+      ? formatPercent(subagents.share) + ' of tokens · ' + subagents.runs + ' run' + (subagents.runs === 1 ? '' : 's')
+      : 'No subagent runs';
+    byId('subagentTypes').innerHTML = types.length === 0
+      ? '<div class="empty-state compact">No subagent usage in this scope. When Claude Code delegates to Task/Explore agents, their tokens and cost appear here.</div>'
+      : types.slice(0, 5).map(function (type, index) {
+        return '<div class="rank-row">' +
+          '<span class="rank-number">' + (index + 1) + '</span>' +
+          '<div class="rank-copy"><strong>' + escapeHtml(type.agentType || 'Unlabelled subagent') + '</strong><span>' + type.runs + ' run' + (type.runs === 1 ? '' : 's') + ' · ' + escapeHtml(formatNumber(type.messageCount)) + ' message' + (type.messageCount === 1 ? '' : 's') + '</span></div>' +
+          '<div class="rank-cost"><strong>' + escapeHtml(formatCost(type.costUsd || 0)) + '</strong><span>' + escapeHtml(formatCompact(type.tokenTotal || 0)) + ' tok</span></div>' +
+        '</div>';
+      }).join('');
+
+    var tools = attribution && Array.isArray(attribution.tools) ? attribution.tools : [];
+    var totals = (attribution && attribution.toolTotals) || {};
+    byId('toolTotals').textContent = totals.calls > 0
+      ? formatNumber(totals.calls) + ' calls · ' + formatNumber(totals.distinctTools) + ' tools'
+      : 'No tool calls';
+    byId('toolAttribution').innerHTML = tools.length === 0
+      ? '<div class="empty-state compact">No tool calls in this scope.</div>'
+      : tools.slice(0, 6).map(function (tool, index) {
+        var label = tool.server ? tool.name.replace(/^mcp__.+?__/, '') : tool.name;
+        return '<div class="rank-row">' +
+          '<span class="rank-number">' + (index + 1) + '</span>' +
+          '<div class="rank-copy"><strong title="' + escapeHtmlAttr(tool.name) + '">' + escapeHtml(label) + (tool.server ? '<span class="tool-badge">MCP · ' + escapeHtml(tool.server) + '</span>' : '') + '</strong><span>' + escapeHtml(formatNumber(tool.calls)) + ' call' + (tool.calls === 1 ? '' : 's') + '</span></div>' +
+          '<div class="rank-cost"><strong>≈' + escapeHtml(formatCompact(tool.estimatedTokens || 0)) + '</strong><span>result tok</span></div>' +
+        '</div>';
+      }).join('');
+
+    var servers = attribution && Array.isArray(attribution.mcpServers) ? attribution.mcpServers : [];
+    byId('mcpServers').textContent = (servers.length
+      ? 'MCP servers: ' + servers.slice(0, 4).map(function (server) {
+        return server.server + ' ≈' + formatCompact(server.estimatedTokens) + ' tok in ' + formatNumber(server.calls) + ' calls';
+      }).join(' · ') + '. '
+      : '') + 'Result tokens are estimated from result size (about ' + ((attribution && attribution.bytesPerTokenEstimate) || 4) + ' bytes per token) and count only what each call returned, not later re-reads from cache.';
   }
 
   function overviewSentence(today, active, velocity, projects, tips) {
@@ -439,6 +744,300 @@
       formatNumber(peak.tokenTotal || 0) + ' tokens on ' + peak.date + '.';
   }
 
+  function renderSparkline(id, byDay, key) {
+    var target = byId(id);
+    var days = (Array.isArray(byDay) ? byDay : []).slice(-14);
+    if (days.length < 2) {
+      target.innerHTML = '';
+      return;
+    }
+    var max = Math.max.apply(null, days.map(function (day) { return finiteOr0(day[key]); })) || 1;
+    var points = days.map(function (day, index) {
+      var x = (index / (days.length - 1)) * 100;
+      var y = 28 - (finiteOr0(day[key]) / max) * 26;
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    });
+    target.innerHTML = '<polyline points="' + points.join(' ') + '"></polyline>';
+  }
+
+  function renderHeatmap(grid) {
+    var target = byId('usageHeatmap');
+    var summaryEl = byId('heatmapSummary');
+    target.classList.remove('loading-block');
+    var tokens = grid && Array.isArray(grid.tokens) ? grid.tokens : [];
+    var messages = grid && Array.isArray(grid.messages) ? grid.messages : [];
+    if (!grid || !grid.recordCount || tokens.length !== 7) {
+      target.innerHTML = '<div class="empty-state compact">Your weekday and hour rhythm appears once detailed message history is recorded.</div>';
+      summaryEl.textContent = 'No detailed message history is available for the activity heatmap yet.';
+      return;
+    }
+
+    // Monday-first rows read more naturally for a working week.
+    var order = [1, 2, 3, 4, 5, 6, 0];
+    var cell = 22;
+    var gap = 3;
+    var left = 36;
+    var top = 4;
+    var width = left + 24 * (cell + gap);
+    var height = top + 7 * (cell + gap) + 18;
+    var max = 0;
+    var peak = { day: 0, hour: 0, tokens: 0 };
+    order.forEach(function (day) {
+      for (var hour = 0; hour < 24; hour++) {
+        var value = finiteOr0(tokens[day] && tokens[day][hour]);
+        if (value > max) max = value;
+        if (value > peak.tokens) peak = { day: day, hour: hour, tokens: value };
+      }
+    });
+
+    var cells = '';
+    order.forEach(function (day, row) {
+      var y = top + row * (cell + gap);
+      cells += '<text class="chart-label" x="0" y="' + (y + cell / 2 + 3) + '">' + WEEKDAYS[day] + '</text>';
+      for (var hour = 0; hour < 24; hour++) {
+        var value = finiteOr0(tokens[day] && tokens[day][hour]);
+        var count = finiteOr0(messages[day] && messages[day][hour]);
+        var intensity = max > 0 && value > 0 ? 0.18 + 0.82 * Math.sqrt(value / max) : 0;
+        var fill = intensity > 0 ? ' style="fill:rgba(239,118,89,' + intensity.toFixed(3) + ')"' : '';
+        cells += '<rect class="heat-cell" x="' + (left + hour * (cell + gap)) + '" y="' + y + '" width="' + cell + '" height="' + cell + '" rx="4"' + fill + '>' +
+          '<title>' + escapeHtml(WEEKDAYS[day] + ' ' + hourLabel(hour) + ' · ' + formatNumber(value) + ' tokens · ' + formatNumber(count) + ' messages') + '</title></rect>';
+      }
+    });
+    var labels = '';
+    for (var tick = 0; tick < 24; tick += 3) {
+      labels += '<text class="chart-label" x="' + (left + tick * (cell + gap)) + '" y="' + (height - 3) + '">' + hourLabel(tick) + '</text>';
+    }
+    target.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Tokens by weekday and hour of day">' + cells + labels + '</svg>';
+    summaryEl.textContent = 'Busiest slot: ' + WEEKDAYS[peak.day] + ' ' + hourLabel(peak.hour) + '–' + hourLabel((peak.hour + 1) % 24) +
+      ' with ' + formatNumber(peak.tokens) + ' tokens. Based on ' + formatNumber(grid.recordCount) +
+      ' recent detailed messages in your local time zone.';
+  }
+
+  function renderEfficiency(efficiency, week) {
+    var target = byId('efficiencyScore');
+    var score = efficiency && typeof efficiency.score === 'number' ? efficiency.score : null;
+    if (score === null) {
+      target.innerHTML = '';
+      byId('efficiencyComponents').innerHTML = '<div class="empty-state compact">The weekly score appears once there is usage in the last 7 days.</div>';
+      byId('efficiencySuggestion').textContent = '';
+    } else {
+      var radius = 50;
+      var circumference = 2 * Math.PI * radius;
+      var level = score >= 80 ? '' : score >= 55 ? 'warn' : 'danger';
+      target.innerHTML = '<svg viewBox="0 0 120 120" role="img" aria-label="' + escapeHtmlAttr('Weekly efficiency score ' + score + ' out of 100') + '">' +
+        '<circle class="gauge-track" cx="60" cy="60" r="' + radius + '"></circle>' +
+        '<circle class="gauge-fill ' + level + '" cx="60" cy="60" r="' + radius + '" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - score / 100)).toFixed(2) + '"></circle>' +
+        '<text class="score-value" x="60" y="66" text-anchor="middle">' + score + '</text>' +
+        '<text class="score-caption" x="60" y="82" text-anchor="middle">OF 100</text>' +
+      '</svg>';
+      byId('efficiencyComponents').innerHTML = (efficiency.components || []).map(function (item) {
+        var ratio = item.max > 0 ? item.points / item.max : 0;
+        return '<div class="efficiency-row"><div><strong>' + escapeHtml(item.label) + '</strong><small>' + escapeHtml(item.detail) + '</small></div>' +
+          '<div class="bar"><span class="' + (ratio >= .8 ? '' : ratio >= .5 ? 'mid' : 'low') + '" style="width:' + (ratio * 100).toFixed(1) + '%"></span></div>' +
+          '<b>' + item.points + '/' + item.max + '</b></div>';
+      }).join('');
+      byId('efficiencySuggestion').textContent = efficiency.suggestion ? 'Biggest opportunity: ' + efficiency.suggestion : 'Nothing to improve this week. Nice work.';
+    }
+
+    if (!week) return;
+    var current = week.current || {};
+    var previous = week.previous || {};
+    var change = previous.costUsd > 0 ? (current.costUsd - previous.costUsd) / previous.costUsd : null;
+    byId('efficiencyWeek').textContent = formatCompact(current.tokenTotal || 0) + ' tokens and ' + formatCost(current.costUsd || 0) + ' this week' +
+      (change === null ? '.' : ', ' + (change >= 0 ? 'up ' : 'down ') + formatPercent(Math.abs(change)) + ' on the previous week.') +
+      ' The score uses cache reuse, open recommendations (dismissed ones included), and /compact use in long sessions.';
+  }
+
+  async function downloadWeeklyReport(withNames) {
+    try {
+      var response = await fetch('/api/report' + (withNames ? '?names=1' : ''), { cache: 'no-store' });
+      if (!response.ok) throw new Error('Report request failed');
+      var blob = await response.blob();
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'cc-token-meter-weekly-' + localDateString(new Date()) + (withNames ? '-with-names' : '') + '.md';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+      showToast(withNames ? 'Weekly report downloaded with project names.' : 'Weekly report downloaded. Project names are pseudonymized for sharing.');
+    } catch (error) {
+      showToast('Could not create the weekly report. Please try again.');
+    }
+  }
+
+  function renderPlan(plan) {
+    var panel = byId('planPanel');
+    var subscribed = plan && plan.plan && plan.plan !== 'api';
+    panel.classList.toggle('hidden', !subscribed);
+    byId('costCardLabel').textContent = subscribed ? 'API-equivalent value today' : 'Estimated cost today';
+    if (!subscribed) return;
+
+    var block = plan.currentBlock;
+    var badge = byId('planWindowBadge');
+    var bar = byId('planWindowBar');
+    var marker = byId('planWindowProjected');
+    byId('planPanelKicker').textContent = (plan.planLabel + ' · ' + plan.blockHours + '-hour window').toUpperCase();
+
+    if (!block) {
+      byId('planWindowTokens').textContent = '0 tok';
+      byId('planWindowReset').textContent = 'No active window. Your next message starts one.';
+      byId('planWindowMeta').textContent = plan.recordBlockTokens
+        ? 'Your largest recent window used ' + formatCompact(plan.recordBlockTokens) + ' tokens.'
+        : 'Window progress appears after your first message.';
+      bar.style.width = '0%';
+      marker.classList.add('hidden');
+      badge.textContent = 'Idle';
+      badge.className = 'soft-badge';
+    } else {
+      var ratio = typeof block.ratio === 'number' ? block.ratio : null;
+      var projected = typeof block.projectedRatio === 'number' ? block.projectedRatio : null;
+      byId('planWindowTokens').textContent = formatCompact(block.tokenTotal) + ' tok';
+      byId('planWindowReset').textContent = 'Resets in ' + formatMinutes(block.remainingMinutes) + ' · at ' + formatTime(block.end);
+      bar.style.width = (ratio == null ? 0 : Math.min(100, ratio * 100)) + '%';
+      bar.style.background = ratio == null ? 'var(--teal)' : ratio >= 1 ? 'var(--red)' : ratio >= .8 ? 'var(--amber)' : 'var(--teal)';
+      marker.classList.toggle('hidden', projected == null);
+      if (projected != null) marker.style.left = 'calc(' + Math.min(100, projected * 100).toFixed(1) + '% - 1px)';
+
+      var referenceCopy = block.referenceKind === 'limit'
+        ? formatPercent(ratio) + ' of your ' + formatCompact(block.reference) + '-token window limit'
+        : block.referenceKind === 'record'
+          ? formatPercent(ratio) + ' of your largest recent window (' + formatCompact(block.reference) + ')'
+          : 'Your first tracked window';
+      byId('planWindowMeta').textContent = referenceCopy + ' · ' + formatCompact(block.tokensPerMinute) +
+        ' tok/min · on pace for ' + formatCompact(block.projectedTokens) + ' by reset.';
+      var over = ratio != null && ratio >= 1;
+      var near = projected != null && projected >= 1;
+      badge.textContent = over ? 'Over limit' : near ? 'On pace to exceed' : 'Active';
+      badge.className = 'soft-badge ' + (over || near ? 'warn' : 'good');
+    }
+
+    var recent = Array.isArray(plan.recentBlocks) ? plan.recentBlocks : [];
+    var maxBlock = Math.max.apply(null, recent.map(function (item) { return finiteOr0(item.tokenTotal); }).concat([1]));
+    byId('planRecentBlocks').innerHTML = recent.map(function (item) {
+      var height = Math.max(6, (finiteOr0(item.tokenTotal) / maxBlock) * 100);
+      return '<span class="' + (item.active ? 'active' : '') + '" style="height:' + height.toFixed(1) + '%" title="' +
+        escapeHtmlAttr(formatDateTime(item.start) + ' · ' + formatNumber(item.tokenTotal) + ' tokens · ' + formatCost(item.costUsd)) + '"></span>';
+    }).join('');
+
+    var value = plan.apiValue || {};
+    byId('planValue').textContent = formatCost(value.monthToDateUsd || 0);
+    byId('planValueMeta').textContent = typeof value.multipleOfPlan === 'number'
+      ? (value.multipleOfPlan >= 1 ? trimNumber(value.multipleOfPlan, 1) + '×' : formatPercent(value.multipleOfPlan) + ' of') +
+        ' your ' + formatCost(value.planMonthlyUsd) + '/month ' + plan.planLabel + ' plan, at local API prices.'
+      : 'Set your plan price in Settings to compare.';
+
+    var weekly = plan.weekly || {};
+    byId('planWeekly').textContent = formatCompact(weekly.tokenTotal || 0) + ' tok';
+    byId('planWeeklyMeta').textContent = typeof weekly.ratio === 'number'
+      ? formatPercent(weekly.ratio) + ' of your ' + formatCompact(weekly.limit) + '-token weekly limit.'
+      : formatCost(weekly.costUsd || 0) + ' API-equivalent. Set a weekly limit in Settings to track pace.';
+  }
+
+  function formatMinutes(minutes) {
+    var total = Math.max(0, Math.round(finiteOr0(minutes)));
+    var hours = Math.floor(total / 60);
+    return hours ? hours + 'h ' + (total % 60) + 'm' : total + 'm';
+  }
+
+  function formatDateTime(timestamp) {
+    var date = new Date(timestamp);
+    return Number.isNaN(date.getTime())
+      ? 'Unknown time'
+      : date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function hourLabel(hour) {
+    return String(hour).padStart(2, '0') + ':00';
+  }
+
+  function contextWindowFor(model, observedMax) {
+    // Claude Code marks extended-context sessions with a [1m] model suffix;
+    // a prompt larger than the standard window also proves the larger one.
+    if (/\[1m\]/i.test(String(model || '')) || observedMax > DEFAULT_CONTEXT_WINDOW) return EXTENDED_CONTEXT_WINDOW;
+    return DEFAULT_CONTEXT_WINDOW;
+  }
+
+  function renderContextGauge(session) {
+    var usage = session.timeline && Array.isArray(session.timeline.usage) ? session.timeline.usage : [];
+    if (usage.length === 0) return '';
+    var promptSize = function (point) {
+      return finiteOr0(point.inputTokens) + finiteOr0(point.cacheCreationInputTokens) + finiteOr0(point.cacheReadInputTokens);
+    };
+    var last = usage[usage.length - 1];
+    var current = promptSize(last);
+    var observedMax = usage.reduce(function (max, point) { return Math.max(max, promptSize(point)); }, 0);
+    var windowSize = contextWindowFor(last.model, observedMax);
+    var ratio = Math.min(1, current / windowSize);
+    var radius = 26;
+    var circumference = 2 * Math.PI * radius;
+    var level = ratio >= .8 ? 'danger' : ratio >= .6 ? 'warn' : '';
+    var advice = ratio >= .8
+      ? 'Close to the limit. Run /compact or start a focused session before quality drops.'
+      : ratio >= .6
+        ? 'Context is filling up. Plan a /compact at the next natural break.'
+        : 'Plenty of room in the current context.';
+    return '<div class="context-card"><div class="gauge-row">' +
+      '<svg viewBox="0 0 64 64" role="img" aria-label="' + escapeHtmlAttr(formatPercent(ratio) + ' of the estimated context window used') + '">' +
+        '<circle class="gauge-track" cx="32" cy="32" r="' + radius + '"></circle>' +
+        '<circle class="gauge-fill ' + level + '" cx="32" cy="32" r="' + radius + '" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - ratio)).toFixed(2) + '"></circle>' +
+        '<text class="gauge-text" x="32" y="37" text-anchor="middle">' + escapeHtml(Math.round(ratio * 100) + '%') + '</text>' +
+      '</svg>' +
+      '<div><span>Context window · latest message</span><strong>' + escapeHtml(formatCompact(current) + ' of ' + formatCompact(windowSize)) + '</strong>' +
+      '<small>' + escapeHtml(advice) + ' Window size is estimated from the model and observed prompts.</small></div>' +
+    '</div></div>';
+  }
+
+  function estimateBadge(flag) {
+    return flag === true
+      ? '<abbr class="est-badge" title="Includes a model without a local pricing row, so this cost uses fallback pricing.">≈ est.</abbr>'
+      : '';
+  }
+
+  function renderMonthBudget(month, config) {
+    var bar = byId('monthBar');
+    var marker = byId('monthProjected');
+    if (!month || !month.month) {
+      byId('monthSpend').textContent = '—';
+      byId('monthMeta').textContent = 'Monthly usage appears after the first session this month.';
+      bar.style.width = '0%';
+      marker.classList.add('hidden');
+      return;
+    }
+    var date = new Date(month.month + '-01T12:00:00');
+    byId('monthLabel').textContent = Number.isNaN(date.getTime()) ? 'This month' : date.toLocaleDateString([], { month: 'long' }) + ' so far';
+    var costCap = typeof config.monthlyCostCapUsd === 'number' && config.monthlyCostCapUsd > 0 ? config.monthlyCostCapUsd : null;
+    var tokenCap = !costCap && typeof config.monthlyTokenCap === 'number' && config.monthlyTokenCap > 0 ? config.monthlyTokenCap : null;
+    var used = costCap ? month.costUsd : tokenCap ? month.tokenTotal : null;
+    var projected = costCap ? month.projectedCostUsd : tokenCap ? month.projectedTokens : null;
+    var cap = costCap || tokenCap;
+    var fmt = costCap ? formatCost : formatCompact;
+
+    if (!cap) {
+      byId('monthSpend').textContent = formatCost(month.costUsd || 0) + ' · ' + formatCompact(month.tokenTotal || 0) + ' tok';
+      byId('monthMeta').textContent = 'On pace for ' + formatCost(month.projectedCostUsd || 0) + ' by month end. Set a monthly budget in Settings to track it.';
+      bar.style.width = '0%';
+      marker.classList.add('hidden');
+      return;
+    }
+    var ratio = used / cap;
+    var projectedRatio = projected / cap;
+    byId('monthSpend').textContent = fmt(used) + ' of ' + fmt(cap) + (tokenCap ? ' tok' : '') + ' · ' + formatPercent(ratio);
+    bar.style.width = Math.min(100, ratio * 100) + '%';
+    bar.style.background = ratio >= 1 ? 'var(--red)' : (ratio * 100 >= (config.warnThresholdPct || 80) || projectedRatio >= 1) ? 'var(--amber)' : 'var(--teal)';
+    marker.classList.toggle('hidden', !(projectedRatio > 0));
+    marker.style.left = 'calc(' + Math.min(100, projectedRatio * 100).toFixed(1) + '% - 1px)';
+    byId('monthMeta').textContent = 'On pace for ' + fmt(projected) + (tokenCap ? ' tok' : '') + ' by month end (' + formatPercent(projectedRatio) + ' of budget).';
+    // The forecast badge otherwise reflects only the daily cap; a monthly
+    // budget on pace to be passed must not read as "On track".
+    if (projectedRatio >= 1) {
+      byId('forecastBadge').textContent = 'Over pace';
+      byId('forecastBadge').className = 'soft-badge warn';
+      byId('forecastMessage').className = 'forecast-message warn';
+      byId('forecastMessage').textContent = 'At this month\'s rate you will pass your ' + fmt(cap) + (tokenCap ? '-token' : '') + ' monthly budget before month end.';
+    }
+  }
+
   function renderForecast(forecast, config) {
     var badge = byId('forecastBadge');
     var message = byId('forecastMessage');
@@ -510,7 +1109,7 @@
       return '<div class="rank-row">' +
         '<span class="rank-number">' + (index + 1) + '</span>' +
         '<div class="rank-copy"><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + project.sessions.length + ' session' + (project.sessions.length === 1 ? '' : 's') + '</span></div>' +
-        '<div class="rank-cost"><strong>' + escapeHtml(formatCost(project.costUsd || 0)) + '</strong><span>' + escapeHtml(formatCompact(project.tokenTotal || 0)) + ' tok</span></div>' +
+        '<div class="rank-cost"><strong>' + escapeHtml(formatCost(project.costUsd || 0)) + estimateBadge(project.estimatedCostUsed) + '</strong><span>' + escapeHtml(formatCompact(project.tokenTotal || 0)) + ' tok</span></div>' +
       '</div>';
     }).join('');
   }
@@ -566,7 +1165,7 @@
         '</div>' +
         '<div class="live-metrics">' +
           liveMetric('Total tokens', formatCompact(session.tokenTotal || 0)) +
-          liveMetric('Estimated cost', formatCost(session.costUsd || 0)) +
+          liveMetric('Estimated cost', (session.estimatedCostUsed ? '≈ ' : '') + formatCost(session.costUsd || 0)) +
           liveMetric('Messages', formatNumber(session.messageCount || 0)) +
           liveMetric('Session span', formatDuration(session.firstTimestamp, session.lastTimestamp)) +
         '</div>' +
@@ -582,7 +1181,9 @@
           detailRow('Model' + (models.length > 1 ? 's' : ''), escapeHtml(models.join(', ') || 'Unknown')) +
           detailRow('Claude Code version', escapeHtml(session.version || 'Not recorded')) +
           detailRow('Pricing quality', session.estimatedCostUsed ? 'Fallback estimate used' : 'Recognized local pricing rows') +
+          detailRow('Subagents', subagentSummary(session)) +
         '</dl>' +
+        renderContextGauge(session) +
         '<div class="velocity-card"><span>Workspace velocity · last ' + (velocity.windowMinutes || 15) + ' min</span><strong>' + escapeHtml(formatCompact(velocity.tokensPerMinute || 0)) + ' tokens/min</strong><small>' + escapeHtml(formatCost(velocity.costPerHour || 0)) + '/hour if this short-term pace continues</small></div>' +
         '</article>' +
       '</div>';
@@ -591,6 +1192,19 @@
       state.selectedSessionId = event.target.value;
       renderLive();
     });
+  }
+
+  function subagentSummary(session) {
+    var agents = Array.isArray(session.subagents) ? session.subagents : [];
+    if (agents.length === 0) return 'None in this session';
+    var types = {};
+    agents.forEach(function (agent) {
+      var label = agent.agentType || 'unlabelled';
+      types[label] = (types[label] || 0) + 1;
+    });
+    var typeCopy = Object.keys(types).map(function (label) { return types[label] + '× ' + label; }).join(', ');
+    return escapeHtml(agents.length + ' run' + (agents.length === 1 ? '' : 's') + ' (' + typeCopy + ') · ' +
+      formatCompact(session.subagentTokenTotal || 0) + ' tokens · ' + formatCost(session.subagentCostUsd || 0) + ' on top of this session');
   }
 
   function liveMetric(label, value) {
@@ -681,13 +1295,13 @@
         var expanded = state.expandedProject === project.project;
         var share = allProjectCost > 0 ? (project.costUsd || 0) / allProjectCost : 0;
         var sessions = expanded ? '<div class="project-session-details">' + project.sessions.slice(0, 8).map(function (session) {
-          return '<div class="project-session-row"><code>' + escapeHtml(String(session.sessionId || '').slice(0, 12)) + '</code><span>' + escapeHtml(formatCompact(session.tokenTotal || 0)) + ' tokens</span><strong>' + escapeHtml(formatCost(session.costUsd || 0)) + '</strong></div>';
+          return '<div class="project-session-row"><code>' + escapeHtml(String(session.sessionId || '').slice(0, 12)) + '</code><span>' + escapeHtml(formatCompact(session.tokenTotal || 0)) + ' tokens</span><strong>' + escapeHtml(formatCost(session.costUsd || 0)) + estimateBadge(session.estimatedCostUsed) + '</strong></div>';
         }).join('') + '</div>' : '';
         return '<button type="button" class="project-table-row" data-project-row="' + escapeHtmlAttr(project.project) + '" aria-expanded="' + expanded + '">' +
           '<span class="project-name-cell"><i class="project-avatar">' + escapeHtml(projectInitial(project.project)) + '</i><span><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + escapeHtml(project.project) + '</span></span></span>' +
           '<span class="table-number">' + project.sessions.length + '</span>' +
           '<span class="table-number">' + escapeHtml(formatCompact(project.tokenTotal || 0)) + '</span>' +
-          '<span class="table-number strong">' + escapeHtml(formatCost(project.costUsd || 0)) + '</span>' +
+          '<span class="table-number strong">' + escapeHtml(formatCost(project.costUsd || 0)) + estimateBadge(project.estimatedCostUsed) + '</span>' +
           '<span class="share-cell"><span class="share-bar"><span style="width:' + (share * 100).toFixed(2) + '%"></span></span><span class="table-number">' + escapeHtml(formatPercent(share)) + '</span></span>' +
         '</button>' + sessions;
       }).join('');
@@ -701,6 +1315,57 @@
       });
     }
     renderBranches(projectSummary);
+    renderWhatIf(projectSummary);
+  }
+
+  function renderWhatIf(projectSummary) {
+    var target = byId('whatIfRows');
+    var select = byId('whatIfProject');
+    var whatIf = projectSummary && projectSummary.whatIf;
+    var projects = whatIf && Array.isArray(whatIf.byProject) ? whatIf.byProject : [];
+
+    var optionsKey = projects.map(function (project) { return project.project; }).join('\n');
+    if (optionsKey !== state.whatIfOptionsKey) {
+      state.whatIfOptionsKey = optionsKey;
+      var allOption = document.createElement('option');
+      allOption.value = '';
+      allOption.textContent = 'All projects in scope';
+      select.replaceChildren(allOption);
+      projects.forEach(function (project) {
+        var option = document.createElement('option');
+        option.value = project.project;
+        option.textContent = shortProjectName(project.project);
+        select.appendChild(option);
+      });
+    }
+    var selected = state.whatIfProject && projects.find(function (project) { return project.project === state.whatIfProject; });
+    if (!selected) state.whatIfProject = '';
+    select.value = state.whatIfProject;
+
+    var scope = selected || (whatIf && whatIf.scope);
+    if (!scope || !Array.isArray(scope.costs) || !(scope.actualCostUsd > 0)) {
+      target.innerHTML = '<div class="empty-state compact">What-if pricing appears once this scope has priced usage.</div>';
+      return;
+    }
+
+    var actual = scope.actualCostUsd;
+    var max = Math.max.apply(null, scope.costs.map(function (cost) { return finiteOr0(cost.costUsd); }).concat([actual])) || 1;
+    var row = function (cls, title, subtitle, cost, delta) {
+      return '<div class="whatif-row ' + cls + '" role="listitem">' +
+        '<div><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
+        '<div class="whatif-bar"><span style="width:' + Math.max(1, (cost / max) * 100).toFixed(1) + '%"></span></div>' +
+        '<span class="whatif-cost">' + escapeHtml(formatCost(cost)) + '</span>' + delta + '</div>';
+    };
+    var rows = row('actual', 'Your actual mix', scope.estimated ? 'includes fallback pricing' : 'as recorded', actual,
+      '<span class="whatif-delta same">baseline</span>');
+    scope.costs.forEach(function (cost) {
+      var ratio = typeof cost.deltaRatio === 'number' ? cost.deltaRatio : 0;
+      var kind = Math.abs(ratio) < .005 ? 'same' : ratio < 0 ? 'cheaper' : 'pricier';
+      var deltaCopy = kind === 'same' ? 'same' : (ratio < 0 ? '−' : '+') + formatPercent(Math.abs(ratio));
+      rows += row(kind, cost.label, kind === 'cheaper' ? 'saves ' + formatCost(-cost.deltaUsd) : kind === 'pricier' ? 'costs ' + formatCost(cost.deltaUsd) + ' more' : 'about the same', finiteOr0(cost.costUsd),
+        '<span class="whatif-delta ' + kind + '">' + escapeHtml(deltaCopy) + '</span>');
+    });
+    target.innerHTML = rows;
   }
 
   function renderBranches(projectSummary) {
@@ -718,6 +1383,7 @@
 
   function renderInsights() {
     var allTips = rankedTips(state.summary.tips || []);
+    var hiddenTips = rankedTips(state.summary.hiddenTips || []);
     var warnCount = allTips.filter(function (tip) { return tip.severity === 'warn'; }).length;
     var infoCount = allTips.length - warnCount;
     var savingsUsd = allTips.reduce(function (sum, tip) { return sum + finiteOr0(tip.estimatedSavingsUsd); }, 0);
@@ -726,26 +1392,38 @@
     byId('filterAllCount').textContent = allTips.length;
     byId('filterWarnCount').textContent = warnCount;
     byId('filterInfoCount').textContent = infoCount;
+    byId('filterHiddenCount').textContent = hiddenTips.length;
     byId('totalSavings').textContent = savingsUsd > 0 ? formatCost(savingsUsd) : (savingsTokens > 0 ? formatCompact(savingsTokens) + ' tok' : '—');
     byId('totalSavingsTokens').textContent = savingsTokens > 0
       ? formatNumber(savingsTokens) + ' estimated tokens · recommendations may overlap'
       : 'Savings appear only when they can be calculated';
 
-    var filtered = state.insightFilter === 'all' ? allTips : allTips.filter(function (tip) {
+    var showingHidden = state.insightFilter === 'hidden';
+    var filtered = showingHidden ? hiddenTips : state.insightFilter === 'all' ? allTips : allTips.filter(function (tip) {
       return state.insightFilter === 'warn' ? tip.severity === 'warn' : tip.severity !== 'warn';
     });
     var list = byId('insightsList');
     if (filtered.length === 0) {
-      list.innerHTML = '<div class="empty-state-card"><div class="empty-icon">✓</div><h2>No matching recommendations</h2><p>The selected category has no current findings. Insights update automatically as local sessions change.</p></div>';
+      list.innerHTML = showingHidden
+        ? '<div class="empty-state-card"><div class="empty-icon">↺</div><h2>Nothing dismissed or snoozed</h2><p>Insights you dismiss or snooze appear here, where you can restore them.</p></div>'
+        : '<div class="empty-state-card"><div class="empty-icon">✓</div><h2>No matching recommendations</h2><p>The selected category has no current findings. Insights update automatically as local sessions change.</p></div>';
       return;
     }
 
     list.innerHTML = filtered.map(function (tip) {
       var kind = tipKind(tip);
       var saving = savingText(tip);
-      return '<article class="insight-card ' + (tip.severity === 'warn' ? 'warn' : '') + '">' +
+      var id = escapeHtmlAttr(tip.id || '');
+      var actions = showingHidden
+        ? '<span class="insight-hidden-note">' + escapeHtml(hiddenStateText(tip.userState)) + '</span>' +
+          '<button class="insight-action" type="button" data-insight-action="restore" data-insight-id="' + id + '">Restore</button>'
+        : '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="1" data-insight-id="' + id + '">Snooze 1 day</button>' +
+          '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="7" data-insight-id="' + id + '">Snooze 7 days</button>' +
+          '<button class="insight-action" type="button" data-insight-action="dismiss" data-insight-id="' + id + '">Dismiss</button>';
+      return '<article class="insight-card ' + (tip.severity === 'warn' ? 'warn' : '') + (showingHidden ? ' muted' : '') + '">' +
         '<span class="insight-icon ' + (tip.severity === 'warn' ? 'warn' : '') + '">' + escapeHtml(kind.icon) + '</span>' +
-        '<div class="insight-copy"><h3>' + escapeHtml(kind.label) + '</h3><p>' + escapeHtml(tip.message || '') + '</p><div class="insight-meta"><span class="severity-badge ' + (tip.severity === 'warn' ? '' : 'info') + '">' + escapeHtml(tip.severity === 'warn' ? 'Attention' : 'Optimize') + '</span><span>Session ' + escapeHtml(String(tip.sessionId || '').slice(0, 12)) + '</span></div></div>' +
+        '<div class="insight-copy"><h3>' + escapeHtml(kind.label) + '</h3><p>' + escapeHtml(tip.message || '') + '</p><div class="insight-meta"><span class="severity-badge ' + (tip.severity === 'warn' ? '' : 'info') + '">' + escapeHtml(tip.severity === 'warn' ? 'Attention' : 'Optimize') + '</span><span>Session ' + escapeHtml(String(tip.sessionId || '').slice(0, 12)) + '</span></div>' +
+        '<div class="insight-actions" role="group" aria-label="' + escapeHtmlAttr('Manage ' + kind.label) + '">' + actions + '</div></div>' +
         '<div class="insight-side">' + (saving ? '<strong>' + escapeHtml(saving) + '</strong><span>estimated opportunity</span>' : '<strong>Actionable</strong><span>impact not quantified</span>') + '<button class="session-button" type="button" data-view-session="' + escapeHtmlAttr(tip.sessionId || '') + '">View session</button></div>' +
       '</article>';
     }).join('');
@@ -756,6 +1434,41 @@
         setView('live');
       });
     });
+    list.querySelectorAll('[data-insight-action]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        updateInsight(button);
+      });
+    });
+  }
+
+  function hiddenStateText(userState) {
+    if (!userState) return '';
+    if (userState.status === 'snoozed') {
+      var until = new Date(userState.until);
+      return 'Snoozed until ' + (Number.isNaN(until.getTime()) ? 'later' : until.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+    }
+    return 'Dismissed';
+  }
+
+  async function updateInsight(button) {
+    var action = button.getAttribute('data-insight-action');
+    var days = Number(button.getAttribute('data-insight-days')) || undefined;
+    button.disabled = true;
+    try {
+      var response = await fetch('/api/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: button.getAttribute('data-insight-id'), action: action, days: days })
+      });
+      if (!response.ok) throw new Error('Insight update failed');
+      var summaryResponse = await fetch('/api/summary', { cache: 'no-store' });
+      if (!summaryResponse.ok) throw new Error('Could not refresh the dashboard');
+      receiveSummary(await summaryResponse.json());
+      showToast(action === 'restore' ? 'Insight restored.' : action === 'dismiss' ? 'Insight dismissed. Find it under Dismissed & snoozed.' : 'Insight snoozed for ' + days + ' day' + (days === 1 ? '' : 's') + '.');
+    } catch (error) {
+      button.disabled = false;
+      showToast('Could not update this insight. Please try again.');
+    }
   }
 
   function renderSettings() {
@@ -764,7 +1477,13 @@
     setInputValue('dailyTokenCap', config.dailyTokenCap);
     setInputValue('dailyCostCapUsd', config.dailyCostCapUsd);
     setInputValue('sessionCostCapUsd', config.sessionCostCapUsd);
+    setInputValue('monthlyCostCapUsd', config.monthlyCostCapUsd);
+    setInputValue('monthlyTokenCap', config.monthlyTokenCap);
     setInputValue('warnThresholdPct', config.warnThresholdPct == null ? 80 : config.warnThresholdPct);
+    byId('planSelect').value = config.plan || 'api';
+    setInputValue('planMonthlyUsd', config.planMonthlyUsd);
+    setInputValue('blockTokenLimit', config.blockTokenLimit);
+    setInputValue('weeklyTokenLimit', config.weeklyTokenLimit);
     byId('pricingVerifiedOn').textContent = valueAt(state.summary, ['pricing', 'verifiedOn'], 'Unknown');
     state.settingsHydrated = true;
   }
@@ -985,6 +1704,11 @@
     return '';
   }
 
+  function lastPathSegment(project) {
+    var parts = String(project || '').split(/[\\/]/).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
+  }
+
   function projectInitial(project) {
     var name = shortProjectName(project).replace(/^\//, '');
     return name ? name.charAt(0).toUpperCase() : '?';
@@ -1080,6 +1804,146 @@
 
   function escapeHtmlAttr(value) {
     return escapeHtml(value).replace(/"/g, '&quot;');
+  }
+
+  function renderAlertStrip(alerts) {
+    var strip = byId('alertStrip');
+    var list = Array.isArray(alerts) ? alerts.slice() : [];
+    list.sort(function (a, b) { return (b.level === 'exceeded') - (a.level === 'exceeded'); });
+    strip.classList.toggle('hidden', list.length === 0);
+    strip.innerHTML = list.slice(0, 4).map(function (alert) {
+      var level = alert.level === 'exceeded' ? 'exceeded' : 'warn';
+      return '<div class="alert-item ' + level + '"><strong>' + (level === 'exceeded' ? 'Over limit' : 'Heads up') + '</strong><span>' + escapeHtml(alert.message || '') + '</span></div>';
+    }).join('');
+  }
+
+  function notificationsSupported() {
+    return typeof window.Notification === 'function';
+  }
+
+  function readStorage(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStorage(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      // Preferences still apply for this page view when storage is blocked.
+    }
+  }
+
+  function notificationsEnabled() {
+    return notificationsSupported() && window.Notification.permission === 'granted' && state.notifyEnabled;
+  }
+
+  function bindNotifications() {
+    state.notifyEnabled = readStorage(NOTIFY_KEY) === 'on';
+    try {
+      state.notified = JSON.parse(readStorage(NOTIFIED_KEY) || '{}') || {};
+    } catch {
+      state.notified = {};
+    }
+    var toggle = byId('notifyToggle');
+    var testButton = byId('notifyTest');
+
+    toggle.addEventListener('change', async function () {
+      if (!toggle.checked) {
+        state.notifyEnabled = false;
+        writeStorage(NOTIFY_KEY, 'off');
+        syncNotificationControls();
+        return;
+      }
+      if (notificationsSupported() && window.Notification.permission === 'default') {
+        try {
+          await window.Notification.requestPermission();
+        } catch {
+          // Treated as not granted below.
+        }
+      }
+      state.notifyEnabled = notificationsSupported() && window.Notification.permission === 'granted';
+      writeStorage(NOTIFY_KEY, state.notifyEnabled ? 'on' : 'off');
+      syncNotificationControls();
+      if (state.notifyEnabled && state.summary) notifyAlerts(state.summary.alerts);
+    });
+
+    testButton.addEventListener('click', function () {
+      if (!notificationsEnabled()) return;
+      showDesktopNotification('test', 'Notifications are working. You will hear from CC Token Meter when a budget or plan limit is close.');
+    });
+
+    syncNotificationControls();
+  }
+
+  function syncNotificationControls() {
+    var toggle = byId('notifyToggle');
+    var status = byId('notifyStatus');
+    var testButton = byId('notifyTest');
+    status.className = 'notify-status';
+    if (!notificationsSupported()) {
+      toggle.checked = false;
+      toggle.disabled = true;
+      testButton.disabled = true;
+      status.textContent = 'This browser does not support desktop notifications.';
+      return;
+    }
+    var permission = window.Notification.permission;
+    toggle.disabled = false;
+    toggle.checked = state.notifyEnabled && permission === 'granted';
+    testButton.disabled = !toggle.checked;
+    if (permission === 'denied') {
+      status.className = 'notify-status error';
+      status.textContent = 'Notifications are blocked for this page. Allow them in your browser\'s site settings, then turn this on again.';
+    } else if (toggle.checked) {
+      status.textContent = 'On. Each alert notifies once per level per day, or once per 5-hour window.';
+    } else {
+      status.textContent = 'Off. Alerts still appear at the top of Overview.';
+    }
+  }
+
+  function notifyAlerts(alerts) {
+    if (!Array.isArray(alerts) || alerts.length === 0) return;
+    var enabled = notificationsEnabled();
+    var now = Date.now();
+    var today = localDateString(new Date());
+    var changed = false;
+    Object.keys(state.notified).forEach(function (key) {
+      if (now - state.notified[key] > NOTIFIED_TTL_MS) {
+        delete state.notified[key];
+        changed = true;
+      }
+    });
+    if (enabled) {
+      alerts.forEach(function (alert) {
+        if (!alert || !alert.id) return;
+        // Day and session alerts repeat each day; window ids already include
+        // the window start, so each window notifies on its own.
+        var key = alert.id + '|' + alert.level + '|' + today;
+        if (state.notified[key]) return;
+        state.notified[key] = now;
+        changed = true;
+        if (document.hidden) showDesktopNotification(alert.id, alert.message);
+        else showToast(alert.message);
+      });
+    }
+    if (changed) writeStorage(NOTIFIED_KEY, JSON.stringify(state.notified));
+  }
+
+  function showDesktopNotification(tag, message) {
+    try {
+      var notification = new window.Notification('CC Token Meter', { body: String(message || ''), tag: 'cc-token-meter:' + tag });
+      notification.addEventListener('click', function () {
+        window.focus();
+        setView('overview', true, true);
+        notification.close();
+      });
+    } catch {
+      showToast(message);
+    }
   }
 
   function showToast(message) {

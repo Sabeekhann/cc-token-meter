@@ -26,7 +26,17 @@ The default view provides a useful answer in under ten seconds:
 - a 14-day burn chart and 30-day forecast;
 - token composition;
 - top projects by estimated cost;
-- the three highest-priority recommendations.
+- the three highest-priority recommendations;
+- 14-day sparklines on the token and cost cards;
+- a weekly efficiency score (cache reuse, open recommendations, long-session
+  compaction) with per-component points, the biggest opportunity, and
+  shareable (pseudonymized) or named weekly report downloads;
+- a weekday × hour heatmap of recent detailed usage;
+- for Pro/Max plans only, a plan panel: the current estimated 5-hour window
+  against a user limit or the user's largest recent window, recent windows,
+  rolling 7-day tokens, and month-to-date API-equivalent value against the
+  plan price. Anthropic publishes no plan token limits, so the panel never
+  shows guessed limits and says that windows are local estimates.
 
 ### Live session
 
@@ -36,7 +46,9 @@ The live view focuses on one selected session:
 - total tokens, estimated cost, message count, and current burn velocity;
 - per-message token timeline with cumulative burn;
 - tool-event markers for correlating large reads/outputs with spikes;
-- direct navigation from a recommendation to its affected session.
+- direct navigation from a recommendation to its affected session;
+- an estimated context-window gauge for the latest message, with a
+  `/compact` prompt as it nears the limit.
 
 When no session has been active recently, the view clearly says so and offers
 the most recent session instead of displaying empty charts without context.
@@ -49,7 +61,10 @@ The projects view supports investigation and comparison:
 - cost, token, session-count, and relative-share columns;
 - expandable session details;
 - a branch breakdown using exact per-message attribution;
-- readable short names while retaining full paths in tooltips.
+- readable short names while retaining full paths in tooltips;
+- what-if pricing: the same token totals repriced on each comparison model
+  for the filtered scope or one project, with savings or extra cost and a
+  visible same-token caveat.
 
 ### Insights
 
@@ -60,13 +75,17 @@ The insights view turns heuristics into an action queue:
 - clear issue name, affected session, measured explanation, and savings;
 - a “view session” action that opens the relevant timeline;
 - a summary of total calculable savings without pretending that
-  non-quantifiable advice has a dollar value.
+  non-quantifiable advice has a dollar value;
+- snooze (1 or 7 days), dismiss, and restore per insight, with a
+  "Dismissed & snoozed" filter; snoozed insights return automatically.
 
 ### Settings
 
 Settings are task-focused and small:
 
 - daily token and cost budgets;
+- monthly cost or token budget, shown on Overview as month-to-date progress
+  with a run-rate month-end projection;
 - per-session cost budget;
 - warning threshold;
 - save feedback and validation;
@@ -76,17 +95,23 @@ Settings are task-focused and small:
 
 - Desktop uses a persistent sidebar; mobile uses a compact horizontal view
   switcher.
+- A command palette (Ctrl/⌘+K) and `g`-prefixed shortcuts reach every view,
+  project, and recent session from the keyboard.
 - Server-Sent Events keep metrics current and visibly report connection state.
 - Only the active view is re-rendered when new data arrives.
 - Project search and insight filters are immediate and local.
 - Budget changes are saved locally, then the summary is refetched so the UI
   updates even when no new transcript message arrives.
 - Empty, loading, disconnected, and fallback-pricing states are explicit.
+- Active budget and plan alerts show in an Overview strip; opt-in desktop
+  notifications (Settings) fire once per alert level per day or window, only
+  after the user grants permission from the toggle.
 
 ## Visual system
 
 - Dark navigation rail plus a calm off-white workspace for hierarchy and
-  long-session readability.
+  long-session readability, with a matching dark theme that follows the OS
+  preference or a per-browser toggle.
 - Coral is the primary action/data color; teal represents healthy/local/live
   states; amber and red are reserved for attention and exceeded states.
 - System fonts only, so the dashboard remains fully offline.

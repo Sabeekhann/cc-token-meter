@@ -40,3 +40,46 @@ test('compact summary is useful for an empty fresh install', () => {
   assert.match(output, /Top project: no usage/);
   assert.match(output, /Recommendations: 0 active/);
 });
+
+test('compact summary adds a plan line for subscription users only', () => {
+  const output = formatCompactSummary({
+    plan: {
+      plan: 'max20x',
+      planLabel: 'Max 20×',
+      currentBlock: { tokenTotal: 1_200_000, ratio: 0.6, referenceKind: 'limit', remainingMinutes: 72 },
+      apiValue: { monthToDateUsd: 400, planMonthlyUsd: 200, multipleOfPlan: 2 },
+    },
+  });
+  assert.match(
+    output,
+    /Plan: Max 20× · 5h window 1,200,000 tokens \(60% of your limit\), resets in 72 min · \$400\.00 API-equivalent this month \(2\.0x the \$200\.00 plan\)/,
+  );
+  assert.doesNotMatch(formatCompactSummary({ plan: { plan: 'api' } }), /Plan:/);
+});
+
+test('compact summary lists what-if prices for the same tokens', () => {
+  const output = formatCompactSummary({
+    whatIf: {
+      scope: {
+        actualCostUsd: 20,
+        costs: [
+          { label: 'Big', costUsd: 40, deltaRatio: 1 },
+          { label: 'Small', costUsd: 5, deltaRatio: -0.75 },
+        ],
+      },
+    },
+  });
+  assert.match(output, /What-if, same tokens: Big \$40\.00 \(\+100%\) · Small \$5\.00 \(-75%\) vs \$20\.00 actual/);
+  assert.doesNotMatch(formatCompactSummary({ whatIf: { scope: { actualCostUsd: 0, costs: [] } } }), /What-if/);
+});
+
+test('compact summary attributes usage to subagents and the heaviest tool', () => {
+  const output = formatCompactSummary({
+    attribution: {
+      subagents: { runs: 3, share: 0.25, costUsd: 4.5 },
+      tools: [{ name: 'Read', calls: 42, estimatedTokens: 370_000 }],
+    },
+  });
+  assert.match(output, /Attribution: 25% of tokens in 3 subagent runs · \$4\.50 · largest tool results: Read \(~370,000 tokens in 42 calls\)/);
+  assert.doesNotMatch(formatCompactSummary({}), /Attribution:/);
+});

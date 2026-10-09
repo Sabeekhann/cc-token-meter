@@ -14,7 +14,7 @@
     <a href="https://app.codecov.io/github/Sabeekhann/cc-token-meter"><img alt="Codecov coverage" src="https://codecov.io/github/Sabeekhann/cc-token-meter/graph/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
-    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.2.0"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.2.0" /></a>
+    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.3.0"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.3.0" /></a>
     <img alt="Corgea scanned" src="https://img.shields.io/badge/Corgea-scanned-ff6b2c" />
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
     <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-f3b33d" /></a>
@@ -60,7 +60,7 @@ It requires no API key, makes no Anthropic API call, works retroactively, and tr
 
 ## Release status
 
-The current **v1.2.0** release adds exact model/date usage exploration in the CLI, local API, and Projects dashboard; scoped attribution across recent and compacted history; and stronger cross-platform release gates while preserving the local-only privacy model.
+The current **v1.3.0** release corrects token accounting (responses were counted more than once, and subagents were missing), adds subagent and tool attribution, and brings a Claude Code status line, Pro/Max plan mode, what-if model pricing, budget alerts with desktop notifications, monthly budgets, insight snoozing, a weekly efficiency score and report, and a dark theme, while preserving the local-only privacy model.
 
 The [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/latest) and npm version badge above are the authoritative published versions. Updating repository package metadata does not publish a package; release publication remains an explicit maintainer action. See [`CHANGELOG.md`](CHANGELOG.md) for the version-by-version history.
 
@@ -71,6 +71,7 @@ The [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/release
 | **Overview** | Today's tokens and estimated cost, cache reuse, active sessions, a 14-day history, and a 30-day forecast. |
 | **Live Session** | Recent tokens/minute, estimated cost/hour, models, branches, and message-level burn while Claude Code is running. |
 | **Projects** | Exact per-message attribution across projects, branches, and sessions. |
+| **Attribution** | Subagent usage by agent type, and the tools and MCP servers returning the most data into context. |
 | **Insights** | Ranked, evidence-backed recommendations for repeated reads, cache degradation, large tool output, long context, and outlier sessions. |
 | **Budgets** | Daily token, daily cost, and per-session cost guardrails stored locally. |
 | **Exports** | Human-readable terminal summaries plus JSON and CSV for your own analysis. |
@@ -124,7 +125,7 @@ it does not require an Anthropic API key.
 | **Operating systems** | Linux, macOS, and Windows are covered by the compatibility workflow. |
 | **Claude Code data** | Existing local JSONL transcripts under `~/.claude/projects`. |
 | **Network posture** | No external runtime requests; the dashboard listens only on `127.0.0.1`. |
-| **Upgrade path** | Existing valid v2 indexes migrate automatically to the bounded v3 format. |
+| **Upgrade path** | Indexes written before the accounting fix in the next release are rebuilt once from your transcripts; later upgrades restore warm. |
 
 ### Install as a reusable command
 
@@ -155,6 +156,147 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
+### Monthly budgets
+
+Set a monthly cap with `cc-token-meter --set-monthly-budget-usd 200` (or
+`--set-monthly-budget-tokens`), or in Settings. Overview's forecast panel
+shows month-to-date usage against the budget and where the month's run rate
+lands by month end. `--summary` prints the same as a `Month:` line. Monthly
+budgets cover all projects, whatever filter is applied. The status line shows
+daily and session budgets only, because it reads just today's transcripts to
+stay fast.
+
+## Weekly efficiency score and report
+
+Overview scores the last 7 days from 0 to 100 using only what the meter
+measures:
+
+| Component | Points | Full points when |
+| --- | ---: | --- |
+| Cache reuse | 45 | at least 80% of prompt tokens come from cache |
+| Open recommendations | 35 | no recommendations for this week's sessions (−15% per attention item, −5% per optimization; dismissed ones still count) |
+| Long-session compaction | 20 | every session over 60 messages used `/compact` |
+
+A component that doesn't apply this week, such as compaction when no session
+was long, is left out and the rest re-weighted. The panel names the biggest
+opportunity. The score is a local heuristic for spotting habits, not a
+benchmark.
+
+**Download weekly report** (or `cc-token-meter --report weekly.md`) produces
+a Markdown digest:
+
+- the score and its breakdown;
+- tokens, cost, messages and cache reuse versus the previous week;
+- a daily table, models, and top projects;
+- plan value, in plan mode;
+- recommendations.
+
+By default project names are pseudonymized (e.g. `project-c63dd3`) and
+recommendations are listed by category, because their text can name files,
+so it is safe to share. Use **With names** or `--show-names` for a private
+copy.
+
+## Managing insights
+
+Each recommendation in **Insights** can be snoozed for a day, snoozed for a
+week, or dismissed. Hidden insights move to the **Dismissed & snoozed**
+filter, where you can restore them. A snoozed insight comes back on its own
+when the snooze ends. The choice is stored in your local `config.json` under
+a one-way hash of the insight, so file paths named in insights are never
+written there.
+
+## Budget alerts and desktop notifications
+
+Active budget and plan alerts appear at the top of Overview: daily token or
+cost caps, per-session caps for sessions running today, monthly cost or token
+budgets (with an early warning when the month's run rate will pass the
+budget), and, in plan mode,
+your 5-hour window and weekly limits, including a warning when the current
+window is on pace to pass its limit before it resets.
+
+Turn on **Settings → Desktop notifications** to get them as desktop
+notifications while the dashboard tab is open in the background. Each alert
+notifies once per level per day (or once per 5-hour window), so you won't be
+spammed. Notifications come from the local page via your browser, and
+nothing is sent anywhere. If you need alerts without the dashboard open, use
+the [status line](#claude-code-status-line).
+
+## What-if model pricing
+
+The Projects view shows what the same tokens would cost on other Claude
+models (Fable 5, Opus 5, Sonnet 5, and Haiku 4.5) for everything in the
+current date/model scope or for one project. For example, "Sonnet 5:
+$15.32, −21%". `--summary` and `--json` include the same comparison.
+
+It reprices the exact token counts you used, at the current local pricing
+rows. Another model may need more or fewer tokens and give different results,
+so treat it as a price comparison, not a forecast.
+
+## Pro and Max plan mode
+
+On a Claude subscription, dollars matter less than usage windows. Tell the
+meter your plan:
+
+```bash
+cc-token-meter --set-plan max20x        # or pro, max5x; api switches it off
+```
+
+The dashboard then adds a plan panel to Overview, and the status line and
+`--summary` gain a plan segment:
+
+- **Current 5-hour window:** tokens used, time until reset, burn rate, and
+  where you'll be at reset if you keep this pace.
+- **Recent windows:** your last eight windows side by side.
+- **API-equivalent value:** what this month's usage would cost at local API
+  prices, compared with your plan price.
+- **Rolling 7 days:** tokens against an optional weekly limit.
+
+Anthropic doesn't publish the token limits behind subscription windows, so the
+meter never guesses them. Progress is measured against a limit you set
+(`--set-block-token-limit`, `--set-weekly-token-limit`, or Settings) or, if
+you haven't set one, your largest recent window. Windows are rebuilt locally
+from message timestamps, so treat them as estimates rather than Anthropic's
+own accounting. The plan price defaults to the plan's list price and can be
+changed in Settings.
+
+## Claude Code status line
+
+See usage without leaving Claude Code. Install globally, then add the command
+to `~/.claude/settings.json`:
+
+```bash
+npm install --global cc-token-meter
+```
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "cc-token-meter --statusline"
+  }
+}
+```
+
+Claude Code then shows a line like:
+
+```text
+◆ $2.41 session · 182K tok · cache 74% · ctx 50% · today $8.20/$20.00 (41%)
+```
+
+| Segment | Meaning |
+| --- | --- |
+| `session` | Estimated cost of the current session (`≈` when fallback pricing was used; shown against your session cap when one is set). |
+| `tok` | Total tokens in the current session. |
+| `cache` | Share of prompt tokens served from cache. |
+| `ctx` | Latest prompt size against the estimated context window (amber from 60%, red from 80%). |
+| `5h` | With a subscription plan set: tokens in the current estimated 5-hour window (or % of your window limit) and time until it resets. |
+| `today` | Today's estimated cost, against your daily cost or token cap when one is set. A trailing `+` means more than 20 transcripts changed today and the total is a lower bound. |
+
+The status line finds the session through local transcript discovery, never
+opens a path supplied on stdin, writes no files, and never edits your Claude
+Code settings. Set `NO_COLOR=1` to disable colors. Use a global install rather
+than `npx`, which adds startup time to every refresh.
+
 ## Privacy by design
 
 Claude Code Token Meter reads session transcripts from:
@@ -179,8 +321,8 @@ It writes only its own local state under:
 | Local state is recoverable | Index writes are atomic; the index can be deleted and rebuilt from the original transcripts. |
 
 Use `--no-cache` to avoid reading or writing the local usage index.
-Existing v2 indexes migrate automatically without reparsing unchanged
-transcripts. See [large-history performance and retention](docs/PERFORMANCE.md)
+Indexes written by older versions are rebuilt once from the transcripts, so
+corrected accounting applies to your whole history. See [large-history performance and retention](docs/PERFORMANCE.md)
 for the retention contract and reproducible budgets.
 
 ## CLI reference
@@ -194,10 +336,18 @@ The commands below assume a global install. For one-off use, replace
 | `cc-token-meter --summary` | Print a compact usage summary and exit. |
 | `cc-token-meter --json` | Print a machine-readable summary and exit. |
 | `cc-token-meter --csv <path\|->` | Export filtered usage as CSV. Use `-` for stdout. |
+| `cc-token-meter --report <path\|->` | Write the weekly report as Markdown (`--show-names` includes project names). |
 | `cc-token-meter --doctor` | Diagnose the local setup and private state. |
+| `cc-token-meter --statusline` | Print one usage line for Claude Code's status line (reads session JSON on stdin). |
+| `cc-token-meter --statusline-config` | Show how to enable the status line. |
 | `cc-token-meter --set-budget-usd <n>` | Set a daily estimated-cost cap. |
 | `cc-token-meter --set-budget-tokens <n>` | Set a daily token cap. |
 | `cc-token-meter --set-session-budget-usd <n>` | Set a per-session estimated-cost cap. |
+| `cc-token-meter --set-monthly-budget-usd <n>` | Set a monthly estimated-cost cap (`0` clears). |
+| `cc-token-meter --set-monthly-budget-tokens <n>` | Set a monthly token cap (`0` clears). |
+| `cc-token-meter --set-plan <id>` | Set your plan: `api`, `pro`, `max5x`, or `max20x`. |
+| `cc-token-meter --set-block-token-limit <n>` | Set a 5-hour window token limit (`0` clears). |
+| `cc-token-meter --set-weekly-token-limit <n>` | Set a rolling 7-day token limit (`0` clears). |
 | `cc-token-meter --help` | Show all options. |
 
 Common filters:

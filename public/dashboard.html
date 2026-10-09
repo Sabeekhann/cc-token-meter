@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="light" />
+  <meta name="color-scheme" content="light dark" />
   <title>Token Meter — Local Claude Code Intelligence</title>
   <link rel="stylesheet" href="/dashboard.css" />
+  <script src="/dashboard.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to dashboard content</a>
@@ -67,6 +68,12 @@
           <h1 id="viewTitle" tabindex="-1">Overview</h1>
         </div>
         <div class="topbar-actions">
+          <button id="paletteTrigger" class="palette-trigger" type="button" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">
+            <span>Jump to…</span><kbd>⌘K</kbd>
+          </button>
+          <button id="themeToggle" class="icon-button" type="button" aria-label="Switch color theme" title="Switch color theme">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" /></svg>
+          </button>
           <div id="connectionStatus" class="connection-pill connecting" role="status">
             <span class="status-dot"></span>
             <span class="connection-copy">Connecting</span>
@@ -92,6 +99,8 @@
             </button>
           </div>
 
+          <div id="alertStrip" class="alert-strip hidden" role="status" aria-live="polite"></div>
+
           <div class="metric-grid">
             <article class="metric-card accent-card">
               <div class="metric-topline">
@@ -100,15 +109,17 @@
               </div>
               <strong id="todayTokens" class="metric-value">—</strong>
               <div id="todayTokensMeta" class="metric-meta">Waiting for local data</div>
+              <svg id="tokenSpark" class="metric-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="metric-progress"><span id="tokenBudgetBar"></span></div>
             </article>
             <article class="metric-card">
               <div class="metric-topline">
-                <span>Estimated cost today</span>
+                <span id="costCardLabel">Estimated cost today</span>
                 <span class="metric-icon cost-icon">$</span>
               </div>
               <strong id="todayCost" class="metric-value">—</strong>
               <div id="todayCostMeta" class="metric-meta">Local pricing estimate</div>
+              <svg id="costSpark" class="metric-spark cost" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="metric-progress"><span id="costBudgetBar"></span></div>
             </article>
             <article class="metric-card">
@@ -132,6 +143,40 @@
               <button class="metric-link" type="button" data-go-view="live">Open live view →</button>
             </article>
           </div>
+
+          <article id="planPanel" class="panel plan-panel hidden" aria-labelledby="planPanelTitle">
+            <div class="panel-header">
+              <div>
+                <p id="planPanelKicker" class="panel-kicker">PLAN WINDOW</p>
+                <h3 id="planPanelTitle">Current 5-hour window</h3>
+              </div>
+              <span id="planWindowBadge" class="soft-badge">Idle</span>
+            </div>
+            <div class="plan-grid">
+              <div class="plan-window">
+                <div class="plan-window-head">
+                  <strong id="planWindowTokens" class="plan-big">—</strong>
+                  <span id="planWindowReset">No messages in the current window</span>
+                </div>
+                <div class="plan-meter" aria-hidden="true"><span id="planWindowBar"></span><i id="planWindowProjected"></i></div>
+                <p id="planWindowMeta" class="plan-meta">Window progress appears after your first message.</p>
+                <div id="planRecentBlocks" class="plan-blocks" role="img" aria-label="Recent 5-hour windows"></div>
+              </div>
+              <div class="plan-side">
+                <div class="plan-stat">
+                  <span>API-equivalent value this month</span>
+                  <strong id="planValue">—</strong>
+                  <small id="planValueMeta">Set your plan in Settings.</small>
+                </div>
+                <div class="plan-stat">
+                  <span>Rolling 7 days</span>
+                  <strong id="planWeekly">—</strong>
+                  <small id="planWeeklyMeta">Set a weekly limit in Settings to track pace.</small>
+                </div>
+              </div>
+            </div>
+            <p class="chart-summary">Windows are reconstructed locally from message times and may not match Anthropic's exact accounting. Anthropic doesn't publish plan token limits, so progress uses your own limit or your largest recent window.</p>
+          </article>
 
           <div class="overview-grid">
             <article class="panel burn-panel">
@@ -166,9 +211,47 @@
                 <div><span>Daily average</span><strong id="averageDailyCost">—</strong></div>
                 <div><span>Projected tokens</span><strong id="projectedTokens">—</strong></div>
               </div>
+              <div class="month-budget">
+                <div class="month-budget-head"><span id="monthLabel">This month</span><strong id="monthSpend">—</strong></div>
+                <div class="month-meter" aria-hidden="true"><span id="monthBar"></span><i id="monthProjected" class="hidden"></i></div>
+                <small id="monthMeta">Set a monthly budget in Settings to track it here.</small>
+              </div>
               <div id="forecastMessage" class="forecast-message neutral">Forecast updates from your local history.</div>
             </article>
           </div>
+
+          <article class="panel efficiency-panel" aria-labelledby="efficiencyTitle">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">LAST 7 DAYS</p>
+                <h3 id="efficiencyTitle">Weekly efficiency</h3>
+              </div>
+              <div class="report-actions">
+                <button id="downloadReport" class="secondary-button" type="button">Download weekly report</button>
+                <button id="downloadReportNames" class="text-button" type="button" title="Includes project names and recommendation details">With names</button>
+              </div>
+            </div>
+            <div class="efficiency-grid">
+              <div id="efficiencyScore" class="efficiency-score"></div>
+              <div>
+                <div id="efficiencyComponents" class="efficiency-components"></div>
+                <p id="efficiencySuggestion" class="efficiency-suggestion"></p>
+              </div>
+            </div>
+            <p id="efficiencyWeek" class="chart-summary">Loading this week's usage…</p>
+          </article>
+
+          <article class="panel heatmap-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">WORK RHYTHM</p>
+                <h3 id="heatmapTitle">When your tokens burn</h3>
+              </div>
+              <div class="heat-legend" aria-hidden="true">Less <i style="background:var(--heat-empty)"></i><i style="background:rgba(239,118,89,.35)"></i><i style="background:rgba(239,118,89,.65)"></i><i style="background:var(--coral)"></i> More</div>
+            </div>
+            <div id="usageHeatmap" class="heatmap loading-block" role="group" aria-labelledby="heatmapTitle" aria-describedby="heatmapSummary"></div>
+            <p id="heatmapSummary" class="chart-summary" aria-live="polite">Loading your local weekday and hour activity.</p>
+          </article>
 
           <div class="overview-grid lower-grid">
             <article class="panel">
@@ -191,6 +274,31 @@
                 <button class="text-button" type="button" data-go-view="projects">View all</button>
               </div>
               <div id="topProjects" class="rank-list"><div class="empty-state compact">Loading projects…</div></div>
+            </article>
+          </div>
+
+          <div class="overview-grid lower-grid attribution-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">SUBAGENTS</p>
+                  <h3>Work delegated to subagents</h3>
+                </div>
+                <span id="subagentShare" class="panel-total">—</span>
+              </div>
+              <div id="subagentTypes" class="rank-list"><div class="empty-state compact">Loading subagent usage…</div></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">TOOLS</p>
+                  <h3>Tools by result size</h3>
+                </div>
+                <span id="toolTotals" class="panel-total">—</span>
+              </div>
+              <div id="toolAttribution" class="rank-list"><div class="empty-state compact">Loading tool usage…</div></div>
+              <p id="mcpServers" class="chart-summary"></p>
             </article>
           </div>
 
@@ -254,6 +362,22 @@
           <article class="panel table-panel">
             <div id="projectsTable" class="data-table"></div>
           </article>
+          <article class="panel whatif-panel" aria-labelledby="whatIfTitle">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">WHAT-IF PRICING</p>
+                <h3 id="whatIfTitle">Same tokens on another model</h3>
+              </div>
+              <label class="explorer-field whatif-field">
+                <span>Compare</span>
+                <select id="whatIfProject" aria-label="What-if pricing scope">
+                  <option value="">All projects in scope</option>
+                </select>
+              </label>
+            </div>
+            <div id="whatIfRows" class="whatif-rows" role="list"></div>
+            <p id="whatIfNote" class="chart-summary">Assumes the same token counts. Another model may use more or fewer tokens and give different results, so treat this as a price comparison, not a forecast.</p>
+          </article>
           <article class="panel branch-panel">
             <div class="panel-header">
               <div>
@@ -282,6 +406,7 @@
             <button class="filter-button active" type="button" data-insight-filter="all" aria-pressed="true">All <span id="filterAllCount">0</span></button>
             <button class="filter-button" type="button" data-insight-filter="warn" aria-pressed="false">Needs attention <span id="filterWarnCount">0</span></button>
             <button class="filter-button" type="button" data-insight-filter="info" aria-pressed="false">Optimizations <span id="filterInfoCount">0</span></button>
+            <button class="filter-button" type="button" data-insight-filter="hidden" aria-pressed="false">Dismissed &amp; snoozed <span id="filterHiddenCount">0</span></button>
           </div>
           <div id="insightsList" class="insights-list"></div>
         </section>
@@ -319,9 +444,52 @@
                   <small>Warn when one session becomes expensive.</small>
                 </label>
                 <label>
+                  <span>Monthly cost cap (USD)</span>
+                  <input id="monthlyCostCapUsd" name="monthlyCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 200.00" />
+                  <small>Estimated cost budget for each calendar month.</small>
+                </label>
+                <label>
+                  <span>Monthly token cap</span>
+                  <input id="monthlyTokenCap" name="monthlyTokenCap" type="number" min="0" step="100000" placeholder="e.g. 50000000" />
+                  <small>Warns early when you're on pace to pass it.</small>
+                </label>
+                <label>
                   <span>Warning threshold (%)</span>
                   <input id="warnThresholdPct" name="warnThresholdPct" type="number" min="1" max="100" step="1" placeholder="80" />
                   <small>Warn before a configured cap is reached.</small>
+                </label>
+              </div>
+              <div class="panel-header plan-settings-header">
+                <div>
+                  <p class="panel-kicker">PLAN</p>
+                  <h3>Subscription windows</h3>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>
+                  <span>Your Claude plan</span>
+                  <select id="planSelect" name="plan">
+                    <option value="api">API (pay as you go)</option>
+                    <option value="pro">Pro</option>
+                    <option value="max5x">Max 5×</option>
+                    <option value="max20x">Max 20×</option>
+                  </select>
+                  <small>Subscription plans show 5-hour windows and API-equivalent value.</small>
+                </label>
+                <label>
+                  <span>Plan price per month (USD)</span>
+                  <input id="planMonthlyUsd" name="planMonthlyUsd" type="number" min="0" step="1" placeholder="Plan list price" />
+                  <small>Leave empty to use the plan's list price.</small>
+                </label>
+                <label>
+                  <span>5-hour window token limit</span>
+                  <input id="blockTokenLimit" name="blockTokenLimit" type="number" min="0" step="1000" placeholder="Your largest window" />
+                  <small>Empty compares each window with your largest recent one.</small>
+                </label>
+                <label>
+                  <span>Weekly token limit</span>
+                  <input id="weeklyTokenLimit" name="weeklyTokenLimit" type="number" min="0" step="1000" placeholder="e.g. 20000000" />
+                  <small>Rolling 7-day pace check. Leave empty for none.</small>
                 </label>
               </div>
               <div class="form-actions">
@@ -341,6 +509,17 @@
                   <p>Transcripts are read locally and never modified. The dashboard binds only to <code>127.0.0.1</code>.</p>
                 </div>
               </article>
+              <article class="panel notify-panel" aria-labelledby="notifyTitle">
+                <p class="panel-kicker">ALERTS</p>
+                <h3 id="notifyTitle">Desktop notifications</h3>
+                <p class="notify-copy">Get a notification when a daily or session budget, a 5-hour window limit, or a weekly limit is close or passed. Notifications come from this dashboard tab, so keep it open in the background.</p>
+                <label class="notify-toggle">
+                  <input id="notifyToggle" type="checkbox" />
+                  <span>Notify me about budget and plan limits</span>
+                </label>
+                <p id="notifyStatus" class="notify-status" role="status">Checking browser support…</p>
+                <button id="notifyTest" class="secondary-button" type="button" disabled>Send a test notification</button>
+              </article>
               <article class="panel local-files-panel">
                 <p class="panel-kicker">LOCAL FILES</p>
                 <h3>Transparent storage</h3>
@@ -359,6 +538,13 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/dashboard.js"></script>
+
+  <div id="paletteBackdrop" class="palette-backdrop hidden">
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <label><span class="sr-only">Search commands</span><input id="paletteInput" type="text" placeholder="Jump to a view, project, or session…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" /></label>
+      <ul id="paletteList" class="palette-list" role="listbox"></ul>
+      <div class="palette-hint"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span><span><kbd>g</kbd> then <kbd>o</kbd>/<kbd>l</kbd>/<kbd>p</kbd>/<kbd>i</kbd>/<kbd>s</kbd> views</span></div>
+    </div>
+  </div>
 </body>
 </html>

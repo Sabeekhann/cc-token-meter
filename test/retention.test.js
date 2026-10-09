@@ -11,6 +11,7 @@ import {
   aggregateByProject,
 } from '../src/ingest/aggregate.js';
 import { createStore } from '../src/ingest/store.js';
+import { ACCOUNTING_REVISION } from '../src/ingest/localIndex.js';
 import { parseSessionFile } from '../src/ingest/parser.js';
 import {
   compactSessionHistory,
@@ -63,49 +64,59 @@ test('bounded detail preserves session, project, branch, day, and intelligence t
   assert.deepEqual(afterIntelligence.dataQuality, beforeIntelligence.dataQuality);
 });
 
-test('a v2 index migrates warm to bounded v3 without reparsing unchanged transcripts', async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-migration-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const transcript = path.join(dir, 'session-1.jsonl');
-  const records = Array.from({ length: RECENT_DETAIL_LIMIT + 5 }, (_, index) => usageRecord(index));
-  fs.writeFileSync(transcript, `${records.map(assistantLine).join('\n')}\n`, 'utf8');
-  const stat = fs.statSync(transcript);
-  const v2Path = path.join(dir, 'usage-index-v2.json');
-  const v3Path = path.join(dir, 'usage-index-v3.json');
+for (const legacy of [
+  { label: 'v2', version: 2, accountingRevision: undefined },
+  { label: 'v3 from before accounting revision 2', version: 3, accountingRevision: undefined },
+]) {
+  test(`a ${legacy.label} index is rebuilt once from transcripts, then restores warm`, async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-rebuild-legacy-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const transcript = path.join(dir, 'session-1.jsonl');
+    const records = Array.from({ length: RECENT_DETAIL_LIMIT + 5 }, (_, index) => usageRecord(index));
+    fs.writeFileSync(transcript, `${records.map(assistantLine).join('\n')}\n`, 'utf8');
+    const stat = fs.statSync(transcript);
+    const indexPath = path.join(dir, 'usage-index-v3.json');
 
-  fs.writeFileSync(v2Path, JSON.stringify({
-    version: 2,
-    writtenAt: '2026-08-01T00:00:00.000Z',
-    totalIngestedMessages: records.length + 99,
-    sessions: [{ ...makeSession(records), models: ['claude-sonnet-5', 'claude-haiku-4'] }],
-    files: [{
-      filePath: transcript,
-      offset: stat.size,
-      mtimeMs: stat.mtimeMs,
-      size: stat.size,
-      projectDirName: '-synthetic-project',
-      sessionIds: ['session-1'],
-    }],
-  }), 'utf8');
+    // Older indexes hold totals the current accounting would not produce
+    // (here inflated by 99 messages), so they must never be restored.
+    fs.writeFileSync(indexPath, JSON.stringify({
+      version: legacy.version,
+      accountingRevision: legacy.accountingRevision,
+      writtenAt: '2026-08-01T00:00:00.000Z',
+      totalIngestedMessages: records.length + 99,
+      sessions: [{ ...makeSession(records), messageCount: records.length + 99 }],
+      files: [{
+        filePath: transcript,
+        offset: stat.size,
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        projectDirName: '-synthetic-project',
+        sessionIds: ['session-1'],
+      }],
+    }), 'utf8');
 
-  let parseCount = 0;
-  const store = createStore({
-    indexPath: v3Path,
-    discoverFiles: async () => [{ filePath: transcript, projectDirName: '-synthetic-project' }],
-    parseFile: async () => {
+    const discoverFiles = async () => [{ filePath: transcript, projectDirName: '-synthetic-project' }];
+    let parseCount = 0;
+    const countingParse = async (...args) => {
       parseCount += 1;
-      throw new Error('unchanged v2 transcript must not be reparsed');
-    },
-  });
-  await store.ingestNewData();
+      return parseSessionFile(...args);
+    };
 
-  const snapshot = store.getSnapshot();
-  assert.equal(parseCount, 0);
-  assert.equal(snapshot.totalIngestedMessages, records.length);
-  assert.equal(snapshot.sessions[0].usageRecords.length, RECENT_DETAIL_LIMIT);
-  assert.equal(retainedMessageCount(snapshot.sessions[0]), records.length);
-  assert.equal(JSON.parse(fs.readFileSync(v3Path, 'utf8')).version, 3);
-});
+    const rebuilt = createStore({ indexPath, discoverFiles, parseFile: countingParse });
+    await rebuilt.ingestNewData();
+    assert.equal(parseCount, 1, 'the transcript is reparsed once');
+    assert.equal(rebuilt.getSnapshot().totalIngestedMessages, records.length);
+    const written = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+    assert.equal(written.version, 3);
+    assert.equal(written.accountingRevision, ACCOUNTING_REVISION);
+
+    parseCount = 0;
+    const warm = createStore({ indexPath, discoverFiles, parseFile: countingParse });
+    await warm.ingestNewData();
+    assert.equal(parseCount, 0, 'a current index restores without reparsing');
+    assert.equal(warm.getSnapshot().totalIngestedMessages, records.length);
+  });
+}
 
 test('--no-cache behavior keeps exact totals, bounds memory, and writes no index', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-no-cache-'));

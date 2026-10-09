@@ -5,15 +5,23 @@ import {
   aggregateByProject,
   aggregateByBranch,
   aggregateByDay,
+  aggregateByHourOfWeek,
   getTodayTotal,
+  getMonthToDate,
   tokenTotal,
+  localDateKey,
   forecastBurnRate,
   buildTimeline,
 } from '../ingest/aggregate.js';
-import { computeAlerts } from '../budget/alerts.js';
+import { computeAlerts, computeMonthAlerts, computePlanAlerts } from '../budget/alerts.js';
+import { partitionTips } from '../budget/insightStates.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
 import { buildUsageIntelligence } from '../analytics/overview.js';
+import { buildAttribution, subagentsByParent } from '../analytics/attribution.js';
+import { buildPlanIntelligence } from '../analytics/plan.js';
+import { buildWeek, scoreEfficiency } from '../analytics/efficiency.js';
+import { buildWhatIf } from '../analytics/whatIf.js';
 import { filterSessions, normalizeSummaryFilters } from '../analytics/filters.js';
 import { PRICING_VERIFIED_ON } from '../pricing/models.js';
 
@@ -70,7 +78,11 @@ export function buildSummary(store, options = {}) {
     }
   );
 
-  const sessionSummaries = sessions.map((s) => ({
+  // Subagent aggregates count toward every total above, but are listed under
+  // their parent session rather than as sessions of their own.
+  const mainSessions = sessions.filter((s) => !s.parentSessionId);
+  const subagents = subagentsByParent(sessions);
+  const sessionSummaries = mainSessions.map((s) => ({
     sessionId: s.sessionId,
     project: s.projectCwd || s.projectDirNameFallback || 'unknown',
     models: s.models,
@@ -89,32 +101,67 @@ export function buildSummary(store, options = {}) {
     gitBranch: s.gitBranch,
     version: s.version,
     timeline: buildTimeline(s),
+    subagents: subagents.get(s.sessionId) || [],
+    subagentTokenTotal: (subagents.get(s.sessionId) || []).reduce((sum, agent) => sum + agent.tokenTotal, 0),
+    subagentCostUsd: (subagents.get(s.sessionId) || []).reduce((sum, agent) => sum + agent.costUsd, 0),
   }));
 
+  // Session caps cover the work a session started, subagents included.
   const activeSessionTotals = sessionSummaries.map((s) => ({
     sessionId: s.sessionId,
-    tokenTotal: s.tokenTotal,
-    costUsd: s.costUsd,
+    tokenTotal: s.tokenTotal + s.subagentTokenTotal,
+    costUsd: (s.costUsd || 0) + s.subagentCostUsd,
+    lastTimestamp: s.lastTimestamp,
   }));
 
-  const alerts = computeAlerts(
-    { tokenTotal: todayTotal.tokenTotal, costUsd: todayTotal.costUsd },
-    activeSessionTotals,
-    config
-  );
   const intelligence = buildUsageIntelligence(sessions, { now: generatedAt });
+  // Subscription windows are account-wide, so plan intelligence always uses
+  // every session rather than the filtered scope.
+  const filtered = Boolean(filters.from || filters.to || filters.project || filters.model);
+  const plan = buildPlanIntelligence(snapshot.sessions, config, {
+    now: generatedAt,
+    byDay: filtered ? undefined : byDay,
+  });
+
+  // Monthly budgets are account-wide, like plan windows: always all sessions.
+  const month = getMonthToDate(filtered ? aggregateByDay(snapshot.sessions) : byDay, generatedAt);
+
+  // Session caps apply to sessions that ran today; finished history would
+  // otherwise raise the same alerts forever.
+  const todayKey = localDateKey(generatedAt);
+  const alerts = [
+    ...computeAlerts(
+      { tokenTotal: todayTotal.tokenTotal, costUsd: todayTotal.costUsd },
+      activeSessionTotals.filter((s) => s.lastTimestamp && localDateKey(s.lastTimestamp) === todayKey),
+      config
+    ),
+    ...computePlanAlerts(plan, config),
+    ...computeMonthAlerts(month, config),
+  ];
 
   const tips = [];
-  for (const s of sessions) {
+  for (const s of mainSessions) {
     const sessionTips = runHeuristics(
       s,
       s.toolEvents || [],
-      sessions,
+      mainSessions,
       [],
       { contextKey: heuristicContextKey },
     );
     tips.push(...sessionTips);
   }
+
+  // Dismissed and snoozed insights leave the action queue; the hashed state
+  // map itself stays server-side.
+  const { visible: visibleTips, hidden: hiddenTips } = partitionTips(tips, config.insightStates, generatedAt);
+  // The weekly view is account-wide, and dismissed insights still count
+  // toward the score, so hiding a recommendation cannot raise it.
+  const week = buildWeek(snapshot.sessions, generatedAt);
+  // Subagent runs count toward the week's usage but are not sessions of
+  // their own for the recommendation and /compact components.
+  const efficiency = scoreEfficiency(week, snapshot.sessions.filter((s) => !s.parentSessionId), tips);
+  const publicConfig = { ...config };
+  delete publicConfig.insightStates;
 
   return {
     generatedAt,
@@ -130,11 +177,13 @@ export function buildSummary(store, options = {}) {
       cacheReadInputTokens: p.cacheReadInputTokens,
       costUsd: p.costUsd,
       tokenTotal: p.tokenTotal,
-      sessions: p.sessions.map((s) => ({
+      estimatedCostUsed: p.sessions.some((s) => s.estimatedCostUsed === true),
+      sessions: p.sessions.filter((s) => !s.parentSessionId).map((s) => ({
         sessionId: s.sessionId,
         messageCount: s.messageCount,
         tokenTotal: tokenTotal(s),
         costUsd: s.costUsd,
+        estimatedCostUsed: s.estimatedCostUsed === true,
         lastTimestamp: s.lastTimestamp,
       })),
     })),
@@ -146,7 +195,7 @@ export function buildSummary(store, options = {}) {
       cacheReadInputTokens: b.cacheReadInputTokens,
       costUsd: b.costUsd,
       tokenTotal: b.tokenTotal,
-      sessions: b.sessions.map((s) => ({
+      sessions: b.sessions.filter((s) => !s.parentSessionId).map((s) => ({
         sessionId: s.sessionId,
         messageCount: s.messageCount,
         tokenTotal: tokenTotal(s),
@@ -155,12 +204,20 @@ export function buildSummary(store, options = {}) {
       })),
     })),
     byDay,
+    byHourOfWeek: aggregateByHourOfWeek(sessions),
     forecast,
+    month,
+    week,
+    efficiency,
     intelligence,
+    plan,
+    whatIf: buildWhatIf(sessions, { now: generatedAt }),
+    attribution: buildAttribution(sessions),
     sessions: sessionSummaries,
-    tips,
+    tips: visibleTips,
+    hiddenTips,
     alerts,
-    config,
+    config: publicConfig,
     totalIngestedMessages:
       filters.from || filters.to || filters.project || filters.model
         ? sessions.reduce((sum, session) => sum + (session.messageCount || 0), 0)

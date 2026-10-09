@@ -24,6 +24,7 @@ export function formatCompactSummary(summary = {}) {
     `Scope: ${formatScope(summary.filters || {})}`,
     `Selected: ${formatTokens(selected.tokenTotal)} tokens · ${formatCost(selected.costUsd)}`,
     `Today: ${formatTokens(today.tokenTotal)} tokens · ${formatCost(today.costUsd)}`,
+    formatMonthLine(summary.month, summary.config || {}),
     `Active: ${integer(active.sessionCount)} session${integer(active.sessionCount) === 1 ? '' : 's'} · ${formatTokens(velocity.tokensPerMinute)}/min · ${formatCost(velocity.costPerHour)}/hour`,
     `Cache: ${formatPercent(cache.reuseRate)} reuse · ${formatCost(cache.estimatedSavingsUsd)} estimated input cost avoided`,
     topProject
@@ -33,7 +34,60 @@ export function formatCompactSummary(summary = {}) {
     `Pricing quality: ${integer(quality.exactCostMessageCount)}/${integer(quality.messageCount)} messages matched known pricing · verified ${summary.pricing?.verifiedOn || 'unknown'}`,
   ];
 
+  const whatIf = summary.whatIf && summary.whatIf.scope;
+  if (whatIf && whatIf.actualCostUsd > 0 && Array.isArray(whatIf.costs) && whatIf.costs.length > 0) {
+    const options = whatIf.costs
+      .map((cost) => `${cost.label} ${formatCost(cost.costUsd)} (${formatSignedPercent(cost.deltaRatio)})`)
+      .join(' · ');
+    lines.push(`What-if, same tokens: ${options} vs ${formatCost(whatIf.actualCostUsd)} actual`);
+  }
+
+  const plan = summary.plan;
+  if (plan && plan.plan && plan.plan !== 'api') lines.push(formatPlanLine(plan));
+
+  const attribution = summary.attribution || {};
+  const subagents = attribution.subagents || {};
+  const topTool = Array.isArray(attribution.tools) ? attribution.tools[0] : null;
+  if (subagents.runs > 0 || topTool) {
+    const subagentCopy = subagents.runs > 0
+      ? `${formatPercent(subagents.share)} of tokens in ${integer(subagents.runs)} subagent run${integer(subagents.runs) === 1 ? '' : 's'} · ${formatCost(subagents.costUsd)}`
+      : 'no subagent runs';
+    const toolCopy = topTool
+      ? ` · largest tool results: ${topTool.name} (~${formatTokens(topTool.estimatedTokens)} tokens in ${integer(topTool.calls)} calls)`
+      : '';
+    lines.push(`Attribution: ${subagentCopy}${toolCopy}`);
+  }
+
   return `${lines.join('\n')}\n`;
+}
+
+function formatPlanLine(plan) {
+  const block = plan.currentBlock;
+  const windowText = block
+    ? `5h window ${formatTokens(block.tokenTotal)} tokens${typeof block.ratio === 'number' ? ` (${formatPercent(block.ratio)} of your ${block.referenceKind === 'limit' ? 'limit' : 'largest window'})` : ''}, resets in ${integer(block.remainingMinutes)} min`
+    : '5h window idle';
+  const value = plan.apiValue || {};
+  const multiple = typeof value.multipleOfPlan === 'number'
+    ? ` (${value.multipleOfPlan >= 1 ? `${value.multipleOfPlan.toFixed(1)}x` : `${formatPercent(value.multipleOfPlan)} of`} the ${formatCost(value.planMonthlyUsd)} plan)`
+    : '';
+  return `Plan: ${plan.planLabel} · ${windowText} · ${formatCost(value.monthToDateUsd)} API-equivalent this month${multiple}`;
+}
+
+function formatSignedPercent(ratio) {
+  const value = Math.round(numberOr0(ratio) * 100);
+  return value > 0 ? `+${value}%` : `${value}%`;
+}
+
+function formatMonthLine(month, config) {
+  if (!month || !month.month) return `Month: no usage yet`;
+  const base = `Month (${month.month}): ${formatTokens(month.tokenTotal)} tokens · ${formatCost(month.costUsd)}`;
+  if (config.monthlyCostCapUsd > 0) {
+    return `${base} · ${formatPercent(month.costUsd / config.monthlyCostCapUsd)} of ${formatCost(config.monthlyCostCapUsd)} budget · on pace for ${formatCost(month.projectedCostUsd)}`;
+  }
+  if (config.monthlyTokenCap > 0) {
+    return `${base} · ${formatPercent(month.tokenTotal / config.monthlyTokenCap)} of ${formatTokens(config.monthlyTokenCap)}-token budget · on pace for ${formatTokens(month.projectedTokens)} tokens`;
+  }
+  return `${base} · on pace for ${formatCost(month.projectedCostUsd)}`;
 }
 
 function formatScope(filters) {

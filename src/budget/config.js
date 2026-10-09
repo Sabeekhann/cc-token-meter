@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveStateDirectory } from '../paths.js';
+import { pruneInsightStates } from './insightStates.js';
 
 const CONFIG_DIR = resolveStateDirectory();
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -10,7 +11,15 @@ const DEFAULT_CONFIG = {
   dailyCostCapUsd: null,
   sessionTokenCap: null,
   sessionCostCapUsd: null,
+  monthlyTokenCap: null,
+  monthlyCostCapUsd: null,
   warnThresholdPct: 80,
+  plan: 'api',
+  planMonthlyUsd: null,
+  blockTokenLimit: null,
+  weeklyTokenLimit: null,
+  // Dismissed/snoozed insights keyed by a hash of the insight id.
+  insightStates: {},
 };
 
 const CAP_KEYS = new Set([
@@ -18,7 +27,15 @@ const CAP_KEYS = new Set([
   'dailyCostCapUsd',
   'sessionTokenCap',
   'sessionCostCapUsd',
+  'monthlyTokenCap',
+  'monthlyCostCapUsd',
+  'planMonthlyUsd',
+  'blockTokenLimit',
+  'weeklyTokenLimit',
 ]);
+
+// Mirrors the keys of PLAN_PRESETS in src/analytics/plan.js.
+const PLAN_IDS = new Set(['api', 'pro', 'max5x', 'max20x']);
 
 function ensureConfigDir(directory = CONFIG_DIR) {
   if (!fs.existsSync(directory)) {
@@ -38,11 +55,11 @@ function ensureConfigDir(directory = CONFIG_DIR) {
  * malformed files return defaults rather than crashing the CLI/server.
  * Invalid individual values are replaced by their safe defaults.
  *
- * @returns {{dailyTokenCap: number|null, dailyCostCapUsd: number|null, sessionTokenCap: number|null, sessionCostCapUsd: number|null, warnThresholdPct: number}}
+ * @returns {{dailyTokenCap: number|null, dailyCostCapUsd: number|null, sessionTokenCap: number|null, sessionCostCapUsd: number|null, warnThresholdPct: number, plan: string, planMonthlyUsd: number|null, blockTokenLimit: number|null, weeklyTokenLimit: number|null}}
  */
 export function readConfig(filePath = CONFIG_FILE) {
   if (!fs.existsSync(filePath)) {
-    return { ...DEFAULT_CONFIG };
+    return { ...DEFAULT_CONFIG, insightStates: {} };
   }
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
@@ -115,6 +132,22 @@ export function validateConfigUpdates(updates) {
       continue;
     }
 
+    if (key === 'insightStates') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new RangeError('insightStates must be an object');
+      }
+      validated[key] = pruneInsightStates(value);
+      continue;
+    }
+
+    if (key === 'plan') {
+      if (!PLAN_IDS.has(value)) {
+        throw new RangeError(`plan must be one of: ${Array.from(PLAN_IDS).join(', ')}`);
+      }
+      validated[key] = value;
+      continue;
+    }
+
     throw new Error(`unsupported budget config key: ${key}`);
   }
 
@@ -122,7 +155,7 @@ export function validateConfigUpdates(updates) {
 }
 
 function sanitizeStoredConfig(parsed) {
-  const next = { ...DEFAULT_CONFIG };
+  const next = { ...DEFAULT_CONFIG, insightStates: {} };
 
   for (const key of CAP_KEYS) {
     const value = parsed[key];
@@ -137,7 +170,10 @@ function sanitizeStoredConfig(parsed) {
     next.warnThresholdPct = parsed.warnThresholdPct;
   }
 
+  if (PLAN_IDS.has(parsed.plan)) next.plan = parsed.plan;
+  next.insightStates = pruneInsightStates(parsed.insightStates);
+
   return next;
 }
 
-export { CONFIG_DIR, CONFIG_FILE, DEFAULT_CONFIG };
+export { CONFIG_DIR, CONFIG_FILE, DEFAULT_CONFIG, PLAN_IDS };
