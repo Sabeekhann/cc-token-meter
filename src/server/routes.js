@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { buildSummary } from './summary.js';
-import { writeConfig } from '../budget/config.js';
+import { readConfig, writeConfig } from '../budget/config.js';
+import { applyInsightAction } from '../budget/insightStates.js';
 
 const MAX_PROJECT_FILTER_LENGTH = 1024;
 const MAX_MODEL_FILTER_LENGTH = 256;
@@ -62,6 +63,30 @@ export async function handleApiRoute(req, res, url, store) {
       sendJson(res, 200, { ok: true, config: next });
     } catch (err) {
       sendJson(res, 400, { error: 'Invalid budget config', detail: String(err && err.message) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/insights' && req.method === 'POST') {
+    let body;
+    try {
+      body = await readJsonBody(req, 16_384);
+    } catch (err) {
+      sendJson(res, 400, { error: 'Invalid JSON body', detail: String(err && err.message) });
+      return true;
+    }
+
+    try {
+      const request = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+      const insightStates = applyInsightAction(readConfig().insightStates, {
+        id: request.id,
+        action: request.action,
+        days: request.days,
+      });
+      writeConfig({ insightStates });
+      sendJson(res, 200, { ok: true, hiddenInsightCount: Object.keys(insightStates).length });
+    } catch (err) {
+      sendJson(res, 400, { error: 'Invalid insight action', detail: String(err && err.message) });
     }
     return true;
   }

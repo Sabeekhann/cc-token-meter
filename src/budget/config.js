@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveStateDirectory } from '../paths.js';
+import { pruneInsightStates } from './insightStates.js';
 
 const CONFIG_DIR = resolveStateDirectory();
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -15,6 +16,8 @@ const DEFAULT_CONFIG = {
   planMonthlyUsd: null,
   blockTokenLimit: null,
   weeklyTokenLimit: null,
+  // Dismissed/snoozed insights keyed by a hash of the insight id.
+  insightStates: {},
 };
 
 const CAP_KEYS = new Set([
@@ -52,7 +55,7 @@ function ensureConfigDir(directory = CONFIG_DIR) {
  */
 export function readConfig(filePath = CONFIG_FILE) {
   if (!fs.existsSync(filePath)) {
-    return { ...DEFAULT_CONFIG };
+    return { ...DEFAULT_CONFIG, insightStates: {} };
   }
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
@@ -125,6 +128,14 @@ export function validateConfigUpdates(updates) {
       continue;
     }
 
+    if (key === 'insightStates') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new RangeError('insightStates must be an object');
+      }
+      validated[key] = pruneInsightStates(value);
+      continue;
+    }
+
     if (key === 'plan') {
       if (!PLAN_IDS.has(value)) {
         throw new RangeError(`plan must be one of: ${Array.from(PLAN_IDS).join(', ')}`);
@@ -140,7 +151,7 @@ export function validateConfigUpdates(updates) {
 }
 
 function sanitizeStoredConfig(parsed) {
-  const next = { ...DEFAULT_CONFIG };
+  const next = { ...DEFAULT_CONFIG, insightStates: {} };
 
   for (const key of CAP_KEYS) {
     const value = parsed[key];
@@ -156,6 +167,7 @@ function sanitizeStoredConfig(parsed) {
   }
 
   if (PLAN_IDS.has(parsed.plan)) next.plan = parsed.plan;
+  next.insightStates = pruneInsightStates(parsed.insightStates);
 
   return next;
 }

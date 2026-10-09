@@ -72,7 +72,9 @@ The insights view turns heuristics into an action queue:
 - clear issue name, affected session, measured explanation, and savings;
 - a “view session” action that opens the relevant timeline;
 - a summary of total calculable savings without pretending that
-  non-quantifiable advice has a dollar value.
+  non-quantifiable advice has a dollar value;
+- snooze (1 or 7 days), dismiss, and restore per insight, with a
+  "Dismissed & snoozed" filter; snoozed insights return automatically.
 
 ### Settings
 

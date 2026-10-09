@@ -155,6 +155,15 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
+## Managing insights
+
+Each recommendation in **Insights** can be snoozed for a day, snoozed for a
+week, or dismissed. Hidden insights move to the **Dismissed & snoozed**
+filter, where you can restore them. A snoozed insight comes back on its own
+when the snooze ends. The choice is stored in your local `config.json` under
+a one-way hash of the insight, so file paths named in insights are never
+written there.
+
 ## Budget alerts and desktop notifications
 
 Active budget and plan alerts appear at the top of Overview: daily token or

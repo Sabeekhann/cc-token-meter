@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSummary } from '../src/server/summary.js';
 import { parseSummaryQuery } from '../src/server/routes.js';
+import { applyInsightAction } from '../src/budget/insightStates.js';
 import { createDashboardDemoStore } from './fixtures/dashboard-sessions.js';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
@@ -22,6 +23,7 @@ const config = {
   // Preview window alerts with CC_TOKEN_METER_DEMO_BLOCK_LIMIT=<tokens>.
   blockTokenLimit: Number(process.env.CC_TOKEN_METER_DEMO_BLOCK_LIMIT) || null,
   weeklyTokenLimit: null,
+  insightStates: {},
 };
 
 const types = {
@@ -33,7 +35,7 @@ const types = {
 export function createDashboardDemoServer(options = {}) {
   const store = createDashboardDemoStore(options);
 
-  return http.createServer((req, res) => {
+  return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
 
     if (url.pathname === '/api/summary' && req.method === 'GET') {
@@ -45,6 +47,17 @@ export function createDashboardDemoServer(options = {}) {
           error: 'Invalid summary filters',
           detail: String(error && error.message),
         });
+      }
+    }
+
+    if (url.pathname === '/api/insights' && req.method === 'POST') {
+      // In-memory only: the synthetic preview never writes local config.
+      const body = await readDemoBody(req);
+      try {
+        config.insightStates = applyInsightAction(config.insightStates, body);
+        return sendJson(res, 200, { ok: true });
+      } catch (error) {
+        return sendJson(res, 400, { error: 'Invalid insight action', detail: String(error && error.message) });
       }
     }
 
@@ -87,6 +100,24 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const server = createDashboardDemoServer();
   server.listen(port, '127.0.0.1', () => {
     console.log(`Synthetic dashboard preview: http://127.0.0.1:${port}`);
+  });
+}
+
+function readDemoBody(req) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size <= 16_384) chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
+      } catch {
+        resolve({});
+      }
+    });
   });
 }
 

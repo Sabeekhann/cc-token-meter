@@ -124,3 +124,16 @@ test('dashboard shows active alerts and offers opt-in desktop notifications', ()
   assert.match(js, /function readStorage[\s\S]*?try \{[\s\S]*?\} catch/);
   assert.match(js, /if \(document\.hidden\) showDesktopNotification/);
 });
+
+test('insights can be snoozed, dismissed, and restored through the local API', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /data-insight-filter="hidden"[^>]*>Dismissed &amp; snoozed <span id="filterHiddenCount">/);
+  assert.match(js, /fetch\('\/api\/insights'/);
+  assert.match(js, /data-insight-action="snooze" data-insight-days="1"/);
+  assert.match(js, /data-insight-action="snooze" data-insight-days="7"/);
+  assert.match(js, /data-insight-action="dismiss"/);
+  assert.match(js, /data-insight-action="restore"/);
+  assert.match(js, /state\.summary\.hiddenTips/);
+});

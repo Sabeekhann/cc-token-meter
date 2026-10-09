@@ -115,10 +115,16 @@ read this file before starting any development or design task in this repo.
     read-only. Shape:
     `{ dailyTokenCap, dailyCostCapUsd, sessionTokenCap, sessionCostCapUsd,
     warnThresholdPct, plan, planMonthlyUsd, blockTokenLimit,
-    weeklyTokenLimit }`, all nullable except `warnThresholdPct` (default
+    weeklyTokenLimit, insightStates }`, all nullable except `warnThresholdPct` (default
     `80`) and `plan` (`api`|`pro`|`max5x`|`max20x`, default `api`). `readConfig()` never throws on a missing file or malformed JSON
     — falls back to defaults silently in both cases, since a corrupt local
     config file shouldn't crash the CLI/server.
+  - `insightStates.js` — dismiss/snooze/restore state for insights, keyed
+    by `insightKey(id)` (first 16 hex chars of SHA-256) because insight ids
+    can contain local file paths that must not land in `config.json`.
+    `applyInsightAction()` validates (snooze 1–90 days), drops expired
+    snoozes, and keeps at most 500 entries; `partitionTips()` splits tips
+    into visible and hidden. Not on the pure list (uses `node:crypto`).
   - `alerts.js` — pure `computeAlerts(todayTotals, activeSessionTotals,
     config)` and `computePlanAlerts(plan, config)` → alerts `{ id, level:
     'warn'|'exceeded', scope: 'day'|'session'|'window'|'week', message }`.
@@ -164,12 +170,16 @@ read this file before starting any development or design task in this repo.
     avoid recomputing for idle sessions on every ~1.5s poll tick.
     `clearHeuristicsCache()` exported for tests.
 - `src/server/`
-  - `routes.js` — exactly 2 HTTP routes: `GET /api/summary`,
-    `POST /api/budget` (allowlisted keys only). SSE stream is a separate
+  - `routes.js` — exactly 3 HTTP routes: `GET /api/summary`,
+    `POST /api/budget` (allowlisted keys only), and `POST /api/insights`
+    (`{id, action: 'dismiss'|'snooze'|'restore', days?}`, 16 KB body cap).
+    All share the session-cookie authorization. SSE stream is a separate
     concern (see `sse.js`).
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
-    `byDay`, `byHourOfWeek`, `forecast`, `intelligence`, `plan` (always
+    `byDay`, `byHourOfWeek`, `forecast`, `intelligence`, `hiddenTips`
+    (dismissed or snoozed, with `userState`; `tips` holds only visible
+    ones; `config` omits `insightStates`), `plan` (always
     computed from all sessions, ignoring filters), `whatIf` (filtered
     scope), `sessions`, `tips`,
     `alerts`, `config`, `totalIngestedMessages`; `byProject` entries and

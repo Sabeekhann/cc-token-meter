@@ -1225,6 +1225,7 @@
 
   function renderInsights() {
     var allTips = rankedTips(state.summary.tips || []);
+    var hiddenTips = rankedTips(state.summary.hiddenTips || []);
     var warnCount = allTips.filter(function (tip) { return tip.severity === 'warn'; }).length;
     var infoCount = allTips.length - warnCount;
     var savingsUsd = allTips.reduce(function (sum, tip) { return sum + finiteOr0(tip.estimatedSavingsUsd); }, 0);
@@ -1233,26 +1234,38 @@
     byId('filterAllCount').textContent = allTips.length;
     byId('filterWarnCount').textContent = warnCount;
     byId('filterInfoCount').textContent = infoCount;
+    byId('filterHiddenCount').textContent = hiddenTips.length;
     byId('totalSavings').textContent = savingsUsd > 0 ? formatCost(savingsUsd) : (savingsTokens > 0 ? formatCompact(savingsTokens) + ' tok' : '—');
     byId('totalSavingsTokens').textContent = savingsTokens > 0
       ? formatNumber(savingsTokens) + ' estimated tokens · recommendations may overlap'
       : 'Savings appear only when they can be calculated';
 
-    var filtered = state.insightFilter === 'all' ? allTips : allTips.filter(function (tip) {
+    var showingHidden = state.insightFilter === 'hidden';
+    var filtered = showingHidden ? hiddenTips : state.insightFilter === 'all' ? allTips : allTips.filter(function (tip) {
       return state.insightFilter === 'warn' ? tip.severity === 'warn' : tip.severity !== 'warn';
     });
     var list = byId('insightsList');
     if (filtered.length === 0) {
-      list.innerHTML = '<div class="empty-state-card"><div class="empty-icon">✓</div><h2>No matching recommendations</h2><p>The selected category has no current findings. Insights update automatically as local sessions change.</p></div>';
+      list.innerHTML = showingHidden
+        ? '<div class="empty-state-card"><div class="empty-icon">↺</div><h2>Nothing dismissed or snoozed</h2><p>Insights you dismiss or snooze appear here, where you can restore them.</p></div>'
+        : '<div class="empty-state-card"><div class="empty-icon">✓</div><h2>No matching recommendations</h2><p>The selected category has no current findings. Insights update automatically as local sessions change.</p></div>';
       return;
     }
 
     list.innerHTML = filtered.map(function (tip) {
       var kind = tipKind(tip);
       var saving = savingText(tip);
-      return '<article class="insight-card ' + (tip.severity === 'warn' ? 'warn' : '') + '">' +
+      var id = escapeHtmlAttr(tip.id || '');
+      var actions = showingHidden
+        ? '<span class="insight-hidden-note">' + escapeHtml(hiddenStateText(tip.userState)) + '</span>' +
+          '<button class="insight-action" type="button" data-insight-action="restore" data-insight-id="' + id + '">Restore</button>'
+        : '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="1" data-insight-id="' + id + '">Snooze 1 day</button>' +
+          '<button class="insight-action" type="button" data-insight-action="snooze" data-insight-days="7" data-insight-id="' + id + '">Snooze 7 days</button>' +
+          '<button class="insight-action" type="button" data-insight-action="dismiss" data-insight-id="' + id + '">Dismiss</button>';
+      return '<article class="insight-card ' + (tip.severity === 'warn' ? 'warn' : '') + (showingHidden ? ' muted' : '') + '">' +
         '<span class="insight-icon ' + (tip.severity === 'warn' ? 'warn' : '') + '">' + escapeHtml(kind.icon) + '</span>' +
-        '<div class="insight-copy"><h3>' + escapeHtml(kind.label) + '</h3><p>' + escapeHtml(tip.message || '') + '</p><div class="insight-meta"><span class="severity-badge ' + (tip.severity === 'warn' ? '' : 'info') + '">' + escapeHtml(tip.severity === 'warn' ? 'Attention' : 'Optimize') + '</span><span>Session ' + escapeHtml(String(tip.sessionId || '').slice(0, 12)) + '</span></div></div>' +
+        '<div class="insight-copy"><h3>' + escapeHtml(kind.label) + '</h3><p>' + escapeHtml(tip.message || '') + '</p><div class="insight-meta"><span class="severity-badge ' + (tip.severity === 'warn' ? '' : 'info') + '">' + escapeHtml(tip.severity === 'warn' ? 'Attention' : 'Optimize') + '</span><span>Session ' + escapeHtml(String(tip.sessionId || '').slice(0, 12)) + '</span></div>' +
+        '<div class="insight-actions" role="group" aria-label="' + escapeHtmlAttr('Manage ' + kind.label) + '">' + actions + '</div></div>' +
         '<div class="insight-side">' + (saving ? '<strong>' + escapeHtml(saving) + '</strong><span>estimated opportunity</span>' : '<strong>Actionable</strong><span>impact not quantified</span>') + '<button class="session-button" type="button" data-view-session="' + escapeHtmlAttr(tip.sessionId || '') + '">View session</button></div>' +
       '</article>';
     }).join('');
@@ -1263,6 +1276,41 @@
         setView('live');
       });
     });
+    list.querySelectorAll('[data-insight-action]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        updateInsight(button);
+      });
+    });
+  }
+
+  function hiddenStateText(userState) {
+    if (!userState) return '';
+    if (userState.status === 'snoozed') {
+      var until = new Date(userState.until);
+      return 'Snoozed until ' + (Number.isNaN(until.getTime()) ? 'later' : until.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+    }
+    return 'Dismissed';
+  }
+
+  async function updateInsight(button) {
+    var action = button.getAttribute('data-insight-action');
+    var days = Number(button.getAttribute('data-insight-days')) || undefined;
+    button.disabled = true;
+    try {
+      var response = await fetch('/api/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: button.getAttribute('data-insight-id'), action: action, days: days })
+      });
+      if (!response.ok) throw new Error('Insight update failed');
+      var summaryResponse = await fetch('/api/summary', { cache: 'no-store' });
+      if (!summaryResponse.ok) throw new Error('Could not refresh the dashboard');
+      receiveSummary(await summaryResponse.json());
+      showToast(action === 'restore' ? 'Insight restored.' : action === 'dismiss' ? 'Insight dismissed. Find it under Dismissed & snoozed.' : 'Insight snoozed for ' + days + ' day' + (days === 1 ? '' : 's') + '.');
+    } catch (error) {
+      button.disabled = false;
+      showToast('Could not update this insight. Please try again.');
+    }
   }
 
   function renderSettings() {

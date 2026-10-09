@@ -544,6 +544,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[t
 .insight-side { min-width:120px;text-align:right; }
 .insight-side strong { display:block;color:var(--teal);font-size:12px; }
 .insight-side span { display:block;margin-top:3px;color:var(--faint);font-size:8.5px; }
+.insight-actions { display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px; }
+.insight-action { min-height:44px;padding:0 10px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:8px;font-size:9.5px;font-weight:700;cursor:pointer; }
+.insight-action:hover { color:var(--ink);border-color:var(--line-strong); }
+.insight-action:disabled { opacity:.55;cursor:wait; }
+.insight-card.muted { opacity:.78; }
+.insight-hidden-note { margin-right:6px;color:var(--muted);font-size:10px;font-weight:650; }
 .session-button { min-height:44px;margin-top:11px;padding:6px 11px;color:var(--ink);background:var(--card-soft);border:1px solid var(--line);border-radius:7px;font-size:9px;font-weight:700;cursor:pointer; }
 
 /* Settings */

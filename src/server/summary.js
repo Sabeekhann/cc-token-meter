@@ -13,6 +13,7 @@ import {
   buildTimeline,
 } from '../ingest/aggregate.js';
 import { computeAlerts, computePlanAlerts } from '../budget/alerts.js';
+import { partitionTips } from '../budget/insightStates.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
 import { buildUsageIntelligence } from '../analytics/overview.js';
@@ -135,6 +136,12 @@ export function buildSummary(store, options = {}) {
     tips.push(...sessionTips);
   }
 
+  // Dismissed and snoozed insights leave the action queue; the hashed state
+  // map itself stays server-side.
+  const { visible: visibleTips, hidden: hiddenTips } = partitionTips(tips, config.insightStates, generatedAt);
+  const publicConfig = { ...config };
+  delete publicConfig.insightStates;
+
   return {
     generatedAt,
     filters,
@@ -182,9 +189,10 @@ export function buildSummary(store, options = {}) {
     plan,
     whatIf: buildWhatIf(sessions, { now: generatedAt }),
     sessions: sessionSummaries,
-    tips,
+    tips: visibleTips,
+    hiddenTips,
     alerts,
-    config,
+    config: publicConfig,
     totalIngestedMessages:
       filters.from || filters.to || filters.project || filters.model
         ? sessions.reduce((sum, session) => sum + (session.messageCount || 0), 0)
