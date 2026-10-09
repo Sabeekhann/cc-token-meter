@@ -14,7 +14,7 @@
     <a href="https://app.codecov.io/github/Sabeekhann/cc-token-meter"><img alt="Codecov coverage" src="https://codecov.io/github/Sabeekhann/cc-token-meter/graph/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml"><img alt="Compatibility" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/compatibility.yml/badge.svg" /></a>
     <a href="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Sabeekhann/cc-token-meter/actions/workflows/security.yml/badge.svg" /></a>
-    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.3.0"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.3.0" /></a>
+    <a href="https://socket.dev/npm/package/cc-token-meter/overview/1.3.1"><img alt="Socket package score" src="https://badge.socket.dev/npm/package/cc-token-meter/1.3.1" /></a>
     <img alt="Corgea scanned" src="https://img.shields.io/badge/Corgea-scanned-ff6b2c" />
     <a href="package.json"><img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" /></a>
     <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-f3b33d" /></a>
@@ -60,7 +60,7 @@ It requires no API key, makes no Anthropic API call, works retroactively, and tr
 
 ## Release status
 
-The current **v1.3.0** release corrects token accounting (responses were counted more than once, and subagents were missing), adds subagent and tool attribution, and brings a Claude Code status line, Pro/Max plan mode, what-if model pricing, budget alerts with desktop notifications, monthly budgets, insight snoozing, a weekly efficiency score and report, and a dark theme, while preserving the local-only privacy model.
+The current **v1.3.1** release redesigns the dashboard with dark and light themes, larger type, and new charts. It builds on v1.3.0, which corrected token accounting (responses were counted more than once, and subagents were missing), added subagent and tool attribution, and brought a status line, Pro/Max plan mode, what-if model pricing, budget alerts with desktop notifications, monthly budgets, insight snoozing, and a weekly efficiency score and report. The local-only privacy model is unchanged.
 
 The [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/releases/latest) and npm version badge above are the authoritative published versions. Updating repository package metadata does not publish a package; release publication remains an explicit maintainer action. See [`CHANGELOG.md`](CHANGELOG.md) for the version-by-version history.
 
