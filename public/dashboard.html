@@ -112,7 +112,7 @@
             </article>
             <article class="metric-card">
               <div class="metric-topline">
-                <span>Estimated cost today</span>
+                <span id="costCardLabel">Estimated cost today</span>
                 <span class="metric-icon cost-icon">$</span>
               </div>
               <strong id="todayCost" class="metric-value">—</strong>
@@ -141,6 +141,40 @@
               <button class="metric-link" type="button" data-go-view="live">Open live view →</button>
             </article>
           </div>
+
+          <article id="planPanel" class="panel plan-panel hidden" aria-labelledby="planPanelTitle">
+            <div class="panel-header">
+              <div>
+                <p id="planPanelKicker" class="panel-kicker">PLAN WINDOW</p>
+                <h3 id="planPanelTitle">Current 5-hour window</h3>
+              </div>
+              <span id="planWindowBadge" class="soft-badge">Idle</span>
+            </div>
+            <div class="plan-grid">
+              <div class="plan-window">
+                <div class="plan-window-head">
+                  <strong id="planWindowTokens" class="plan-big">—</strong>
+                  <span id="planWindowReset">No messages in the current window</span>
+                </div>
+                <div class="plan-meter" aria-hidden="true"><span id="planWindowBar"></span><i id="planWindowProjected"></i></div>
+                <p id="planWindowMeta" class="plan-meta">Window progress appears after your first message.</p>
+                <div id="planRecentBlocks" class="plan-blocks" role="img" aria-label="Recent 5-hour windows"></div>
+              </div>
+              <div class="plan-side">
+                <div class="plan-stat">
+                  <span>API-equivalent value this month</span>
+                  <strong id="planValue">—</strong>
+                  <small id="planValueMeta">Set your plan in Settings.</small>
+                </div>
+                <div class="plan-stat">
+                  <span>Rolling 7 days</span>
+                  <strong id="planWeekly">—</strong>
+                  <small id="planWeeklyMeta">Set a weekly limit in Settings to track pace.</small>
+                </div>
+              </div>
+            </div>
+            <p class="chart-summary">Windows are reconstructed locally from message times and may not match Anthropic's exact accounting. Anthropic doesn't publish plan token limits, so progress uses your own limit or your largest recent window.</p>
+          </article>
 
           <div class="overview-grid">
             <article class="panel burn-panel">
@@ -343,6 +377,39 @@
                   <span>Warning threshold (%)</span>
                   <input id="warnThresholdPct" name="warnThresholdPct" type="number" min="1" max="100" step="1" placeholder="80" />
                   <small>Warn before a configured cap is reached.</small>
+                </label>
+              </div>
+              <div class="panel-header plan-settings-header">
+                <div>
+                  <p class="panel-kicker">PLAN</p>
+                  <h3>Subscription windows</h3>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>
+                  <span>Your Claude plan</span>
+                  <select id="planSelect" name="plan">
+                    <option value="api">API (pay as you go)</option>
+                    <option value="pro">Pro</option>
+                    <option value="max5x">Max 5×</option>
+                    <option value="max20x">Max 20×</option>
+                  </select>
+                  <small>Subscription plans show 5-hour windows and API-equivalent value.</small>
+                </label>
+                <label>
+                  <span>Plan price per month (USD)</span>
+                  <input id="planMonthlyUsd" name="planMonthlyUsd" type="number" min="0" step="1" placeholder="Plan list price" />
+                  <small>Leave empty to use the plan's list price.</small>
+                </label>
+                <label>
+                  <span>5-hour window token limit</span>
+                  <input id="blockTokenLimit" name="blockTokenLimit" type="number" min="0" step="1000" placeholder="Your largest window" />
+                  <small>Empty compares each window with your largest recent one.</small>
+                </label>
+                <label>
+                  <span>Weekly token limit</span>
+                  <input id="weeklyTokenLimit" name="weeklyTokenLimit" type="number" min="0" step="1000" placeholder="e.g. 20000000" />
+                  <small>Rolling 7-day pace check. Leave empty for none.</small>
                 </label>
               </div>
               <div class="form-actions">

@@ -16,6 +16,11 @@ const config = {
   sessionTokenCap: 3_000_000,
   sessionCostCapUsd: 30,
   warnThresholdPct: 80,
+  // Preview subscription mode with CC_TOKEN_METER_DEMO_PLAN=pro|max5x|max20x.
+  plan: process.env.CC_TOKEN_METER_DEMO_PLAN || 'api',
+  planMonthlyUsd: null,
+  blockTokenLimit: null,
+  weeklyTokenLimit: null,
 };
 
 const types = {

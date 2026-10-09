@@ -46,6 +46,10 @@ export async function handleApiRoute(req, res, url, store) {
       'sessionTokenCap',
       'sessionCostCapUsd',
       'warnThresholdPct',
+      'plan',
+      'planMonthlyUsd',
+      'blockTokenLimit',
+      'weeklyTokenLimit',
     ];
 
     const updates = {};

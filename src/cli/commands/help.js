@@ -14,6 +14,9 @@ Usage:
   cc-token-meter --set-budget-usd <n>          Set daily cost cap (USD) and exit
   cc-token-meter --set-budget-tokens <n>       Set daily token cap and exit
   cc-token-meter --set-session-budget-usd <n>  Set per-session cost cap (USD) and exit
+  cc-token-meter --set-plan <id>               Set your plan: api, pro, max5x, or max20x
+  cc-token-meter --set-block-token-limit <n>   Set a 5-hour window token limit (0 clears)
+  cc-token-meter --set-weekly-token-limit <n>  Set a rolling 7-day token limit (0 clears)
   cc-token-meter --help                   Show this help
   cc-token-meter --version                Show version
 

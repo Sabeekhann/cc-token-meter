@@ -28,7 +28,12 @@ The default view provides a useful answer in under ten seconds:
 - top projects by estimated cost;
 - the three highest-priority recommendations;
 - 14-day sparklines on the token and cost cards;
-- a weekday × hour heatmap of recent detailed usage.
+- a weekday × hour heatmap of recent detailed usage;
+- for Pro/Max plans only, a plan panel: the current estimated 5-hour window
+  against a user limit or the user's largest recent window, recent windows,
+  rolling 7-day tokens, and month-to-date API-equivalent value against the
+  plan price. Anthropic publishes no plan token limits, so the panel never
+  shows guessed limits and says that windows are local estimates.
 
 ### Live session
 

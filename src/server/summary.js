@@ -15,6 +15,7 @@ import { computeAlerts } from '../budget/alerts.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
 import { buildUsageIntelligence } from '../analytics/overview.js';
+import { buildPlanIntelligence } from '../analytics/plan.js';
 import { filterSessions, normalizeSummaryFilters } from '../analytics/filters.js';
 import { PRICING_VERIFIED_ON } from '../pricing/models.js';
 
@@ -104,6 +105,13 @@ export function buildSummary(store, options = {}) {
     config
   );
   const intelligence = buildUsageIntelligence(sessions, { now: generatedAt });
+  // Subscription windows are account-wide, so plan intelligence always uses
+  // every session rather than the filtered scope.
+  const filtered = Boolean(filters.from || filters.to || filters.project || filters.model);
+  const plan = buildPlanIntelligence(snapshot.sessions, config, {
+    now: generatedAt,
+    byDay: filtered ? undefined : byDay,
+  });
 
   const tips = [];
   for (const s of sessions) {
@@ -161,6 +169,7 @@ export function buildSummary(store, options = {}) {
     byHourOfWeek: aggregateByHourOfWeek(sessions),
     forecast,
     intelligence,
+    plan,
     sessions: sessionSummaries,
     tips,
     alerts,

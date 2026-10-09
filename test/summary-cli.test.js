@@ -40,3 +40,19 @@ test('compact summary is useful for an empty fresh install', () => {
   assert.match(output, /Top project: no usage/);
   assert.match(output, /Recommendations: 0 active/);
 });
+
+test('compact summary adds a plan line for subscription users only', () => {
+  const output = formatCompactSummary({
+    plan: {
+      plan: 'max20x',
+      planLabel: 'Max 20×',
+      currentBlock: { tokenTotal: 1_200_000, ratio: 0.6, referenceKind: 'limit', remainingMinutes: 72 },
+      apiValue: { monthToDateUsd: 400, planMonthlyUsd: 200, multipleOfPlan: 2 },
+    },
+  });
+  assert.match(
+    output,
+    /Plan: Max 20× · 5h window 1,200,000 tokens \(60% of your limit\), resets in 72 min · \$400\.00 API-equivalent this month \(2\.0x the \$200\.00 plan\)/,
+  );
+  assert.doesNotMatch(formatCompactSummary({ plan: { plan: 'api' } }), /Plan:/);
+});

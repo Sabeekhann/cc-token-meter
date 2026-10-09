@@ -50,6 +50,9 @@ function parseArgs(argv) {
     setBudgetUsd: null,
     setBudgetTokens: null,
     setSessionBudgetUsd: null,
+    setPlan: null,
+    setBlockTokenLimit: null,
+    setWeeklyTokenLimit: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -85,6 +88,20 @@ function parseArgs(argv) {
         opts.setSessionBudgetUsd = parseRequiredNumber('--set-session-budget-usd', value);
         break;
       }
+      case '--set-plan': {
+        const value = parseRequiredString('--set-plan', argv[++i]);
+        if (!['api', 'pro', 'max5x', 'max20x'].includes(value)) {
+          throw new Error(`--set-plan must be one of: api, pro, max5x, max20x; got: ${value}`);
+        }
+        opts.setPlan = value;
+        break;
+      }
+      case '--set-block-token-limit':
+        opts.setBlockTokenLimit = parseRequiredNumber('--set-block-token-limit', argv[++i]);
+        break;
+      case '--set-weekly-token-limit':
+        opts.setWeeklyTokenLimit = parseRequiredNumber('--set-weekly-token-limit', argv[++i]);
+        break;
       case '--json':
         opts.json = true;
         break;
@@ -218,6 +235,25 @@ export async function main(argv) {
   if (opts.setSessionBudgetUsd !== null) {
     const { setBudgetCommand } = await loadCommand('setBudget');
     await setBudgetCommand({ sessionCostCapUsd: opts.setSessionBudgetUsd });
+    return;
+  }
+
+  if (opts.setPlan !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
+    await setBudgetCommand({ plan: opts.setPlan });
+    return;
+  }
+
+  if (opts.setBlockTokenLimit !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
+    // 0 clears the limit, so progress falls back to the personal record.
+    await setBudgetCommand({ blockTokenLimit: opts.setBlockTokenLimit || null });
+    return;
+  }
+
+  if (opts.setWeeklyTokenLimit !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
+    await setBudgetCommand({ weeklyTokenLimit: opts.setWeeklyTokenLimit || null });
     return;
   }
 

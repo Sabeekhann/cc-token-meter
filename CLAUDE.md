@@ -24,6 +24,7 @@ read this file before starting any development or design task in this repo.
   `--statusline` (one line for Claude Code's `statusLine` command),
   `--statusline-config` (print setup instructions),
   `--set-budget-usd`/`--set-budget-tokens`/`--set-session-budget-usd`,
+  `--set-plan`/`--set-block-token-limit`/`--set-weekly-token-limit`,
   `--port`, `--no-open`, `--help`, `--version`. `src/cli/index.js` loads
   each command module on demand so `--statusline` starts fast.
 - **100% local.** No outbound network calls other than serving the local
@@ -72,6 +73,14 @@ read this file before starting any development or design task in this repo.
   health/savings, model-mix, and data-quality intelligence.
 - `src/analytics/statusline.js` — pure `summarizeUsageRecords()` (session and
   local-today totals from parser records) and `formatStatusline()`.
+- `src/analytics/plan.js` — pure Pro/Max plan mode: `PLAN_PRESETS` (labels
+  and list prices only), `buildUsageBlocks()` (estimated 5-hour windows that
+  open at the local hour of the first message after the previous window
+  closed), and `buildPlanIntelligence()` (current window vs a user limit or
+  the user's largest recent window, rolling 7-day total, month-to-date
+  API-equivalent value vs plan price). Anthropic publishes no subscription
+  token limits — never encode guessed limits; progress must stay relative to
+  user-set limits or the user's own history, and the UI must say so.
 - `src/pricing/`
   - `models.js` — exports `PRICING_TABLE` (array of `{ id,
     matchSubstrings[], inputPerMTok, outputPerMTok, effectiveFrom,
@@ -98,8 +107,9 @@ read this file before starting any development or design task in this repo.
     `~/.claude-token-meter/config.json`; transcript files are strictly
     read-only. Shape:
     `{ dailyTokenCap, dailyCostCapUsd, sessionTokenCap, sessionCostCapUsd,
-    warnThresholdPct }`, all nullable except `warnThresholdPct` (default
-    `80`). `readConfig()` never throws on a missing file or malformed JSON
+    warnThresholdPct, plan, planMonthlyUsd, blockTokenLimit,
+    weeklyTokenLimit }`, all nullable except `warnThresholdPct` (default
+    `80`) and `plan` (`api`|`pro`|`max5x`|`max20x`, default `api`). `readConfig()` never throws on a missing file or malformed JSON
     — falls back to defaults silently in both cases, since a corrupt local
     config file shouldn't crash the CLI/server.
   - `alerts.js` — pure function `computeAlerts(todayTotals,
@@ -119,11 +129,13 @@ read this file before starting any development or design task in this repo.
   - `commands/statusline.js` — reads Claude Code's statusLine JSON from
     stdin (bounded size and time), locates the session only through
     `discoverSessionFiles()` (never a stdin-supplied path), parses that
-    transcript plus at most 20 transcripts modified today, prints one line,
+    transcript plus at most 20 transcripts modified today (or in the last
+    24 hours when a subscription plan is set, to place the 5-hour window),
+    prints one line,
     and writes nothing. It never throws: failures print a neutral line and
     exit 0. Also prints the `--statusline-config` instructions; it never
     edits Claude Code settings.
-  - `commands/setBudget.js` — handles the three `--set-*-budget-*` flags.
+  - `commands/setBudget.js` — handles the `--set-*-budget-*` and plan flags.
   - `commands/help.js` — `--help` output.
 - `src/heuristics/` — 5 pure one-function-per-file tip generators, each
   `(sessionRecord, toolEvents, allSessionsHistory) => Tip[]`, where
@@ -144,7 +156,8 @@ read this file before starting any development or design task in this repo.
     concern (see `sse.js`).
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
-    `byDay`, `byHourOfWeek`, `forecast`, `intelligence`, `sessions`, `tips`,
+    `byDay`, `byHourOfWeek`, `forecast`, `intelligence`, `plan` (always
+    computed from all sessions, ignoring filters), `sessions`, `tips`,
     `alerts`, `config`, `totalIngestedMessages`; `byProject` entries and
     their sessions carry `estimatedCostUsed`). Reused
     **verbatim** by both the SSE dashboard stream and the `--json` CLI
@@ -242,6 +255,9 @@ cc-token-meter --statusline-config            Show status line setup instruction
 cc-token-meter --set-budget-usd <n>           Set daily cost cap (USD) and exit
 cc-token-meter --set-budget-tokens <n>        Set daily token cap and exit
 cc-token-meter --set-session-budget-usd <n>   Set per-session cost cap (USD) and exit
+cc-token-meter --set-plan <id>                Set plan: api, pro, max5x, max20x
+cc-token-meter --set-block-token-limit <n>    Set a 5-hour window token limit (0 clears)
+cc-token-meter --set-weekly-token-limit <n>   Set a rolling 7-day token limit (0 clears)
 cc-token-meter --help                         Show help
 cc-token-meter --version                      Show version
 ```

@@ -81,3 +81,19 @@ test('dashboard ships an offline dark theme, command palette, and new usage visu
   assert.match(js, /estimateBadge\(project\.estimatedCostUsed\)/);
   assert.match(js, /estimateBadge\(session\.estimatedCostUsed\)/);
 });
+
+test('dashboard shows subscription windows only for plan users and saves plan settings', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /id="planPanel" class="panel plan-panel hidden"/);
+  assert.match(html, /<label>[\s\S]*?<select id="planSelect" name="plan">/);
+  for (const id of ['planMonthlyUsd', 'blockTokenLimit', 'weeklyTokenLimit']) {
+    assert.match(html, new RegExp(`<label>[\\s\\S]*?<input id="${id}"`));
+  }
+  assert.match(js, /var subscribed = plan && plan\.plan && plan\.plan !== 'api';/);
+  assert.match(js, /panel\.classList\.toggle\('hidden', !subscribed\)/);
+  assert.match(js, /plan: byId\('planSelect'\)\.value/);
+  // Anthropic publishes no plan token limits; the UI must say progress is local.
+  assert.match(html, /Anthropic doesn't publish plan token limits/);
+});

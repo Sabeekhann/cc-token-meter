@@ -230,3 +230,46 @@ test('cc-token-meter --statusline reads a local transcript end to end and writes
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('formatStatusline adds the subscription window segment', () => {
+  const base = { session: plainSession(), today: { tokenTotal: 0, costUsd: 1, estimated: false } };
+  assert.match(
+    formatStatusline({ ...base, planWindow: { tokenTotal: 1_200_000, remainingMinutes: 72 } }),
+    / · 5h 1\.2M tok resets 1h12m · today /,
+  );
+  assert.match(
+    formatStatusline({
+      ...base,
+      config: { blockTokenLimit: 1_500_000 },
+      planWindow: { tokenTotal: 1_200_000, remainingMinutes: 9 },
+      color: true,
+    }),
+    /\u001b\[33m5h 80% resets 9m\u001b\[0m/,
+  );
+  assert.match(formatStatusline({ ...base, planWindow: { idle: true } }), / · 5h idle · /);
+});
+
+test('buildStatusline reconstructs the active window from a day of history in plan mode', async () => {
+  const now = new Date(2026, 9, 9, 15, 0);
+  const files = [{ sessionId: 'current', filePath: '/p/a/current.jsonl', mtimeMs: now.getTime() - 60_000 }];
+  // 08:10 opens 08:00–13:00, so 12:50 belongs to it and 13:20 opens 13:00–18:00.
+  const parseFile = async () => ({
+    usageRecords: [
+      record(localIso(2026, 10, 9, 8, 10), { inputTokens: 1000 }),
+      record(localIso(2026, 10, 9, 12, 50), { inputTokens: 2000 }),
+      record(localIso(2026, 10, 9, 13, 20), { inputTokens: 3000 }),
+      record(localIso(2026, 10, 9, 14, 40), { inputTokens: 4000 }),
+    ],
+  });
+  const line = await buildStatusline(
+    { sessionId: 'current', model: null },
+    { now, discoverFiles: async () => files, parseFile, loadConfig: () => ({ plan: 'max5x' }), color: false },
+  );
+  assert.match(line, / · 5h 7K tok resets 3h00m · /);
+
+  const apiLine = await buildStatusline(
+    { sessionId: 'current', model: null },
+    { now, discoverFiles: async () => files, parseFile, loadConfig: () => ({ plan: 'api' }), color: false },
+  );
+  assert.doesNotMatch(apiLine, /5h/);
+});

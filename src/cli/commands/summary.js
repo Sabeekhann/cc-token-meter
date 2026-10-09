@@ -33,7 +33,22 @@ export function formatCompactSummary(summary = {}) {
     `Pricing quality: ${integer(quality.exactCostMessageCount)}/${integer(quality.messageCount)} messages matched known pricing · verified ${summary.pricing?.verifiedOn || 'unknown'}`,
   ];
 
+  const plan = summary.plan;
+  if (plan && plan.plan && plan.plan !== 'api') lines.push(formatPlanLine(plan));
+
   return `${lines.join('\n')}\n`;
+}
+
+function formatPlanLine(plan) {
+  const block = plan.currentBlock;
+  const windowText = block
+    ? `5h window ${formatTokens(block.tokenTotal)} tokens${typeof block.ratio === 'number' ? ` (${formatPercent(block.ratio)} of your ${block.referenceKind === 'limit' ? 'limit' : 'largest window'})` : ''}, resets in ${integer(block.remainingMinutes)} min`
+    : '5h window idle';
+  const value = plan.apiValue || {};
+  const multiple = typeof value.multipleOfPlan === 'number'
+    ? ` (${value.multipleOfPlan >= 1 ? `${value.multipleOfPlan.toFixed(1)}x` : `${formatPercent(value.multipleOfPlan)} of`} the ${formatCost(value.planMonthlyUsd)} plan)`
+    : '';
+  return `Plan: ${plan.planLabel} · ${windowText} · ${formatCost(value.monthToDateUsd)} API-equivalent this month${multiple}`;
 }
 
 function formatScope(filters) {

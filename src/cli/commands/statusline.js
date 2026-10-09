@@ -6,13 +6,17 @@ import { parseSessionFile } from '../../ingest/parser.js';
 import { localDateKey } from '../../ingest/aggregate.js';
 import { readConfig } from '../../budget/config.js';
 import { formatStatusline, summarizeUsageRecords } from '../../analytics/statusline.js';
+import { buildUsageBlocks } from '../../analytics/plan.js';
 
 const STDIN_TIMEOUT_MS = 1000;
 const STDIN_MAX_BYTES = 256 * 1024;
-// Bounds the work done on every statusline refresh. Days with more active
-// transcripts than this report today's total as a lower bound ("+").
+// Bounds the work done on every statusline refresh. When more transcripts
+// changed recently than this, today's total is a lower bound ("+").
 const MAX_TODAY_FILES = 20;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+// Subscription windows chain from earlier messages, so plan mode reads a day
+// of history to place the current window's start correctly.
+const PLAN_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Claude Code `statusLine` command: read the session JSON Claude Code sends
@@ -47,16 +51,21 @@ export async function buildStatusline(input, { now, discoverFiles, parseFile, lo
     ? files.find((file) => file.sessionId === input.sessionId)
     : files.slice().sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
 
+  const config = loadConfig();
+  const subscribed = Boolean(config.plan) && config.plan !== 'api';
   const todayKey = localDateKey(now.toISOString());
   const midnight = new Date(now);
   midnight.setHours(0, 0, 0, 0);
-  const todayFiles = files
-    .filter((file) => file.mtimeMs >= midnight.getTime())
+  const planStartMs = now.getTime() - PLAN_LOOKBACK_MS;
+  const sinceMs = subscribed ? Math.min(midnight.getTime(), planStartMs) : midnight.getTime();
+  const recentFiles = files
+    .filter((file) => file.mtimeMs >= sinceMs)
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const scanned = todayFiles.slice(0, MAX_TODAY_FILES);
+  const scanned = recentFiles.slice(0, MAX_TODAY_FILES);
   if (current && !scanned.some((file) => file.filePath === current.filePath)) scanned.push(current);
 
-  const today = { tokenTotal: 0, costUsd: 0, estimated: false, partial: todayFiles.length > MAX_TODAY_FILES };
+  const today = { tokenTotal: 0, costUsd: 0, estimated: false, partial: recentFiles.length > MAX_TODAY_FILES };
+  const planRecords = [];
   let session = null;
   for (const file of scanned) {
     const { usageRecords } = await parseFile(file.filePath);
@@ -65,9 +74,23 @@ export async function buildStatusline(input, { now, discoverFiles, parseFile, lo
     today.tokenTotal += totals.today.tokenTotal;
     today.costUsd += totals.today.costUsd;
     today.estimated ||= totals.today.estimated;
+    if (subscribed) {
+      for (const record of usageRecords) {
+        const ms = record.timestamp ? Date.parse(record.timestamp) : NaN;
+        if (ms >= planStartMs && ms <= now.getTime()) planRecords.push(record);
+      }
+    }
   }
 
-  return formatStatusline({ session, today, config: loadConfig(), model: input.model, color });
+  let planWindow = null;
+  if (subscribed) {
+    const active = buildUsageBlocks(planRecords, { now }).find((block) => block.active);
+    planWindow = active
+      ? { tokenTotal: active.tokenTotal, remainingMinutes: (Date.parse(active.end) - now.getTime()) / 60_000 }
+      : { idle: true };
+  }
+
+  return formatStatusline({ session, today, config, model: input.model, planWindow, color });
 }
 
 /**
@@ -141,8 +164,10 @@ export const STATUSLINE_CONFIG = `Show live Claude Code usage in Claude Code's s
 
 The line shows this session's estimated cost, tokens, cache reuse, and
 context-window use, plus today's estimated cost (against your daily cap when
-one is set). It reads local transcripts only and writes nothing. Set NO_COLOR=1
-to disable colors. cc-token-meter never edits your Claude Code settings.`;
+one is set). With a subscription plan set (cc-token-meter --set-plan max20x),
+it also shows tokens in the current estimated 5-hour window and time to reset.
+It reads local transcripts only and writes nothing. Set NO_COLOR=1 to disable
+colors. cc-token-meter never edits your Claude Code settings.`;
 
 export async function statuslineConfigCommand({ stdout = process.stdout } = {}) {
   stdout.write(`${STATUSLINE_CONFIG}\n`);

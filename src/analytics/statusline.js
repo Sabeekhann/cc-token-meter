@@ -90,11 +90,12 @@ export function contextWindowFor(model, observedMaxPrompt = 0) {
  *   today: {tokenTotal: number, costUsd: number, estimated: boolean, partial?: boolean}|null,
  *   config?: {dailyCostCapUsd?: number|null, dailyTokenCap?: number|null, sessionCostCapUsd?: number|null, warnThresholdPct?: number|null},
  *   model?: string|null,
+ *   planWindow?: {tokenTotal: number, remainingMinutes: number}|{idle: true}|null,
  *   color?: boolean,
  * }} input
  * @returns {string}
  */
-export function formatStatusline({ session, today, config = {}, model = null, color = false }) {
+export function formatStatusline({ session, today, config = {}, model = null, planWindow = null, color = false }) {
   const paint = (text, tone) => (color && tone ? `${ANSI[tone]}${text}${ANSI.reset}` : text);
   const warnRatio = validPositive(config.warnThresholdPct) ? Math.min(config.warnThresholdPct, 100) / 100 : 0.8;
   const tone = (ratio) => (ratio >= 1 ? 'red' : ratio >= warnRatio ? 'amber' : null);
@@ -120,6 +121,16 @@ export function formatStatusline({ session, today, config = {}, model = null, co
     parts.push(paint('no usage yet this session', 'dim'));
   }
 
+  if (planWindow && planWindow.idle) {
+    parts.push(paint('5h idle', 'dim'));
+  } else if (planWindow) {
+    const limit = config.blockTokenLimit;
+    const reset = `resets ${formatMinutes(planWindow.remainingMinutes)}`;
+    parts.push(validPositive(limit)
+      ? paint(`5h ${Math.round((planWindow.tokenTotal / limit) * 100)}% ${reset}`, tone(planWindow.tokenTotal / limit))
+      : `5h ${formatCompact(planWindow.tokenTotal)} tok ${reset}`);
+  }
+
   if (today) {
     const plus = today.partial ? '+' : '';
     const todayCost = `${today.estimated ? '≈' : ''}${formatCost(today.costUsd)}${plus}`;
@@ -135,6 +146,12 @@ export function formatStatusline({ session, today, config = {}, model = null, co
   }
 
   return `◆ ${parts.join(' · ')}`;
+}
+
+function formatMinutes(minutes) {
+  const total = Math.max(0, Math.round(Number.isFinite(minutes) ? minutes : 0));
+  const hours = Math.floor(total / 60);
+  return hours ? `${hours}h${String(total % 60).padStart(2, '0')}m` : `${total}m`;
 }
 
 function validPositive(value) {

@@ -415,7 +415,11 @@
         dailyTokenCap: inputNumberOrNull('dailyTokenCap'),
         dailyCostCapUsd: inputNumberOrNull('dailyCostCapUsd'),
         sessionCostCapUsd: inputNumberOrNull('sessionCostCapUsd'),
-        warnThresholdPct: inputNumberOrNull('warnThresholdPct') || 80
+        warnThresholdPct: inputNumberOrNull('warnThresholdPct') || 80,
+        plan: byId('planSelect').value,
+        planMonthlyUsd: inputNumberOrNull('planMonthlyUsd'),
+        blockTokenLimit: inputNumberOrNull('blockTokenLimit'),
+        weeklyTokenLimit: inputNumberOrNull('weeklyTokenLimit')
       };
 
       submitButton.disabled = true;
@@ -571,6 +575,7 @@
     renderSparkline('tokenSpark', summary.byDay || [], 'tokenTotal');
     renderSparkline('costSpark', summary.byDay || [], 'costUsd');
     renderHeatmap(summary.byHourOfWeek);
+    renderPlan(summary.plan);
     renderForecast(summary.forecast || {}, config);
     renderTokenMix(allTime);
     renderTopProjects(projects);
@@ -745,6 +750,87 @@
     summaryEl.textContent = 'Busiest slot: ' + WEEKDAYS[peak.day] + ' ' + hourLabel(peak.hour) + '–' + hourLabel((peak.hour + 1) % 24) +
       ' with ' + formatNumber(peak.tokens) + ' tokens. Based on ' + formatNumber(grid.recordCount) +
       ' recent detailed messages in your local time zone.';
+  }
+
+  function renderPlan(plan) {
+    var panel = byId('planPanel');
+    var subscribed = plan && plan.plan && plan.plan !== 'api';
+    panel.classList.toggle('hidden', !subscribed);
+    byId('costCardLabel').textContent = subscribed ? 'API-equivalent value today' : 'Estimated cost today';
+    if (!subscribed) return;
+
+    var block = plan.currentBlock;
+    var badge = byId('planWindowBadge');
+    var bar = byId('planWindowBar');
+    var marker = byId('planWindowProjected');
+    byId('planPanelKicker').textContent = (plan.planLabel + ' · ' + plan.blockHours + '-hour window').toUpperCase();
+
+    if (!block) {
+      byId('planWindowTokens').textContent = '0 tok';
+      byId('planWindowReset').textContent = 'No active window. Your next message starts one.';
+      byId('planWindowMeta').textContent = plan.recordBlockTokens
+        ? 'Your largest recent window used ' + formatCompact(plan.recordBlockTokens) + ' tokens.'
+        : 'Window progress appears after your first message.';
+      bar.style.width = '0%';
+      marker.classList.add('hidden');
+      badge.textContent = 'Idle';
+      badge.className = 'soft-badge';
+    } else {
+      var ratio = typeof block.ratio === 'number' ? block.ratio : null;
+      var projected = typeof block.projectedRatio === 'number' ? block.projectedRatio : null;
+      byId('planWindowTokens').textContent = formatCompact(block.tokenTotal) + ' tok';
+      byId('planWindowReset').textContent = 'Resets in ' + formatMinutes(block.remainingMinutes) + ' · at ' + formatTime(block.end);
+      bar.style.width = (ratio == null ? 0 : Math.min(100, ratio * 100)) + '%';
+      bar.style.background = ratio == null ? 'var(--teal)' : ratio >= 1 ? 'var(--red)' : ratio >= .8 ? 'var(--amber)' : 'var(--teal)';
+      marker.classList.toggle('hidden', projected == null);
+      if (projected != null) marker.style.left = 'calc(' + Math.min(100, projected * 100).toFixed(1) + '% - 1px)';
+
+      var referenceCopy = block.referenceKind === 'limit'
+        ? formatPercent(ratio) + ' of your ' + formatCompact(block.reference) + '-token window limit'
+        : block.referenceKind === 'record'
+          ? formatPercent(ratio) + ' of your largest recent window (' + formatCompact(block.reference) + ')'
+          : 'Your first tracked window';
+      byId('planWindowMeta').textContent = referenceCopy + ' · ' + formatCompact(block.tokensPerMinute) +
+        ' tok/min · on pace for ' + formatCompact(block.projectedTokens) + ' by reset.';
+      var over = ratio != null && ratio >= 1;
+      var near = projected != null && projected >= 1;
+      badge.textContent = over ? 'Over limit' : near ? 'On pace to exceed' : 'Active';
+      badge.className = 'soft-badge ' + (over || near ? 'warn' : 'good');
+    }
+
+    var recent = Array.isArray(plan.recentBlocks) ? plan.recentBlocks : [];
+    var maxBlock = Math.max.apply(null, recent.map(function (item) { return finiteOr0(item.tokenTotal); }).concat([1]));
+    byId('planRecentBlocks').innerHTML = recent.map(function (item) {
+      var height = Math.max(6, (finiteOr0(item.tokenTotal) / maxBlock) * 100);
+      return '<span class="' + (item.active ? 'active' : '') + '" style="height:' + height.toFixed(1) + '%" title="' +
+        escapeHtmlAttr(formatDateTime(item.start) + ' · ' + formatNumber(item.tokenTotal) + ' tokens · ' + formatCost(item.costUsd)) + '"></span>';
+    }).join('');
+
+    var value = plan.apiValue || {};
+    byId('planValue').textContent = formatCost(value.monthToDateUsd || 0);
+    byId('planValueMeta').textContent = typeof value.multipleOfPlan === 'number'
+      ? (value.multipleOfPlan >= 1 ? trimNumber(value.multipleOfPlan, 1) + '×' : formatPercent(value.multipleOfPlan) + ' of') +
+        ' your ' + formatCost(value.planMonthlyUsd) + '/month ' + plan.planLabel + ' plan, at local API prices.'
+      : 'Set your plan price in Settings to compare.';
+
+    var weekly = plan.weekly || {};
+    byId('planWeekly').textContent = formatCompact(weekly.tokenTotal || 0) + ' tok';
+    byId('planWeeklyMeta').textContent = typeof weekly.ratio === 'number'
+      ? formatPercent(weekly.ratio) + ' of your ' + formatCompact(weekly.limit) + '-token weekly limit.'
+      : formatCost(weekly.costUsd || 0) + ' API-equivalent. Set a weekly limit in Settings to track pace.';
+  }
+
+  function formatMinutes(minutes) {
+    var total = Math.max(0, Math.round(finiteOr0(minutes)));
+    var hours = Math.floor(total / 60);
+    return hours ? hours + 'h ' + (total % 60) + 'm' : total + 'm';
+  }
+
+  function formatDateTime(timestamp) {
+    var date = new Date(timestamp);
+    return Number.isNaN(date.getTime())
+      ? 'Unknown time'
+      : date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   }
 
   function hourLabel(hour) {
@@ -1121,6 +1207,10 @@
     setInputValue('dailyCostCapUsd', config.dailyCostCapUsd);
     setInputValue('sessionCostCapUsd', config.sessionCostCapUsd);
     setInputValue('warnThresholdPct', config.warnThresholdPct == null ? 80 : config.warnThresholdPct);
+    byId('planSelect').value = config.plan || 'api';
+    setInputValue('planMonthlyUsd', config.planMonthlyUsd);
+    setInputValue('blockTokenLimit', config.blockTokenLimit);
+    setInputValue('weeklyTokenLimit', config.weeklyTokenLimit);
     byId('pricingVerifiedOn').textContent = valueAt(state.summary, ['pricing', 'verifiedOn'], 'Unknown');
     state.settingsHydrated = true;
   }

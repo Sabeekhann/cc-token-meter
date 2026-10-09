@@ -11,6 +11,10 @@ const DEFAULT_CONFIG = {
   sessionTokenCap: null,
   sessionCostCapUsd: null,
   warnThresholdPct: 80,
+  plan: 'api',
+  planMonthlyUsd: null,
+  blockTokenLimit: null,
+  weeklyTokenLimit: null,
 };
 
 const CAP_KEYS = new Set([
@@ -18,7 +22,13 @@ const CAP_KEYS = new Set([
   'dailyCostCapUsd',
   'sessionTokenCap',
   'sessionCostCapUsd',
+  'planMonthlyUsd',
+  'blockTokenLimit',
+  'weeklyTokenLimit',
 ]);
+
+// Mirrors the keys of PLAN_PRESETS in src/analytics/plan.js.
+const PLAN_IDS = new Set(['api', 'pro', 'max5x', 'max20x']);
 
 function ensureConfigDir(directory = CONFIG_DIR) {
   if (!fs.existsSync(directory)) {
@@ -38,7 +48,7 @@ function ensureConfigDir(directory = CONFIG_DIR) {
  * malformed files return defaults rather than crashing the CLI/server.
  * Invalid individual values are replaced by their safe defaults.
  *
- * @returns {{dailyTokenCap: number|null, dailyCostCapUsd: number|null, sessionTokenCap: number|null, sessionCostCapUsd: number|null, warnThresholdPct: number}}
+ * @returns {{dailyTokenCap: number|null, dailyCostCapUsd: number|null, sessionTokenCap: number|null, sessionCostCapUsd: number|null, warnThresholdPct: number, plan: string, planMonthlyUsd: number|null, blockTokenLimit: number|null, weeklyTokenLimit: number|null}}
  */
 export function readConfig(filePath = CONFIG_FILE) {
   if (!fs.existsSync(filePath)) {
@@ -115,6 +125,14 @@ export function validateConfigUpdates(updates) {
       continue;
     }
 
+    if (key === 'plan') {
+      if (!PLAN_IDS.has(value)) {
+        throw new RangeError(`plan must be one of: ${Array.from(PLAN_IDS).join(', ')}`);
+      }
+      validated[key] = value;
+      continue;
+    }
+
     throw new Error(`unsupported budget config key: ${key}`);
   }
 
@@ -137,7 +155,9 @@ function sanitizeStoredConfig(parsed) {
     next.warnThresholdPct = parsed.warnThresholdPct;
   }
 
+  if (PLAN_IDS.has(parsed.plan)) next.plan = parsed.plan;
+
   return next;
 }
 
-export { CONFIG_DIR, CONFIG_FILE, DEFAULT_CONFIG };
+export { CONFIG_DIR, CONFIG_FILE, DEFAULT_CONFIG, PLAN_IDS };

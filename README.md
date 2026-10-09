@@ -155,6 +155,33 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
+## Pro and Max plan mode
+
+On a Claude subscription, dollars matter less than usage windows. Tell the
+meter your plan:
+
+```bash
+cc-token-meter --set-plan max20x        # or pro, max5x; api switches it off
+```
+
+The dashboard then adds a plan panel to Overview, and the status line and
+`--summary` gain a plan segment:
+
+- **Current 5-hour window:** tokens used, time until reset, burn rate, and
+  where you'll be at reset if you keep this pace.
+- **Recent windows:** your last eight windows side by side.
+- **API-equivalent value:** what this month's usage would cost at local API
+  prices, compared with your plan price.
+- **Rolling 7 days:** tokens against an optional weekly limit.
+
+Anthropic doesn't publish the token limits behind subscription windows, so the
+meter never guesses them. Progress is measured against a limit you set
+(`--set-block-token-limit`, `--set-weekly-token-limit`, or Settings) or, if
+you haven't set one, your largest recent window. Windows are rebuilt locally
+from message timestamps, so treat them as estimates rather than Anthropic's
+own accounting. The plan price defaults to the plan's list price and can be
+changed in Settings.
+
 ## Claude Code status line
 
 See usage without leaving Claude Code. Install globally, then add the command
@@ -185,6 +212,7 @@ Claude Code then shows a line like:
 | `tok` | Total tokens in the current session. |
 | `cache` | Share of prompt tokens served from cache. |
 | `ctx` | Latest prompt size against the estimated context window (amber from 60%, red from 80%). |
+| `5h` | With a subscription plan set: tokens in the current estimated 5-hour window (or % of your window limit) and time until it resets. |
 | `today` | Today's estimated cost, against your daily cost or token cap when one is set. A trailing `+` means more than 20 transcripts changed today and the total is a lower bound. |
 
 The status line finds the session through local transcript discovery, never
@@ -237,6 +265,9 @@ The commands below assume a global install. For one-off use, replace
 | `cc-token-meter --set-budget-usd <n>` | Set a daily estimated-cost cap. |
 | `cc-token-meter --set-budget-tokens <n>` | Set a daily token cap. |
 | `cc-token-meter --set-session-budget-usd <n>` | Set a per-session estimated-cost cap. |
+| `cc-token-meter --set-plan <id>` | Set your plan: `api`, `pro`, `max5x`, or `max20x`. |
+| `cc-token-meter --set-block-token-limit <n>` | Set a 5-hour window token limit (`0` clears). |
+| `cc-token-meter --set-weekly-token-limit <n>` | Set a rolling 7-day token limit (`0` clears). |
 | `cc-token-meter --help` | Show all options. |
 
 Common filters:
