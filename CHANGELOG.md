@@ -5,6 +5,16 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Redesigned dashboard: brand gradient visual system with matching dark and
+  light themes, larger type (nothing below 11px), glowing gradient charts, a
+  five-step activity heatmap, an efficiency ring, ranking share bars, a
+  dramatic Live session view with a context-window gauge, colour-coded what-if
+  pricing, restyled insight cards, and sectioned settings with a notification
+  toggle. Session spans of 48 hours or more now read as days and hours.
+- README screenshots and product tour updated for the new design.
+
 ## [1.3.0] — 2026-10-09
 
 Feature release that corrects token accounting, counts subagents, and adds

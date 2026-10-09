@@ -25,6 +25,7 @@
         </span>
       </a>
 
+      <p class="nav-label" aria-hidden="true">Workspace</p>
       <nav class="nav-list" aria-label="Dashboard views">
         <button class="nav-item active" type="button" data-view="overview" aria-current="page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z" /></svg>
@@ -69,6 +70,7 @@
         </div>
         <div class="topbar-actions">
           <button id="paletteTrigger" class="palette-trigger" type="button" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg>
             <span>Jump to…</span><kbd>⌘K</kbd>
           </button>
           <button id="themeToggle" class="icon-button" type="button" aria-label="Switch color theme" title="Switch color theme">
@@ -158,9 +160,14 @@
                   <strong id="planWindowTokens" class="plan-big">—</strong>
                   <span id="planWindowReset">No messages in the current window</span>
                 </div>
-                <div class="plan-meter" aria-hidden="true"><span id="planWindowBar"></span><i id="planWindowProjected"></i></div>
+                <div class="plan-meter" aria-hidden="true"><b id="planWindowPace" class="plan-pace"></b><span id="planWindowBar"></span><i id="planWindowProjected"></i></div>
+                <div class="plan-scale" aria-hidden="true"><span>0</span><span class="plan-scale-key"><i class="key-used"></i>Used <i class="key-pace"></i>Pace at reset</span><span id="planWindowScale">—</span></div>
                 <p id="planWindowMeta" class="plan-meta">Window progress appears after your first message.</p>
-                <div id="planRecentBlocks" class="plan-blocks" role="img" aria-label="Recent 5-hour windows"></div>
+                <div class="plan-history">
+                  <div class="plan-history-head"><span>Recent windows</span><span id="planHistoryPeak"></span></div>
+                  <div id="planRecentBlocks" class="plan-blocks" role="img" aria-label="Recent 5-hour windows"></div>
+                  <div class="plan-blocks-axis" aria-hidden="true"><span>Earlier</span><span>Now</span></div>
+                </div>
               </div>
               <div class="plan-side">
                 <div class="plan-stat">
@@ -233,7 +240,7 @@
             </div>
             <div class="efficiency-grid">
               <div id="efficiencyScore" class="efficiency-score"></div>
-              <div>
+              <div class="efficiency-body">
                 <div id="efficiencyComponents" class="efficiency-components"></div>
                 <p id="efficiencySuggestion" class="efficiency-suggestion"></p>
               </div>
@@ -241,20 +248,20 @@
             <p id="efficiencyWeek" class="chart-summary">Loading this week's usage…</p>
           </article>
 
-          <article class="panel heatmap-panel">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">WORK RHYTHM</p>
-                <h3 id="heatmapTitle">When your tokens burn</h3>
+          <div class="overview-grid rhythm-grid">
+            <article class="panel heatmap-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">WORK RHYTHM</p>
+                  <h3 id="heatmapTitle">When your tokens burn</h3>
+                </div>
+                <div class="heat-legend" aria-hidden="true" title="Active hours split into quartiles">Less <i class="heat-l0"></i><i class="heat-l1"></i><i class="heat-l2"></i><i class="heat-l3"></i><i class="heat-l4"></i> More</div>
               </div>
-              <div class="heat-legend" aria-hidden="true">Less <i style="background:var(--heat-empty)"></i><i style="background:rgba(239,118,89,.35)"></i><i style="background:rgba(239,118,89,.65)"></i><i style="background:var(--coral)"></i> More</div>
-            </div>
-            <div id="usageHeatmap" class="heatmap loading-block" role="group" aria-labelledby="heatmapTitle" aria-describedby="heatmapSummary"></div>
-            <p id="heatmapSummary" class="chart-summary" aria-live="polite">Loading your local weekday and hour activity.</p>
-          </article>
+              <div id="usageHeatmap" class="heatmap loading-block" role="group" aria-labelledby="heatmapTitle" aria-describedby="heatmapSummary"></div>
+              <p id="heatmapSummary" class="chart-summary" aria-live="polite">Loading your local weekday and hour activity.</p>
+            </article>
 
-          <div class="overview-grid lower-grid">
-            <article class="panel">
+            <article class="panel mix-panel">
               <div class="panel-header">
                 <div>
                   <p class="panel-kicker">COST DRIVERS</p>
@@ -264,32 +271,34 @@
               </div>
               <div id="tokenMix" class="token-mix"></div>
             </article>
-
-            <article class="panel">
-              <div class="panel-header">
-                <div>
-                  <p class="panel-kicker">TOP PROJECTS</p>
-                  <h3>Where usage is going</h3>
-                </div>
-                <button class="text-button" type="button" data-go-view="projects">View all</button>
-              </div>
-              <div id="topProjects" class="rank-list"><div class="empty-state compact">Loading projects…</div></div>
-            </article>
           </div>
 
           <div class="overview-grid lower-grid attribution-grid">
-            <article class="panel">
-              <div class="panel-header">
-                <div>
-                  <p class="panel-kicker">SUBAGENTS</p>
-                  <h3>Work delegated to subagents</h3>
+            <div class="overview-stack">
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">TOP PROJECTS</p>
+                    <h3>Where usage is going</h3>
+                  </div>
+                  <button class="text-button" type="button" data-go-view="projects">View all</button>
                 </div>
-                <span id="subagentShare" class="panel-total">—</span>
-              </div>
-              <div id="subagentTypes" class="rank-list"><div class="empty-state compact">Loading subagent usage…</div></div>
-            </article>
+                <div id="topProjects" class="rank-list"><div class="empty-state compact">Loading projects…</div></div>
+              </article>
 
-            <article class="panel">
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">SUBAGENTS</p>
+                    <h3>Work delegated to subagents</h3>
+                  </div>
+                  <span id="subagentShare" class="panel-total">—</span>
+                </div>
+                <div id="subagentTypes" class="rank-list"><div class="empty-state compact">Loading subagent usage…</div></div>
+              </article>
+            </div>
+
+            <article class="panel tools-panel">
               <div class="panel-header">
                 <div>
                   <p class="panel-kicker">TOOLS</p>
@@ -421,77 +430,108 @@
           </div>
           <div class="settings-grid">
             <form id="budgetForm" class="panel settings-form">
-              <div class="panel-header">
+              <div class="panel-header settings-form-head">
                 <div>
-                  <p class="panel-kicker">BUDGETS</p>
+                  <p class="panel-kicker">GUARDRAILS</p>
                   <h3>Usage guardrails</h3>
                 </div>
+                <span class="settings-saved-note">Saved to local config.json</span>
               </div>
-              <div class="form-grid">
-                <label>
-                  <span>Daily token cap</span>
-                  <input id="dailyTokenCap" name="dailyTokenCap" type="number" min="0" step="1000" placeholder="e.g. 500000" />
-                  <small>Leave empty for no token cap.</small>
-                </label>
-                <label>
-                  <span>Daily cost cap (USD)</span>
-                  <input id="dailyCostCapUsd" name="dailyCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 20.00" />
-                  <small>Estimated cost warning for each day.</small>
-                </label>
-                <label>
-                  <span>Session cost cap (USD)</span>
-                  <input id="sessionCostCapUsd" name="sessionCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 5.00" />
-                  <small>Warn when one session becomes expensive.</small>
-                </label>
-                <label>
-                  <span>Monthly cost cap (USD)</span>
-                  <input id="monthlyCostCapUsd" name="monthlyCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 200.00" />
-                  <small>Estimated cost budget for each calendar month.</small>
-                </label>
-                <label>
-                  <span>Monthly token cap</span>
-                  <input id="monthlyTokenCap" name="monthlyTokenCap" type="number" min="0" step="100000" placeholder="e.g. 50000000" />
-                  <small>Warns early when you're on pace to pass it.</small>
-                </label>
-                <label>
-                  <span>Warning threshold (%)</span>
-                  <input id="warnThresholdPct" name="warnThresholdPct" type="number" min="1" max="100" step="1" placeholder="80" />
-                  <small>Warn before a configured cap is reached.</small>
-                </label>
-              </div>
-              <div class="panel-header plan-settings-header">
-                <div>
-                  <p class="panel-kicker">PLAN</p>
-                  <h3>Subscription windows</h3>
+
+              <section class="settings-section" aria-labelledby="budgetSectionTitle">
+                <div class="settings-section-head">
+                  <span class="settings-icon tone-brand" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M10 2.5v15M13.5 5.5H8.3a2.4 2.4 0 0 0 0 4.8h3.4a2.4 2.4 0 0 1 0 4.8H6" /></svg></span>
+                  <div>
+                    <p class="panel-kicker">BUDGETS</p>
+                    <h4 id="budgetSectionTitle">Daily and session caps</h4>
+                    <p class="settings-help">Warn before one day or one session gets expensive. Leave a field empty to turn that check off.</p>
+                  </div>
                 </div>
-              </div>
-              <div class="form-grid">
-                <label>
-                  <span>Your Claude plan</span>
-                  <select id="planSelect" name="plan">
-                    <option value="api">API (pay as you go)</option>
-                    <option value="pro">Pro</option>
-                    <option value="max5x">Max 5×</option>
-                    <option value="max20x">Max 20×</option>
-                  </select>
-                  <small>Subscription plans show 5-hour windows and API-equivalent value.</small>
-                </label>
-                <label>
-                  <span>Plan price per month (USD)</span>
-                  <input id="planMonthlyUsd" name="planMonthlyUsd" type="number" min="0" step="1" placeholder="Plan list price" />
-                  <small>Leave empty to use the plan's list price.</small>
-                </label>
-                <label>
-                  <span>5-hour window token limit</span>
-                  <input id="blockTokenLimit" name="blockTokenLimit" type="number" min="0" step="1000" placeholder="Your largest window" />
-                  <small>Empty compares each window with your largest recent one.</small>
-                </label>
-                <label>
-                  <span>Weekly token limit</span>
-                  <input id="weeklyTokenLimit" name="weeklyTokenLimit" type="number" min="0" step="1000" placeholder="e.g. 20000000" />
-                  <small>Rolling 7-day pace check. Leave empty for none.</small>
-                </label>
-              </div>
+                <div class="form-grid">
+                  <label>
+                    <span>Daily token cap</span>
+                    <span class="input-wrap" data-unit="tokens"><input id="dailyTokenCap" name="dailyTokenCap" type="number" min="0" step="1000" placeholder="e.g. 500000" /></span>
+                    <small>Leave empty for no token cap.</small>
+                  </label>
+                  <label>
+                    <span>Daily cost cap (USD)</span>
+                    <span class="input-wrap" data-unit="USD"><input id="dailyCostCapUsd" name="dailyCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 20.00" /></span>
+                    <small>Estimated cost warning for each day.</small>
+                  </label>
+                  <label>
+                    <span>Session cost cap (USD)</span>
+                    <span class="input-wrap" data-unit="USD"><input id="sessionCostCapUsd" name="sessionCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 5.00" /></span>
+                    <small>Warn when one session becomes expensive.</small>
+                  </label>
+                  <label>
+                    <span>Warning threshold (%)</span>
+                    <span class="input-wrap" data-unit="%"><input id="warnThresholdPct" name="warnThresholdPct" type="number" min="1" max="100" step="1" placeholder="80" /></span>
+                    <small>Warn before a configured cap is reached.</small>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section" aria-labelledby="monthlySectionTitle">
+                <div class="settings-section-head">
+                  <span class="settings-icon tone-violet" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="13" rx="2.5" /><path d="M3 8h14M7 2.5v3M13 2.5v3M7 11.5h2M11 11.5h2M7 14h2" /></svg></span>
+                  <div>
+                    <p class="panel-kicker">MONTHLY BUDGET</p>
+                    <h4 id="monthlySectionTitle">Calendar month limits</h4>
+                    <p class="settings-help">Tracks the local calendar month and warns early when your run rate is on pace to pass a cap.</p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    <span>Monthly cost cap (USD)</span>
+                    <span class="input-wrap" data-unit="USD"><input id="monthlyCostCapUsd" name="monthlyCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 200.00" /></span>
+                    <small>Estimated cost budget for each calendar month.</small>
+                  </label>
+                  <label>
+                    <span>Monthly token cap</span>
+                    <span class="input-wrap" data-unit="tokens"><input id="monthlyTokenCap" name="monthlyTokenCap" type="number" min="0" step="100000" placeholder="e.g. 50000000" /></span>
+                    <small>Warns early when you're on pace to pass it.</small>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section" aria-labelledby="planSectionTitle">
+                <div class="settings-section-head">
+                  <span class="settings-icon tone-teal" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10.5" r="7" /><path d="M10 6.5v4l2.6 1.6M8 2h4" /></svg></span>
+                  <div>
+                    <p class="panel-kicker">PLAN</p>
+                    <h4 id="planSectionTitle">Subscription windows</h4>
+                    <p class="settings-help">Pro and Max plans show estimated 5-hour windows and API-equivalent value. Limits you set here stay on this machine.</p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    <span>Your Claude plan</span>
+                    <select id="planSelect" name="plan">
+                      <option value="api">API (pay as you go)</option>
+                      <option value="pro">Pro</option>
+                      <option value="max5x">Max 5×</option>
+                      <option value="max20x">Max 20×</option>
+                    </select>
+                    <small>Subscription plans show 5-hour windows and API-equivalent value.</small>
+                  </label>
+                  <label>
+                    <span>Plan price per month (USD)</span>
+                    <span class="input-wrap" data-unit="USD"><input id="planMonthlyUsd" name="planMonthlyUsd" type="number" min="0" step="1" placeholder="Plan list price" /></span>
+                    <small>Leave empty to use the plan's list price.</small>
+                  </label>
+                  <label>
+                    <span>5-hour window token limit</span>
+                    <span class="input-wrap" data-unit="tokens"><input id="blockTokenLimit" name="blockTokenLimit" type="number" min="0" step="1000" placeholder="Your largest window" /></span>
+                    <small>Empty compares each window with your largest recent one.</small>
+                  </label>
+                  <label>
+                    <span>Weekly token limit</span>
+                    <span class="input-wrap" data-unit="tokens"><input id="weeklyTokenLimit" name="weeklyTokenLimit" type="number" min="0" step="1000" placeholder="e.g. 20000000" /></span>
+                    <small>Rolling 7-day pace check. Leave empty for none.</small>
+                  </label>
+                </div>
+              </section>
+
               <div class="form-actions">
                 <span id="budgetFormStatus" role="status"></span>
                 <button class="primary-button" type="submit">Save local settings</button>
@@ -541,7 +581,7 @@
 
   <div id="paletteBackdrop" class="palette-backdrop hidden">
     <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
-      <label><span class="sr-only">Search commands</span><input id="paletteInput" type="text" placeholder="Jump to a view, project, or session…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" /></label>
+      <label class="palette-search"><span class="sr-only">Search commands</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg><input id="paletteInput" type="text" placeholder="Jump to a view, project, or session…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" /></label>
       <ul id="paletteList" class="palette-list" role="listbox"></ul>
       <div class="palette-hint"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span><span><kbd>g</kbd> then <kbd>o</kbd>/<kbd>l</kbd>/<kbd>p</kbd>/<kbd>i</kbd>/<kbd>s</kbd> views</span></div>
     </div>

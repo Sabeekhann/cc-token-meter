@@ -68,13 +68,16 @@ The [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/release
 
 | Capability | What it gives you |
 | --- | --- |
-| **Overview** | Today's tokens and estimated cost, cache reuse, active sessions, a 14-day history, and a 30-day forecast. |
-| **Live Session** | Recent tokens/minute, estimated cost/hour, models, branches, and message-level burn while Claude Code is running. |
-| **Projects** | Exact per-message attribution across projects, branches, and sessions. |
+| **Overview** | Today's tokens and estimated cost with sparklines, cache reuse, active sessions, a 14-day burn chart, a 30-day forecast, and an hour-of-week activity heatmap. |
+| **Live Session** | Recent tokens/minute, estimated cost/hour, a message timeline, and a context-window gauge that tells you when to `/compact`. |
+| **Projects** | Exact per-message attribution across projects, branches, and sessions, plus **what-if pricing**: the same tokens repriced on other Claude models. |
 | **Attribution** | Subagent usage by agent type, and the tools and MCP servers returning the most data into context. |
-| **Insights** | Ranked, evidence-backed recommendations for repeated reads, cache degradation, large tool output, long context, and outlier sessions. |
-| **Budgets** | Daily token, daily cost, and per-session cost guardrails stored locally. |
-| **Exports** | Human-readable terminal summaries plus JSON and CSV for your own analysis. |
+| **Insights** | Ranked, evidence-backed recommendations you can snooze, dismiss, or restore. |
+| **Efficiency score** | A weekly 0–100 score from cache reuse, open recommendations, and compaction, with a shareable Markdown report. |
+| **Plan mode** | For Pro and Max: estimated 5-hour windows, time to reset, rolling 7-day usage, and API-equivalent value against your plan price. |
+| **Budgets and alerts** | Daily, per-session, and monthly caps, on-pace warnings, and opt-in desktop notifications. |
+| **Status line** | Session cost, tokens, cache, context, and budget inside Claude Code's own status line. |
+| **Exports** | Terminal summaries, JSON, CSV, and the weekly report for your own analysis. |
 | **Doctor** | Checks the Node runtime, transcript access, index/config health, and local-state permissions. |
 
 The dashboard is organized around five focused views: **Overview**, **Live Session**, **Projects**, **Insights**, and **Settings**. For UI implementation details, see [`docs/UI_PLAN.md`](docs/UI_PLAN.md).
@@ -82,22 +85,45 @@ The dashboard is organized around five focused views: **Overview**, **Live Sessi
 ## Dashboard preview
 
 <a href="docs/media/cc-token-meter-demo.mp4">
-  <img src="docs/media/dashboard-overview.webp" alt="CC Token Meter Overview showing synthetic token usage, estimated cost, cache reuse, active sessions, burn history, and forecast data" width="100%" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/dashboard-overview-dark.webp" />
+    <img src="docs/media/dashboard-overview-light.webp" alt="CC Token Meter Overview with budget alerts, today's tokens and estimated cost, cache reuse, active sessions, and the current 5-hour plan window, using synthetic data" width="100%" />
+  </picture>
 </a>
 
 <p align="center">
-  <strong><a href="docs/media/cc-token-meter-demo.mp4">Watch the 12-second product tour</a></strong><br />
+  <strong><a href="docs/media/cc-token-meter-demo.mp4">Watch the product tour</a></strong> · light and dark themes follow your system<br />
   <sub>Synthetic data only. No personal transcript content or private project paths.</sub>
 </p>
 
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/media/dashboard-trends.webp" alt="Burn history chart, 30-day forecast with monthly budget, weekly efficiency score ring, activity heatmap, and token composition" width="100%" />
+      <p align="center"><sub><strong>Trends</strong> · burn history, forecast, efficiency score, and when your tokens burn</sub></p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/media/dashboard-live.webp" alt="Live session view with session totals, message timeline, context-window gauge, and workspace velocity" width="100%" />
+      <p align="center"><sub><strong>Live session</strong> · timeline, context gauge, and velocity while you work</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/media/dashboard-projects.webp" alt="Projects view with cost-share bars, what-if pricing on other models, and branch attribution" width="100%" />
+      <p align="center"><sub><strong>Projects</strong> · exact attribution and what-if model pricing</sub></p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/media/dashboard-insights.webp" alt="Insights view with a calculable opportunity total and recommendations that can be snoozed or dismissed" width="100%" />
+      <p align="center"><sub><strong>Insights</strong> · evidence-backed savings you can snooze or dismiss</sub></p>
+    </td>
+  </tr>
+</table>
+
 <details>
-  <summary><strong>Explore cost insights and project attribution</strong></summary>
+  <summary><strong>Subagent and tool attribution</strong></summary>
   <br />
-  <img src="docs/media/dashboard-insights.webp" alt="CC Token Meter showing synthetic token composition, top projects, and evidence-backed optimization opportunities" width="100%" />
-  <p align="center"><sub>Token composition, cost drivers, and highest-value opportunities.</sub></p>
-  <br />
-  <img src="docs/media/dashboard-projects.webp" alt="CC Token Meter Projects view showing synthetic project and branch-level token and estimated-cost attribution" width="100%" />
-  <p align="center"><sub>Exact message-level attribution across projects and branches.</sub></p>
+  <img src="docs/media/dashboard-attribution.webp" alt="Top projects, subagents by agent type, and tools ranked by result size with MCP servers" width="100%" />
+  <p align="center"><sub>Where usage goes: projects, subagents, and the tools returning the most data into context.</sub></p>
 </details>
 
 ## Quick start
@@ -125,7 +151,7 @@ it does not require an Anthropic API key.
 | **Operating systems** | Linux, macOS, and Windows are covered by the compatibility workflow. |
 | **Claude Code data** | Existing local JSONL transcripts under `~/.claude/projects`. |
 | **Network posture** | No external runtime requests; the dashboard listens only on `127.0.0.1`. |
-| **Upgrade path** | Indexes written before the accounting fix in the next release are rebuilt once from your transcripts; later upgrades restore warm. |
+| **Upgrade path** | Indexes written before v1.3.0's accounting fix are rebuilt once from your transcripts; later upgrades restore warm. |
 
 ### Install as a reusable command
 
@@ -156,7 +182,7 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
-### Monthly budgets
+## Monthly budgets
 
 Set a monthly cap with `cc-token-meter --set-monthly-budget-usd 200` (or
 `--set-monthly-budget-tokens`), or in Settings. Overview's forecast panel

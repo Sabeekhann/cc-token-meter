@@ -254,9 +254,11 @@ read this file before starting any development or design task in this repo.
     never read personal transcripts and exercise the real summary filters.
   - All dynamic text goes through `escapeHtml`/`escapeHtmlAttr` before
     `innerHTML` — keep doing this for any new dynamic content.
-  - `dashboard.css` defines the offline system-font visual system: dark
-    navigation rail, off-white workspace, coral usage/action accent, teal
-    healthy/local/live state, blue comparison series, and amber/red warnings.
+  - `dashboard.css` defines the offline system-font visual system: a
+    coral → pink → violet brand gradient (`--grad-brand*`) for usage and
+    primary actions, teal healthy/local/live state, blue comparison series,
+    amber/rose warnings, chart tokens (`--chart-*`, `--heat-0..4`, `--ring-*`),
+    an 11px-minimum type scale (`--fs-*`), and spacing/radius/motion tokens.
     Colors are `:root` tokens with a dark theme that follows
     `prefers-color-scheme` unless the viewer toggles it (stored per browser
     in `localStorage`, wrapped in try/catch). New colors must be tokens, not
