@@ -8,6 +8,7 @@ Usage:
   cc-token-meter --summary                Print a compact local usage summary, exit
   cc-token-meter --json                   Load/index history, print JSON summary, exit
   cc-token-meter --csv <path|->           Export filtered usage as CSV, exit
+  cc-token-meter --report <path|->        Write the weekly report (Markdown), exit
   cc-token-meter --doctor                 Diagnose local setup and private state, exit
   cc-token-meter --statusline             Print one usage line for Claude Code's status line
   cc-token-meter --statusline-config      Show how to enable the status line, exit
@@ -31,6 +32,7 @@ Options:
   --project <text> Filter project paths by case-insensitive substring (summary/JSON/CSV)
   --model <id>     Filter by exact model identifier, case-insensitive (summary/JSON/CSV)
   --group-by <n>   CSV rows: day, project, branch, or session (default: day)
+  --show-names     Include project names and insight details in --report
 
 Examples:
   npx cc-token-meter

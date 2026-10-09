@@ -169,4 +169,4 @@ function writePrivateFile(filePath, contents) {
   }
 }
 
-export { GROUPS };
+export { GROUPS, writePrivateFile };

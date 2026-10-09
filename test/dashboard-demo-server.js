@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { buildSummary } from '../src/server/summary.js';
 import { parseSummaryQuery } from '../src/server/routes.js';
 import { applyInsightAction } from '../src/budget/insightStates.js';
+import { buildWeeklyReport } from '../src/analytics/weeklyReport.js';
 import { createDashboardDemoStore } from './fixtures/dashboard-sessions.js';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,12 @@ export function createDashboardDemoServer(options = {}) {
           detail: String(error && error.message),
         });
       }
+    }
+
+    if (url.pathname === '/api/report' && req.method === 'GET') {
+      const report = buildWeeklyReport(buildSummary(store, { config }), { showNames: url.searchParams.get('names') === '1' });
+      res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8' });
+      return res.end(report);
     }
 
     if (url.pathname === '/api/insights' && req.method === 'POST') {

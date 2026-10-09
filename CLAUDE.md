@@ -84,6 +84,16 @@ read this file before starting any development or design task in this repo.
   API-equivalent value vs plan price). Anthropic publishes no subscription
   token limits — never encode guessed limits; progress must stay relative to
   user-set limits or the user's own history, and the UI must say so.
+- `src/analytics/efficiency.js` — pure `buildWeek(sessions, now)` (last 7
+  local days vs the 7 before, daily series, models, top 10 projects, from
+  usageRecords plus dailyRollups) and `scoreEfficiency(week, sessions, tips)`
+  (0–100 from cache reuse 45, open recommendations 35, long-session
+  compaction 20; non-applicable components are re-weighted; dismissed tips
+  still count). Keep it explainable: every point maps to a measured fact.
+- `src/analytics/weeklyReport.js` — pure `buildWeeklyReport(summary,
+  {showNames})` Markdown digest. Redacted by default: projects become
+  `pseudonym()` labels (FNV-1a) and recommendations are grouped by
+  category because tip messages can name files.
 - `src/analytics/whatIf.js` — pure `buildWhatIf(sessions)`: reprices the
   scope's exact token totals (input, output, 5m/1h cache writes, cache reads)
   on each `WHAT_IF_TARGETS` model through `computeCost()` at the current
@@ -149,6 +159,9 @@ read this file before starting any development or design task in this repo.
     plan lines when available.
   - `commands/csv.js` — private atomic CSV export grouped by day, project,
     branch, or session; supports the same date/project filters as JSON.
+  - `commands/report.js` — `--report <path|->` writes the weekly Markdown
+    report (owner-only file via csv.js `writePrivateFile`); `--show-names`
+    disables redaction.
   - `commands/doctor.js` — checks runtime compatibility, transcript access,
     private index/config health, and local-state permissions.
   - `commands/statusline.js` — reads Claude Code's statusLine JSON from
@@ -176,7 +189,8 @@ read this file before starting any development or design task in this repo.
     avoid recomputing for idle sessions on every ~1.5s poll tick.
     `clearHeuristicsCache()` exported for tests.
 - `src/server/`
-  - `routes.js` — exactly 3 HTTP routes: `GET /api/summary`,
+  - `routes.js` — exactly 4 HTTP routes: `GET /api/summary`,
+    `GET /api/report` (weekly Markdown download; `?names=1` unredacted),
     `POST /api/budget` (allowlisted keys only), and `POST /api/insights`
     (`{id, action: 'dismiss'|'snooze'|'restore', days?}`, 16 KB body cap).
     All share the session-cookie authorization. SSE stream is a separate
@@ -184,7 +198,8 @@ read this file before starting any development or design task in this repo.
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
     `byDay`, `byHourOfWeek`, `forecast`, `month` (month-to-date from all
-    sessions, ignoring filters), `intelligence`, `hiddenTips`
+    sessions, ignoring filters), `week` and `efficiency` (also all sessions),
+    `intelligence`, `hiddenTips`
     (dismissed or snoozed, with `userState`; `tips` holds only visible
     ones; `config` omits `insightStates`), `plan` (always
     computed from all sessions, ignoring filters), `whatIf` (filtered
@@ -288,6 +303,7 @@ cc-token-meter                                Start the dashboard server (defaul
 cc-token-meter --summary                      Print a compact local usage summary, exit
 cc-token-meter --json                         Load/index history, print JSON summary, exit
 cc-token-meter --csv <path|->                 Export filtered usage as CSV, exit
+cc-token-meter --report <path|->              Write the weekly report (Markdown), exit
 cc-token-meter --doctor                       Diagnose local setup and private state, exit
 cc-token-meter --statusline                   Print one line for Claude Code's status line
 cc-token-meter --statusline-config            Show status line setup instructions, exit

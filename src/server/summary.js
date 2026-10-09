@@ -19,6 +19,7 @@ import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
 import { buildUsageIntelligence } from '../analytics/overview.js';
 import { buildPlanIntelligence } from '../analytics/plan.js';
+import { buildWeek, scoreEfficiency } from '../analytics/efficiency.js';
 import { buildWhatIf } from '../analytics/whatIf.js';
 import { filterSessions, normalizeSummaryFilters } from '../analytics/filters.js';
 import { PRICING_VERIFIED_ON } from '../pricing/models.js';
@@ -144,6 +145,10 @@ export function buildSummary(store, options = {}) {
   // Dismissed and snoozed insights leave the action queue; the hashed state
   // map itself stays server-side.
   const { visible: visibleTips, hidden: hiddenTips } = partitionTips(tips, config.insightStates, generatedAt);
+  // The weekly view is account-wide, and dismissed insights still count
+  // toward the score, so hiding a recommendation cannot raise it.
+  const week = buildWeek(snapshot.sessions, generatedAt);
+  const efficiency = scoreEfficiency(week, snapshot.sessions, tips);
   const publicConfig = { ...config };
   delete publicConfig.insightStates;
 
@@ -191,6 +196,8 @@ export function buildSummary(store, options = {}) {
     byHourOfWeek: aggregateByHourOfWeek(sessions),
     forecast,
     month,
+    week,
+    efficiency,
     intelligence,
     plan,
     whatIf: buildWhatIf(sessions, { now: generatedAt }),

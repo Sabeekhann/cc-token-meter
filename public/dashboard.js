@@ -86,6 +86,8 @@
   bindSettings();
   bindTheme();
   bindNotifications();
+  byId('downloadReport').addEventListener('click', function () { downloadWeeklyReport(false); });
+  byId('downloadReportNames').addEventListener('click', function () { downloadWeeklyReport(true); });
   bindPalette();
   bindShortcuts();
   connect();
@@ -592,6 +594,7 @@
     renderSparkline('costSpark', summary.byDay || [], 'costUsd');
     renderHeatmap(summary.byHourOfWeek);
     renderPlan(summary.plan);
+    renderEfficiency(summary.efficiency, summary.week);
     renderForecast(summary.forecast || {}, config);
     renderMonthBudget(summary.month, config);
     renderTokenMix(allTime);
@@ -767,6 +770,59 @@
     summaryEl.textContent = 'Busiest slot: ' + WEEKDAYS[peak.day] + ' ' + hourLabel(peak.hour) + '–' + hourLabel((peak.hour + 1) % 24) +
       ' with ' + formatNumber(peak.tokens) + ' tokens. Based on ' + formatNumber(grid.recordCount) +
       ' recent detailed messages in your local time zone.';
+  }
+
+  function renderEfficiency(efficiency, week) {
+    var target = byId('efficiencyScore');
+    var score = efficiency && typeof efficiency.score === 'number' ? efficiency.score : null;
+    if (score === null) {
+      target.innerHTML = '';
+      byId('efficiencyComponents').innerHTML = '<div class="empty-state compact">The weekly score appears once there is usage in the last 7 days.</div>';
+      byId('efficiencySuggestion').textContent = '';
+    } else {
+      var radius = 50;
+      var circumference = 2 * Math.PI * radius;
+      var level = score >= 80 ? '' : score >= 55 ? 'warn' : 'danger';
+      target.innerHTML = '<svg viewBox="0 0 120 120" role="img" aria-label="' + escapeHtmlAttr('Weekly efficiency score ' + score + ' out of 100') + '">' +
+        '<circle class="gauge-track" cx="60" cy="60" r="' + radius + '"></circle>' +
+        '<circle class="gauge-fill ' + level + '" cx="60" cy="60" r="' + radius + '" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - score / 100)).toFixed(2) + '"></circle>' +
+        '<text class="score-value" x="60" y="66" text-anchor="middle">' + score + '</text>' +
+        '<text class="score-caption" x="60" y="82" text-anchor="middle">OF 100</text>' +
+      '</svg>';
+      byId('efficiencyComponents').innerHTML = (efficiency.components || []).map(function (item) {
+        var ratio = item.max > 0 ? item.points / item.max : 0;
+        return '<div class="efficiency-row"><div><strong>' + escapeHtml(item.label) + '</strong><small>' + escapeHtml(item.detail) + '</small></div>' +
+          '<div class="bar"><span class="' + (ratio >= .8 ? '' : ratio >= .5 ? 'mid' : 'low') + '" style="width:' + (ratio * 100).toFixed(1) + '%"></span></div>' +
+          '<b>' + item.points + '/' + item.max + '</b></div>';
+      }).join('');
+      byId('efficiencySuggestion').textContent = efficiency.suggestion ? 'Biggest opportunity: ' + efficiency.suggestion : 'Nothing to improve this week. Nice work.';
+    }
+
+    if (!week) return;
+    var current = week.current || {};
+    var previous = week.previous || {};
+    var change = previous.costUsd > 0 ? (current.costUsd - previous.costUsd) / previous.costUsd : null;
+    byId('efficiencyWeek').textContent = formatCompact(current.tokenTotal || 0) + ' tokens and ' + formatCost(current.costUsd || 0) + ' this week' +
+      (change === null ? '.' : ', ' + (change >= 0 ? 'up ' : 'down ') + formatPercent(Math.abs(change)) + ' on the previous week.') +
+      ' The score uses cache reuse, open recommendations (dismissed ones included), and /compact use in long sessions.';
+  }
+
+  async function downloadWeeklyReport(withNames) {
+    try {
+      var response = await fetch('/api/report' + (withNames ? '?names=1' : ''), { cache: 'no-store' });
+      if (!response.ok) throw new Error('Report request failed');
+      var blob = await response.blob();
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'cc-token-meter-weekly-' + localDateString(new Date()) + (withNames ? '-with-names' : '') + '.md';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+      showToast(withNames ? 'Weekly report downloaded with project names.' : 'Weekly report downloaded. Project names are pseudonymized for sharing.');
+    } catch (error) {
+      showToast('Could not create the weekly report. Please try again.');
+    }
   }
 
   function renderPlan(plan) {

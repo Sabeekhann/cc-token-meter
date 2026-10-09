@@ -220,6 +220,27 @@
             </article>
           </div>
 
+          <article class="panel efficiency-panel" aria-labelledby="efficiencyTitle">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">LAST 7 DAYS</p>
+                <h3 id="efficiencyTitle">Weekly efficiency</h3>
+              </div>
+              <div class="report-actions">
+                <button id="downloadReport" class="secondary-button" type="button">Download weekly report</button>
+                <button id="downloadReportNames" class="text-button" type="button" title="Includes project names and recommendation details">With names</button>
+              </div>
+            </div>
+            <div class="efficiency-grid">
+              <div id="efficiencyScore" class="efficiency-score"></div>
+              <div>
+                <div id="efficiencyComponents" class="efficiency-components"></div>
+                <p id="efficiencySuggestion" class="efficiency-suggestion"></p>
+              </div>
+            </div>
+            <p id="efficiencyWeek" class="chart-summary">Loading this week's usage…</p>
+          </article>
+
           <article class="panel heatmap-panel">
             <div class="panel-header">
               <div>

@@ -4,6 +4,7 @@
 import { buildSummary } from './summary.js';
 import { readConfig, writeConfig } from '../budget/config.js';
 import { applyInsightAction } from '../budget/insightStates.js';
+import { buildWeeklyReport } from '../analytics/weeklyReport.js';
 
 const MAX_PROJECT_FILTER_LENGTH = 1024;
 const MAX_MODEL_FILTER_LENGTH = 256;
@@ -66,6 +67,20 @@ export async function handleApiRoute(req, res, url, store) {
     } catch (err) {
       sendJson(res, 400, { error: 'Invalid budget config', detail: String(err && err.message) });
     }
+    return true;
+  }
+
+  if (url.pathname === '/api/report' && req.method === 'GET') {
+    const showNames = url.searchParams.get('names') === '1';
+    const report = buildWeeklyReport(buildSummary(store), { showNames });
+    const date = new Date().toISOString().slice(0, 10);
+    res.writeHead(200, {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': `attachment; filename="cc-token-meter-weekly-${date}.md"`,
+      'Content-Length': Buffer.byteLength(report),
+      'Cache-Control': 'no-store',
+    });
+    res.end(report);
     return true;
   }
 

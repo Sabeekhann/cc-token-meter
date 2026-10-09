@@ -165,6 +165,36 @@ budgets cover all projects, whatever filter is applied. The status line shows
 daily and session budgets only, because it reads just today's transcripts to
 stay fast.
 
+## Weekly efficiency score and report
+
+Overview scores the last 7 days from 0 to 100 using only what the meter
+measures:
+
+| Component | Points | Full points when |
+| --- | ---: | --- |
+| Cache reuse | 45 | at least 80% of prompt tokens come from cache |
+| Open recommendations | 35 | no recommendations for this week's sessions (−15% per attention item, −5% per optimization; dismissed ones still count) |
+| Long-session compaction | 20 | every session over 60 messages used `/compact` |
+
+A component that doesn't apply this week, such as compaction when no session
+was long, is left out and the rest re-weighted. The panel names the biggest
+opportunity. The score is a local heuristic for spotting habits, not a
+benchmark.
+
+**Download weekly report** (or `cc-token-meter --report weekly.md`) produces
+a Markdown digest:
+
+- the score and its breakdown;
+- tokens, cost, messages and cache reuse versus the previous week;
+- a daily table, models, and top projects;
+- plan value, in plan mode;
+- recommendations.
+
+By default project names are pseudonymized (e.g. `project-c63dd3`) and
+recommendations are listed by category, because their text can name files,
+so it is safe to share. Use **With names** or `--show-names` for a private
+copy.
+
 ## Managing insights
 
 Each recommendation in **Insights** can be snoozed for a day, snoozed for a
@@ -305,6 +335,7 @@ The commands below assume a global install. For one-off use, replace
 | `cc-token-meter --summary` | Print a compact usage summary and exit. |
 | `cc-token-meter --json` | Print a machine-readable summary and exit. |
 | `cc-token-meter --csv <path\|->` | Export filtered usage as CSV. Use `-` for stdout. |
+| `cc-token-meter --report <path\|->` | Write the weekly report as Markdown (`--show-names` includes project names). |
 | `cc-token-meter --doctor` | Diagnose the local setup and private state. |
 | `cc-token-meter --statusline` | Print one usage line for Claude Code's status line (reads session JSON on stdin). |
 | `cc-token-meter --statusline-config` | Show how to enable the status line. |

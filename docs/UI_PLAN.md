@@ -28,6 +28,9 @@ The default view provides a useful answer in under ten seconds:
 - top projects by estimated cost;
 - the three highest-priority recommendations;
 - 14-day sparklines on the token and cost cards;
+- a weekly efficiency score (cache reuse, open recommendations, long-session
+  compaction) with per-component points, the biggest opportunity, and
+  shareable (pseudonymized) or named weekly report downloads;
 - a weekday × hour heatmap of recent detailed usage;
 - for Pro/Max plans only, a plan panel: the current estimated 5-hour window
   against a user limit or the user's largest recent window, recent windows,

@@ -40,6 +40,8 @@ function parseArgs(argv) {
     statusline: false,
     statuslineConfig: false,
     csvPath: null,
+    reportPath: null,
+    showNames: false,
     groupBy: 'day',
     from: null,
     to: null,
@@ -128,6 +130,12 @@ function parseArgs(argv) {
       case '--csv':
         opts.csvPath = parseRequiredString('--csv', argv[++i]);
         break;
+      case '--report':
+        opts.reportPath = parseRequiredString('--report', argv[++i]);
+        break;
+      case '--show-names':
+        opts.showNames = true;
+        break;
       case '--group-by': {
         const value = parseRequiredString('--group-by', argv[++i]);
         if (!['day', 'project', 'branch', 'session'].includes(value)) {
@@ -169,12 +177,17 @@ function parseArgs(argv) {
     opts.doctor,
     opts.summary,
     opts.csvPath !== null,
+    opts.reportPath !== null,
     opts.json && !opts.doctor,
     opts.statusline,
     opts.statuslineConfig,
   ].filter(Boolean).length;
   if (outputModeCount > 1) {
-    throw new Error('choose only one output mode: --summary, --json, --csv, --doctor, --statusline, or --statusline-config');
+    throw new Error('choose only one output mode: --summary, --json, --csv, --report, --doctor, --statusline, or --statusline-config');
+  }
+
+  if (opts.showNames && opts.reportPath === null) {
+    throw new Error('--show-names only applies to --report');
   }
 
   return opts;
@@ -307,6 +320,17 @@ export async function main(argv) {
         groupBy: opts.groupBy,
         filters,
       });
+    } catch (err) {
+      console.error(`cc-token-meter: ${err.message}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (opts.reportPath !== null) {
+    try {
+      const { reportCommand } = await loadCommand('report');
+      await reportCommand({ cache: opts.cache, outputPath: opts.reportPath, showNames: opts.showNames });
     } catch (err) {
       console.error(`cc-token-meter: ${err.message}`);
       process.exitCode = 1;
