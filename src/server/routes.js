@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { buildSummary } from './summary.js';
-import { writeConfig } from '../budget/config.js';
+import { readConfig, writeConfig } from '../budget/config.js';
+import { applyInsightAction } from '../budget/insightStates.js';
+import { buildWeeklyReport } from '../analytics/weeklyReport.js';
 
 const MAX_PROJECT_FILTER_LENGTH = 1024;
 const MAX_MODEL_FILTER_LENGTH = 256;
@@ -45,7 +47,13 @@ export async function handleApiRoute(req, res, url, store) {
       'dailyCostCapUsd',
       'sessionTokenCap',
       'sessionCostCapUsd',
+      'monthlyTokenCap',
+      'monthlyCostCapUsd',
       'warnThresholdPct',
+      'plan',
+      'planMonthlyUsd',
+      'blockTokenLimit',
+      'weeklyTokenLimit',
     ];
 
     const updates = {};
@@ -58,6 +66,44 @@ export async function handleApiRoute(req, res, url, store) {
       sendJson(res, 200, { ok: true, config: next });
     } catch (err) {
       sendJson(res, 400, { error: 'Invalid budget config', detail: String(err && err.message) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/report' && req.method === 'GET') {
+    const showNames = url.searchParams.get('names') === '1';
+    const report = buildWeeklyReport(buildSummary(store), { showNames });
+    const date = new Date().toISOString().slice(0, 10);
+    res.writeHead(200, {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': `attachment; filename="cc-token-meter-weekly-${date}.md"`,
+      'Content-Length': Buffer.byteLength(report),
+      'Cache-Control': 'no-store',
+    });
+    res.end(report);
+    return true;
+  }
+
+  if (url.pathname === '/api/insights' && req.method === 'POST') {
+    let body;
+    try {
+      body = await readJsonBody(req, 16_384);
+    } catch (err) {
+      sendJson(res, 400, { error: 'Invalid JSON body', detail: String(err && err.message) });
+      return true;
+    }
+
+    try {
+      const request = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+      const insightStates = applyInsightAction(readConfig().insightStates, {
+        id: request.id,
+        action: request.action,
+        days: request.days,
+      });
+      writeConfig({ insightStates });
+      sendJson(res, 200, { ok: true, hiddenInsightCount: Object.keys(insightStates).length });
+    } catch (err) {
+      sendJson(res, 400, { error: 'Invalid insight action', detail: String(err && err.message) });
     }
     return true;
   }

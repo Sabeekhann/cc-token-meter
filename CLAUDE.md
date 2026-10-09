@@ -21,8 +21,13 @@ read this file before starting any development or design task in this repo.
   dashboard server), `--json` (restore/index, print summary, exit),
   `--summary` (compact human-readable usage), `--csv` (private filtered
   export), `--doctor` (local setup diagnostics),
+  `--statusline` (one line for Claude Code's `statusLine` command),
+  `--statusline-config` (print setup instructions),
   `--set-budget-usd`/`--set-budget-tokens`/`--set-session-budget-usd`,
-  `--port`, `--no-open`, `--help`, `--version`.
+  `--set-monthly-budget-usd`/`--set-monthly-budget-tokens`,
+  `--set-plan`/`--set-block-token-limit`/`--set-weekly-token-limit`,
+  `--port`, `--no-open`, `--help`, `--version`. `src/cli/index.js` loads
+  each command module on demand so `--statusline` starts fast.
 - **100% local.** No outbound network calls other than serving the local
   dashboard itself. Never add analytics, telemetry, or phone-home checks.
 
@@ -75,13 +80,44 @@ read this file before starting any development or design task in this repo.
   - `aggregate.js` — pure functions: `tokenTotal(session)`,
     `aggregateByProject(sessions)`, exact per-message
     `aggregateByBranch(sessions)`, `aggregateByDay(sessions)` (already a
-    full daily time series), `getTodayTotal(sessions)`, `localDateKey`.
+    full daily time series), `getMonthToDate(byDay, now)` (local
+    calendar month totals plus a run-rate month-end projection, elapsed
+    days floored at 1), `aggregateByHourOfWeek(sessions)` (local
+    weekday × hour grid from detailed usageRecords only, for the activity
+    heatmap), `getTodayTotal(sessions)`, `localDateKey`.
 - `src/analytics/overview.js` — pure active-session (subagents excluded),
   recent velocity, cache health/savings, model-mix, and data-quality
   intelligence.
 - `src/analytics/attribution.js` — pure `buildAttribution()` (subagent usage
   by type and share, tools ranked by result bytes with an estimated token
   figure, MCP servers) and `subagentsByParent()`.
+- `src/analytics/statusline.js` — pure `summarizeUsageRecords()` (session and
+  local-today totals from parser records) and `formatStatusline()`.
+- `src/analytics/plan.js` — pure Pro/Max plan mode: `PLAN_PRESETS` (labels
+  and list prices only), `buildUsageBlocks()` (estimated 5-hour windows that
+  open at the local hour of the first message after the previous window
+  closed), and `buildPlanIntelligence()` (current window vs a user limit or
+  the user's largest recent window, rolling 7-day total, month-to-date
+  API-equivalent value vs plan price). Anthropic publishes no subscription
+  token limits — never encode guessed limits; progress must stay relative to
+  user-set limits or the user's own history, and the UI must say so.
+- `src/analytics/efficiency.js` — pure `buildWeek(sessions, now)` (last 7
+  local days vs the 7 before, daily series, models, top 10 projects, from
+  usageRecords plus dailyRollups) and `scoreEfficiency(week, sessions, tips)`
+  (0–100 from cache reuse 45, open recommendations 35, long-session
+  compaction 20; non-applicable components are re-weighted; dismissed tips
+  still count). Keep it explainable: every point maps to a measured fact.
+- `src/analytics/weeklyReport.js` — pure `buildWeeklyReport(summary,
+  {showNames})` Markdown digest. Redacted by default: projects become
+  `pseudonym()` labels (FNV-1a) and recommendations are grouped by
+  category because tip messages can name files.
+- `src/analytics/whatIf.js` — pure `buildWhatIf(sessions)`: reprices the
+  scope's exact token totals (input, output, 5m/1h cache writes, cache reads)
+  on each `WHAT_IF_TARGETS` model through `computeCost()` at the current
+  pricing row, overall and per project. Cost is linear in token components,
+  so it works from session totals (no per-message pass). Targets name models
+  only, never prices. It answers "these tokens on model X", not "this work on
+  model X" — keep that caveat wherever it is shown.
 - `src/pricing/`
   - `models.js` — exports `PRICING_TABLE` (array of `{ id,
     matchSubstrings[], inputPerMTok, outputPerMTok, effectiveFrom,
@@ -101,32 +137,60 @@ read this file before starting any development or design task in this repo.
     they will take effect.
   - `cost.js` — computes estimated cost per message from the pricing table.
     Falls back to a default (Sonnet-tier) rate for unrecognized models and
-    marks the result `estimated: true`/`usedFallback` — not currently
-    surfaced visually per-row in the dashboard.
+    marks the result `estimated: true`/`usedFallback`. The dashboard shows
+    an "≈ est." badge on project/session rows whose cost used it.
 - `src/budget/`
   - `config.js` — `readConfig()`/`writeConfig(updates)`, reads/writes
     `~/.claude-token-meter/config.json`; transcript files are strictly
     read-only. Shape:
     `{ dailyTokenCap, dailyCostCapUsd, sessionTokenCap, sessionCostCapUsd,
-    warnThresholdPct }`, all nullable except `warnThresholdPct` (default
-    `80`). `readConfig()` never throws on a missing file or malformed JSON
+    monthlyTokenCap, monthlyCostCapUsd,
+    warnThresholdPct, plan, planMonthlyUsd, blockTokenLimit,
+    weeklyTokenLimit, insightStates }`, all nullable except `warnThresholdPct` (default
+    `80`) and `plan` (`api`|`pro`|`max5x`|`max20x`, default `api`). `readConfig()` never throws on a missing file or malformed JSON
     — falls back to defaults silently in both cases, since a corrupt local
     config file shouldn't crash the CLI/server.
-  - `alerts.js` — pure function `computeAlerts(todayTotals,
-    activeSessionTotals, config)` → alert list (`level: 'warning'|
-    'exceeded'`, `message`).
+  - `insightStates.js` — dismiss/snooze/restore state for insights, keyed
+    by `insightKey(id)` (first 16 hex chars of SHA-256) because insight ids
+    can contain local file paths that must not land in `config.json`.
+    `applyInsightAction()` validates (snooze 1–90 days), drops expired
+    snoozes, and keeps at most 500 entries; `partitionTips()` splits tips
+    into visible and hidden. Not on the pure list (uses `node:crypto`).
+  - `alerts.js` — pure `computeAlerts(todayTotals, activeSessionTotals,
+    config)` and `computePlanAlerts(plan, config)` → alerts `{ id, level:
+    'warn'|'exceeded', scope: 'day'|'session'|'window'|'week', message }`.
+    `id` is stable per measured thing (`day-cost`, `session-cost:<id>`,
+    `window-tokens:<windowStart>`, `window-pace:<windowStart>`,
+    `week-tokens`, `month-cost:<YYYY-MM>`, `month-pace-cost:<YYYY-MM>`, and
+    token equivalents) so clients can notify once. `computeMonthAlerts(month,
+    config)` adds monthly budget and on-pace alerts. Plan alerts fire only for
+    user-set limits, never the personal-record baseline. `buildSummary()`
+    passes only sessions active today to `computeAlerts()`.
 - `src/cli/`
   - `index.js` — argv parsing/dispatch.
   - `commands/start.js` — starts the dashboard server (default command).
   - `commands/json.js` — restore/index + `buildSummary()` + JSON to stdout,
     no server (`--no-cache` forces an uncached scan).
   - `commands/summary.js` — compact human-readable totals, live burn, cache,
-    project, recommendation, and pricing-quality summary.
+    project, recommendation, and pricing-quality summary, plus what-if and
+    plan lines when available.
   - `commands/csv.js` — private atomic CSV export grouped by day, project,
     branch, or session; supports the same date/project filters as JSON.
+  - `commands/report.js` — `--report <path|->` writes the weekly Markdown
+    report (owner-only file via csv.js `writePrivateFile`); `--show-names`
+    disables redaction.
   - `commands/doctor.js` — checks runtime compatibility, transcript access,
     private index/config health, and local-state permissions.
-  - `commands/setBudget.js` — handles the three `--set-*-budget-*` flags.
+  - `commands/statusline.js` — reads Claude Code's statusLine JSON from
+    stdin (bounded size and time), locates the session only through
+    `discoverSessionFiles()` (never a stdin-supplied path), parses that
+    transcript plus at most 20 transcripts modified today (or in the last
+    24 hours when a subscription plan is set, to place the 5-hour window),
+    prints one line,
+    and writes nothing. It never throws: failures print a neutral line and
+    exit 0. Also prints the `--statusline-config` instructions; it never
+    edits Claude Code settings.
+  - `commands/setBudget.js` — handles the `--set-*-budget-*` and plan flags.
   - `commands/help.js` — `--help` output.
 - `src/heuristics/` — 5 pure one-function-per-file tip generators, each
   `(sessionRecord, toolEvents, allSessionsHistory) => Tip[]`, where
@@ -142,17 +206,27 @@ read this file before starting any development or design task in this repo.
     avoid recomputing for idle sessions on every ~1.5s poll tick.
     `clearHeuristicsCache()` exported for tests.
 - `src/server/`
-  - `routes.js` — exactly 2 HTTP routes: `GET /api/summary`,
-    `POST /api/budget` (allowlisted keys only). SSE stream is a separate
+  - `routes.js` — exactly 4 HTTP routes: `GET /api/summary`,
+    `GET /api/report` (weekly Markdown download; `?names=1` unredacted),
+    `POST /api/budget` (allowlisted keys only), and `POST /api/insights`
+    (`{id, action: 'dismiss'|'snooze'|'restore', days?}`, 16 KB body cap).
+    All share the session-cookie authorization. SSE stream is a separate
     concern (see `sse.js`).
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
-    `byDay`, `forecast`, `intelligence`, `attribution`, `sessions`, `tips`,
-    `alerts`, `config`, `totalIngestedMessages`). Subagent aggregates count
-    in every total but are listed only under their parent: `sessions` and
-    project/branch session lists hold main sessions, each with `subagents`,
-    `subagentTokenTotal`, and `subagentCostUsd`; heuristics run on main
-    sessions; session caps include subagents. Reused
+    `byDay`, `byHourOfWeek`, `forecast`, `month` (month-to-date from all
+    sessions, ignoring filters), `week` and `efficiency` (also all sessions;
+    the score's session components use main sessions only), `intelligence`,
+    `attribution`, `hiddenTips` (dismissed or snoozed, with `userState`;
+    `tips` holds only visible ones; `config` omits `insightStates`), `plan`
+    (always computed from all sessions, ignoring filters), `whatIf`
+    (filtered scope), `sessions`, `tips`, `alerts`, `config`,
+    `totalIngestedMessages`; `byProject` entries and their sessions carry
+    `estimatedCostUsed`). Subagent aggregates count in every total but are
+    listed only under their parent: `sessions` and project/branch session
+    lists hold main sessions, each with `subagents`, `subagentTokenTotal`,
+    and `subagentCostUsd`; heuristics run on main sessions; session caps
+    include subagents. Reused
     **verbatim** by both the SSE dashboard stream and the `--json` CLI
     command — any shape change must stay consistent across both consumers.
     Note: `sessionSummaries` includes `gitBranch`/`version`/`tokenTotal` but
@@ -169,7 +243,9 @@ read this file before starting any development or design task in this repo.
   - Five task views: Overview, Live Session, Projects, Insights, Settings.
   - `renderBurnChart()` and `renderSessionTimeline()` create accessible local
     SVG charts without a chart dependency.
-  - `renderProjects()` supports search and expandable session details;
+  - `renderProjects()` supports search and expandable session details,
+    plus a what-if pricing panel (`renderWhatIf()`) for the filtered scope
+    or one selected project;
     `renderInsights()` ranks/filters evidence and deep-links to sessions.
   - The Settings form posts to `/api/budget`, then refetches `/api/summary`
     so config changes appear even when no transcript message changed.
@@ -181,7 +257,19 @@ read this file before starting any development or design task in this repo.
   - `dashboard.css` defines the offline system-font visual system: dark
     navigation rail, off-white workspace, coral usage/action accent, teal
     healthy/local/live state, blue comparison series, and amber/red warnings.
-    Desktop, tablet, and mobile layouts are included.
+    Colors are `:root` tokens with a dark theme that follows
+    `prefers-color-scheme` unless the viewer toggles it (stored per browser
+    in `localStorage`, wrapped in try/catch). New colors must be tokens, not
+    literals. Desktop, tablet, and mobile layouts are included.
+  - Active `summary.alerts` render in an Overview strip. Opt-in desktop
+    notifications (Settings) use the browser Notification API from the open
+    tab: permission is requested only from the toggle, each alert notifies
+    once per `id`+level per local day (remembered in `localStorage`), and a
+    visible tab gets a toast instead. There is no service worker, so nothing
+    is delivered while the dashboard is closed.
+  - A command palette (Ctrl/⌘+K) jumps to views, projects, and sessions;
+    `g` + `o`/`l`/`p`/`i`/`s` switches views and `/` focuses project search.
+    Shortcuts are ignored while typing in form fields.
 - `docs/UI_PLAN.md` is the canonical information architecture, interaction,
   accessibility, privacy, and acceptance-criteria document for dashboard work.
 
@@ -236,10 +324,18 @@ cc-token-meter                                Start the dashboard server (defaul
 cc-token-meter --summary                      Print a compact local usage summary, exit
 cc-token-meter --json                         Load/index history, print JSON summary, exit
 cc-token-meter --csv <path|->                 Export filtered usage as CSV, exit
+cc-token-meter --report <path|->              Write the weekly report (Markdown), exit
 cc-token-meter --doctor                       Diagnose local setup and private state, exit
+cc-token-meter --statusline                   Print one line for Claude Code's status line
+cc-token-meter --statusline-config            Show status line setup instructions, exit
 cc-token-meter --set-budget-usd <n>           Set daily cost cap (USD) and exit
 cc-token-meter --set-budget-tokens <n>        Set daily token cap and exit
 cc-token-meter --set-session-budget-usd <n>   Set per-session cost cap (USD) and exit
+cc-token-meter --set-monthly-budget-usd <n>   Set monthly cost cap (USD, 0 clears)
+cc-token-meter --set-monthly-budget-tokens <n> Set monthly token cap (0 clears)
+cc-token-meter --set-plan <id>                Set plan: api, pro, max5x, max20x
+cc-token-meter --set-block-token-limit <n>    Set a 5-hour window token limit (0 clears)
+cc-token-meter --set-weekly-token-limit <n>   Set a rolling 7-day token limit (0 clears)
 cc-token-meter --help                         Show help
 cc-token-meter --version                      Show version
 ```
@@ -276,9 +372,8 @@ Useful for scripting/CI-adjacent local checks.
 ## Known gaps (standing findings, not regressions)
 
 - Pricing table can lag official Anthropic pricing around scheduled changes
-  — treat dollar figures as estimates; `estimated`/`usedFallback` flags
-  exist in the data model but aren't rendered visually per-row in the
-  dashboard yet.
+  — treat dollar figures as estimates; fallback-priced rows are badged in
+  the dashboard, but a recognized row can still be out of date.
 - The first uncached scan still scales with total transcript history volume;
   warm starts restore the bounded v3 local index. Each session retains its
   newest 1,000 normalized usage records while older detail is compacted into

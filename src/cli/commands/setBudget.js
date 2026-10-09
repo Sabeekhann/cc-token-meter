@@ -11,6 +11,6 @@ import { writeConfig } from '../../budget/config.js';
  */
 export async function setBudgetCommand(updates) {
   const next = writeConfig(updates);
-  console.log('cc-token-meter: budget config updated.');
+  console.log('cc-token-meter: local config updated.');
   console.log(JSON.stringify(next, null, 2));
 }

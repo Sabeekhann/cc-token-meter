@@ -89,7 +89,9 @@ test('subagentsByParent nests subagents under their parent, largest first', () =
 });
 
 test('summary counts subagents in totals but lists them under their parent session', () => {
-  const store = { getSnapshot: () => ({ sessions, totalIngestedMessages: 12 }) };
+  // Session-cap alerts only cover sessions that ran today.
+  const today = [{ ...parent, lastTimestamp: new Date().toISOString() }, ...sessions.slice(1)];
+  const store = { getSnapshot: () => ({ sessions: today, totalIngestedMessages: 12 }) };
   const summary = buildSummary(store, { config: { warnThresholdPct: 80, sessionCostCapUsd: 7 } });
 
   assert.equal(summary.allTime.tokenTotal, 1000, 'subagent tokens are part of all-time usage');

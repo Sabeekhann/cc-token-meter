@@ -8,10 +8,18 @@ Usage:
   cc-token-meter --summary                Print a compact local usage summary, exit
   cc-token-meter --json                   Load/index history, print JSON summary, exit
   cc-token-meter --csv <path|->           Export filtered usage as CSV, exit
+  cc-token-meter --report <path|->        Write the weekly report (Markdown), exit
   cc-token-meter --doctor                 Diagnose local setup and private state, exit
+  cc-token-meter --statusline             Print one usage line for Claude Code's status line
+  cc-token-meter --statusline-config      Show how to enable the status line, exit
   cc-token-meter --set-budget-usd <n>          Set daily cost cap (USD) and exit
   cc-token-meter --set-budget-tokens <n>       Set daily token cap and exit
   cc-token-meter --set-session-budget-usd <n>  Set per-session cost cap (USD) and exit
+  cc-token-meter --set-monthly-budget-usd <n>     Set a monthly cost cap (USD, 0 clears)
+  cc-token-meter --set-monthly-budget-tokens <n>  Set a monthly token cap (0 clears)
+  cc-token-meter --set-plan <id>               Set your plan: api, pro, max5x, or max20x
+  cc-token-meter --set-block-token-limit <n>   Set a 5-hour window token limit (0 clears)
+  cc-token-meter --set-weekly-token-limit <n>  Set a rolling 7-day token limit (0 clears)
   cc-token-meter --help                   Show this help
   cc-token-meter --version                Show version
 
@@ -24,6 +32,7 @@ Options:
   --project <text> Filter project paths by case-insensitive substring (summary/JSON/CSV)
   --model <id>     Filter by exact model identifier, case-insensitive (summary/JSON/CSV)
   --group-by <n>   CSV rows: day, project, branch, or session (default: day)
+  --show-names     Include project names and insight details in --report
 
 Examples:
   npx cc-token-meter
@@ -38,6 +47,7 @@ Examples:
   npx cc-token-meter --csv usage.csv --from 2026-08-01 --group-by project
   npx cc-token-meter --csv - --project my-app --model claude-sonnet-5 --group-by session
   npx cc-token-meter --set-budget-usd 20
+  cc-token-meter --statusline-config
 `;
 
 export async function helpCommand() {

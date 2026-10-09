@@ -54,6 +54,90 @@ test('dashboard assets remain fully local and connect only to local API paths', 
   assert.match(js, /new EventSource\('\/api\/stream'\)/);
 });
 
+test('dashboard ships an offline dark theme, command palette, and new usage visuals', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const css = fs.readFileSync(path.join(publicDir, 'dashboard.css'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /<meta name="color-scheme" content="light dark" \/>/);
+  assert.match(css, /@media \(prefers-color-scheme:dark\)/);
+  assert.match(css, /:root\[data-theme="dark"\]/);
+  assert.match(html, /id="themeToggle"/);
+  assert.match(js, /window\.localStorage\.getItem\(THEME_KEY\)/);
+  // Storage can be unavailable (private mode, blocked site data); theme
+  // persistence must never break rendering.
+  assert.match(js, /try \{\s*window\.localStorage\.setItem\(THEME_KEY, next\);\s*\} catch/);
+
+  assert.match(html, /id="paletteBackdrop"[^>]*>\s*<div class="palette" role="dialog" aria-modal="true"/);
+  assert.match(html, /id="paletteInput"[^>]+role="combobox"/);
+  assert.match(js, /event\.metaKey \|\| event\.ctrlKey\) && !event\.altKey && String\(event\.key\)\.toLowerCase\(\) === 'k'/);
+  assert.match(js, /isTypingTarget\(event\.target\)/);
+
+  assert.match(html, /id="usageHeatmap"[^>]+aria-describedby="heatmapSummary"/);
+  assert.match(html, /id="heatmapSummary" class="chart-summary"/);
+  assert.match(html, /id="tokenSpark"/);
+  assert.match(html, /id="costSpark"/);
+  assert.match(js, /renderContextGauge\(session\)/);
+  assert.match(js, /estimateBadge\(project\.estimatedCostUsed\)/);
+  assert.match(js, /estimateBadge\(session\.estimatedCostUsed\)/);
+});
+
+test('dashboard shows subscription windows only for plan users and saves plan settings', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /id="planPanel" class="panel plan-panel hidden"/);
+  assert.match(html, /<label>[\s\S]*?<select id="planSelect" name="plan">/);
+  for (const id of ['planMonthlyUsd', 'blockTokenLimit', 'weeklyTokenLimit']) {
+    assert.match(html, new RegExp(`<label>[\\s\\S]*?<input id="${id}"`));
+  }
+  assert.match(js, /var subscribed = plan && plan\.plan && plan\.plan !== 'api';/);
+  assert.match(js, /panel\.classList\.toggle\('hidden', !subscribed\)/);
+  assert.match(js, /plan: byId\('planSelect'\)\.value/);
+  // Anthropic publishes no plan token limits; the UI must say progress is local.
+  assert.match(html, /Anthropic doesn't publish plan token limits/);
+});
+
+test('projects view offers what-if pricing with an explicit same-token caveat', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /<label class="explorer-field whatif-field">[\s\S]*?<select id="whatIfProject"/);
+  assert.match(html, /id="whatIfRows" class="whatif-rows" role="list"/);
+  assert.match(html, /Assumes the same token counts/);
+  assert.match(js, /renderWhatIf\(projectSummary\)/);
+  assert.match(js, /whatIf = projectSummary && projectSummary\.whatIf;/);
+});
+
+test('dashboard shows active alerts and offers opt-in desktop notifications', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /id="alertStrip" class="alert-strip hidden" role="status" aria-live="polite"/);
+  assert.match(html, /<label class="notify-toggle">\s*<input id="notifyToggle" type="checkbox" \/>/);
+  assert.match(html, /id="notifyTest"/);
+  // Permission is requested only from the toggle's change handler (a user gesture).
+  assert.match(js, /toggle\.addEventListener\('change'[\s\S]*?Notification\.requestPermission\(\)/);
+  assert.equal((js.match(/requestPermission\(/g) || []).length, 1);
+  // Each alert notifies once per level per day; storage failures never break the page.
+  assert.match(js, /alert\.id \+ '\|' \+ alert\.level \+ '\|' \+ today/);
+  assert.match(js, /function readStorage[\s\S]*?try \{[\s\S]*?\} catch/);
+  assert.match(js, /if \(document\.hidden\) showDesktopNotification/);
+});
+
+test('insights can be snoozed, dismissed, and restored through the local API', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /data-insight-filter="hidden"[^>]*>Dismissed &amp; snoozed <span id="filterHiddenCount">/);
+  assert.match(js, /fetch\('\/api\/insights'/);
+  assert.match(js, /data-insight-action="snooze" data-insight-days="1"/);
+  assert.match(js, /data-insight-action="snooze" data-insight-days="7"/);
+  assert.match(js, /data-insight-action="dismiss"/);
+  assert.match(js, /data-insight-action="restore"/);
+  assert.match(js, /state\.summary\.hiddenTips/);
+});
+
 test('overview attributes usage to subagents and tools with an explicit estimate note', () => {
   const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
   const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
