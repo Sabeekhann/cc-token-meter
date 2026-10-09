@@ -29,11 +29,13 @@ read this file before starting any development or design task in this repo.
 ## Architecture / module map
 
 - `src/ingest/`
-  - `discover.js` — `discoverSessionFiles()` globs
-    `~/.claude/projects/*/*.jsonl` (via the `glob` dependency, `nodir:
-    true` — a same-named sibling directory exists next to each `.jsonl`
-    file, must not be picked up), returns `{sessionId, projectDirName,
-    filePath, mtimeMs, size}[]`. Returns `[]` rather than throwing if the
+  - `discover.js` — `discoverSessionFiles()` reads
+    `~/.claude/projects/*/*.jsonl` plus subagent transcripts at
+    `~/.claude/projects/*/<sessionId>/subagents/agent-<id>.jsonl` (nothing
+    else in the same-named sibling directory is read), returning
+    `{sessionId, projectDirName, filePath, mtimeMs, size, agentId?,
+    parentSessionId?}[]`. Subagent files get their own aggregate id from
+    `subagentSessionId(parent, agentId)` so they rebuild independently. Returns `[]` rather than throwing if the
     projects dir doesn't exist yet (fresh install). Also exports
     `deriveProjectPath(projectDirName)`, the lossy `-`→`/` reversal
     fallback described in Known Gaps below.
@@ -41,6 +43,12 @@ read this file before starting any development or design task in this repo.
     file into memory), tolerates malformed lines and in-progress trailing
     writes from live sessions, tracks byte offsets for incremental tailing
     so a poll tick only re-reads bytes appended since the last read.
+    Claude Code writes one API response as several `assistant` lines (one
+    per content block, `apiBlockIndex`), each repeating the full usage:
+    usage is counted once per `message.id`+`requestId`, carried across
+    incremental reads via `recentMessageKeys`, while tool_use blocks are
+    still read from every line. Finished subagents are reported as
+    `subagentEvents` (id and type only, never prompt or report text).
   - `store.js` — maintains a `SessionAggregate` per session, restores and
     persists a versioned private local index, detects transcript
     truncation/replacement, and polls for new/changed files ~every 1.5s.
@@ -50,21 +58,30 @@ read this file before starting any development or design task in this repo.
     `cacheCreationInputTokens`/`cacheReadInputTokens`/`cacheWrite5m`/
     `cacheWrite1h`, `costUsd`, `estimatedCostUsed`, `compactDetected`
     (tri-state: boolean after a full scan, absent for legacy cache entries),
-    `gitBranch` (last-seen session value), `version`, `usageRecords[]` (the
+    `gitBranch` (last-seen session value), `version`, `toolStatsByDay`
+    (`{date: {tool: {calls, resultBytes}}}`), `subagentTypes` (parents:
+    agentId → agentType), `parentSessionId`/`agentId` (subagent aggregates
+    only), `usageRecords[]` (the
     newest 1,000 per session, with older detail compacted into metadata-only
     daily rollups while exact aggregate totals are preserved), and
     `toolEvents[]` (ring-buffered at 200).
   - `localIndex.js` — reads/writes
     `~/.claude-token-meter/usage-index-v3.json` atomically with owner-only
-    permissions where supported. Corrupt/future-version indexes are ignored
-    and rebuilt. It contains normalized counters/events and local paths
+    permissions where supported. Corrupt/future-version indexes, and any
+    index whose `accountingRevision` differs from `ACCOUNTING_REVISION`, are
+    ignored and rebuilt. Bump `ACCOUNTING_REVISION` whenever ingestion starts
+    counting differently. It contains normalized counters/events and local paths
     needed for analytics, never prompt or tool-result content.
   - `aggregate.js` — pure functions: `tokenTotal(session)`,
     `aggregateByProject(sessions)`, exact per-message
     `aggregateByBranch(sessions)`, `aggregateByDay(sessions)` (already a
     full daily time series), `getTodayTotal(sessions)`, `localDateKey`.
-- `src/analytics/overview.js` — pure active-session, recent velocity, cache
-  health/savings, model-mix, and data-quality intelligence.
+- `src/analytics/overview.js` — pure active-session (subagents excluded),
+  recent velocity, cache health/savings, model-mix, and data-quality
+  intelligence.
+- `src/analytics/attribution.js` — pure `buildAttribution()` (subagent usage
+  by type and share, tools ranked by result bytes with an estimated token
+  figure, MCP servers) and `subagentsByParent()`.
 - `src/pricing/`
   - `models.js` — exports `PRICING_TABLE` (array of `{ id,
     matchSubstrings[], inputPerMTok, outputPerMTok, effectiveFrom,
@@ -130,8 +147,12 @@ read this file before starting any development or design task in this repo.
     concern (see `sse.js`).
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
-    `byDay`, `forecast`, `intelligence`, `sessions`, `tips`, `alerts`,
-    `config`, `totalIngestedMessages`). Reused
+    `byDay`, `forecast`, `intelligence`, `attribution`, `sessions`, `tips`,
+    `alerts`, `config`, `totalIngestedMessages`). Subagent aggregates count
+    in every total but are listed only under their parent: `sessions` and
+    project/branch session lists hold main sessions, each with `subagents`,
+    `subagentTokenTotal`, and `subagentCostUsd`; heuristics run on main
+    sessions; session caps include subagents. Reused
     **verbatim** by both the SSE dashboard stream and the `--json` CLI
     command — any shape change must stay consistent across both consumers.
     Note: `sessionSummaries` includes `gitBranch`/`version`/`tokenTotal` but

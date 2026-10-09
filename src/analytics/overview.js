@@ -28,7 +28,8 @@ export function buildUsageIntelligence(sessions, options = {}) {
   const records = flattenRecords(safeSessions);
 
   return {
-    active: buildActiveSummary(safeSessions, nowMs, activeWindowMinutes),
+    // A running subagent is part of its parent session, not another session.
+    active: buildActiveSummary(safeSessions.filter((session) => !session.parentSessionId), nowMs, activeWindowMinutes),
     velocity: buildVelocity(records, nowMs, velocityWindowMinutes),
     cache: buildCacheHealth(records),
     models: buildModelMix(records),

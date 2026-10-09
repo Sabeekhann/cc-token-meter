@@ -51,11 +51,15 @@ npm run benchmark:large
 
 ## Index upgrade and recovery
 
-Index schema v3 adds `dailyRollups` and bounded `usageRecords`. On first use it
-loads an unchanged v2 index, compacts it in memory, recalculates the current
-message count, and atomically writes `usage-index-v3.json`; transcripts do not
-need to be reparsed. Corrupt, unsupported, deleted, replaced, or truncated
-state falls back to the read-only transcripts without double counting.
+Index schema v3 adds `dailyRollups` and bounded `usageRecords`. Each index
+also records the `accountingRevision` it was built under. When ingestion
+starts counting differently, the revision is bumped and any index from an
+older revision (and every v2 index) is ignored and rebuilt once from the
+transcripts, because its stored totals would be wrong. Revision 2 counts each
+API response once rather than once per content-block line, and includes
+subagent transcripts. Indexes from the current revision restore warm without
+reparsing. Corrupt, unsupported, deleted, replaced, or truncated state falls
+back to the read-only transcripts without double counting.
 
 Deleting `~/.claude-token-meter/usage-index-v3.json` is always safe: the next
 cached run rebuilds it. `--no-cache` continues to read no index and write no

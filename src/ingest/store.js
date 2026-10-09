@@ -1,4 +1,5 @@
-import { discoverSessionFiles, deriveProjectPath } from './discover.js';
+import path from 'node:path';
+import { discoverSessionFiles, deriveProjectPath, subagentSessionId } from './discover.js';
 import { parseSessionFile } from './parser.js';
 import { computeCost } from '../pricing/cost.js';
 import {
@@ -7,6 +8,7 @@ import {
   writeLocalIndex,
 } from './localIndex.js';
 import { compactSessionHistory } from './retention.js';
+import { localDateKey } from './aggregate.js';
 
 const REGLOB_INTERVAL_MS = 5000;
 const TOOL_EVENT_RING_SIZE = 200;
@@ -126,6 +128,13 @@ export function createStore({
         // recent detail window remains for timelines and heuristics.
         dailyRollups: [],
         usageRecords: [],
+        // Exact per-tool counters by local day: { date: { tool: {calls, resultBytes} } }.
+        toolStatsByDay: {},
+        // Parent sessions: agentId -> agentType reported by finished subagents.
+        subagentTypes: {},
+        // Set only on subagent aggregates (see subagentSessionId()).
+        parentSessionId: null,
+        agentId: null,
       };
       sessions.set(sessionId, agg);
     }
@@ -139,14 +148,29 @@ export function createStore({
     }
   }
 
-  function applyParsedResults(filePath, projectDirName, result, compactDetectionState) {
+  function applyParsedResults(filePath, projectDirName, result, compactDetectionState, fileInfo = {}) {
     const { usageRecords, toolUseEvents, toolResultEvents } = result;
+    const subagentEvents = Array.isArray(result.subagentEvents) ? result.subagentEvents : [];
     const touchedSessionIds = new Set();
+    // Every line of a subagent transcript belongs to that subagent's own
+    // aggregate, even though the lines carry the parent's sessionId.
+    const fileSessionId = fileInfo.agentId && fileInfo.parentSessionId
+      ? subagentSessionId(fileInfo.parentSessionId, fileInfo.agentId)
+      : null;
+    const sessionFor = (lineSessionId) => fileSessionId || lineSessionId || inferSessionIdFromFile(filePath);
+    const getSession = (sessionId) => {
+      const agg = getOrCreateSession(sessionId);
+      if (fileSessionId && !agg.agentId) {
+        agg.parentSessionId = fileInfo.parentSessionId;
+        agg.agentId = fileInfo.agentId;
+      }
+      return agg;
+    };
 
     for (const record of usageRecords) {
-      const sessionId = record.sessionId || inferSessionIdFromFile(filePath);
+      const sessionId = sessionFor(record.sessionId);
       touchedSessionIds.add(sessionId);
-      const agg = getOrCreateSession(sessionId);
+      const agg = getSession(sessionId);
 
       agg.projectCwd = record.projectCwd || agg.projectCwd;
       if (!agg.projectCwd) {
@@ -181,8 +205,11 @@ export function createStore({
       // usage record. Downstream day/branch/model analytics can then
       // attribute cost correctly instead of spreading a session total
       // evenly across messages (which is wrong for mixed-model sessions).
+      // messageKey only deduplicates lines during parsing; it isn't persisted.
+      const storedRecord = { ...record };
+      delete storedRecord.messageKey;
       agg.usageRecords.push({
-        ...record,
+        ...storedRecord,
         costUsd: cost.totalCost,
         estimatedCostUsed: cost.estimated,
         costBreakdown: {
@@ -197,10 +224,11 @@ export function createStore({
     }
 
     for (const evt of toolUseEvents) {
-      const sessionId = evt.sessionId || inferSessionIdFromFile(filePath);
+      const sessionId = sessionFor(evt.sessionId);
       touchedSessionIds.add(sessionId);
-      const agg = getOrCreateSession(sessionId);
+      const agg = getSession(sessionId);
       pushToolEvent(agg, { kind: 'tool_use', ...evt });
+      if (evt.name) toolStat(agg, evt.name, evt.timestamp).calls += 1;
     }
 
     for (const evt of toolResultEvents) {
@@ -211,10 +239,19 @@ export function createStore({
       // matching tool_use id, but that lookup is deferred to heuristics
       // (which receive the full toolEvents ring buffer already merged
       // per-session here).
-      const sessionId = inferSessionIdFromFile(filePath);
+      const sessionId = fileSessionId || inferSessionIdFromFile(filePath);
       touchedSessionIds.add(sessionId);
-      const agg = getOrCreateSession(sessionId);
+      const agg = getSession(sessionId);
+      const toolName = toolNameFor(agg, evt.toolUseId);
+      if (toolName) toolStat(agg, toolName, evt.timestamp).resultBytes += evt.contentByteLength || 0;
       pushToolEvent(agg, { kind: 'tool_result', ...evt });
+    }
+
+    for (const evt of subagentEvents) {
+      const sessionId = sessionFor(null);
+      touchedSessionIds.add(sessionId);
+      const agg = getSession(sessionId);
+      if (evt.agentType) agg.subagentTypes[evt.agentId] = evt.agentType;
     }
 
     // Full-scan evidence is carried forward at the file level across later
@@ -236,8 +273,24 @@ export function createStore({
   }
 
   function inferSessionIdFromFile(filePath) {
-    const base = filePath.split('/').pop() || filePath;
-    return base.replace(/\.jsonl$/, '');
+    return path.basename(filePath).replace(/\.jsonl$/, '');
+  }
+
+  function toolStat(agg, name, timestamp) {
+    const date = (timestamp && localDateKey(timestamp)) || 'unknown';
+    if (!agg.toolStatsByDay) agg.toolStatsByDay = {};
+    const day = agg.toolStatsByDay[date] || (agg.toolStatsByDay[date] = {});
+    if (!day[name]) day[name] = { calls: 0, resultBytes: 0 };
+    return day[name];
+  }
+
+  function toolNameFor(agg, toolUseId) {
+    if (!toolUseId) return null;
+    for (let i = agg.toolEvents.length - 1; i >= 0; i -= 1) {
+      const event = agg.toolEvents[i];
+      if (event.kind === 'tool_use' && event.toolUseId === toolUseId) return event.name || null;
+    }
+    return null;
   }
 
   /**
@@ -256,9 +309,11 @@ export function createStore({
       didDiscover = true;
     } else {
       // Reuse previously discovered files (from fileState) without re-globbing.
-      discovered = Array.from(fileState.keys()).map((filePath) => ({
+      discovered = Array.from(fileState.entries()).map(([filePath, state]) => ({
         filePath,
-        projectDirName: fileState.get(filePath).projectDirName,
+        projectDirName: state.projectDirName,
+        agentId: state.agentId,
+        parentSessionId: state.parentSessionId,
       }));
     }
 
@@ -291,7 +346,7 @@ export function createStore({
         projectDirName = projectDirName || fileInfo.projectDirName;
         const result = await parseFile(filePath, { startOffset: 0 });
         const compactDetected = mergeCompactDetection(undefined, result);
-        const sessionIds = applyParsedResults(filePath, projectDirName, result, compactDetected);
+        const sessionIds = applyParsedResults(filePath, projectDirName, result, compactDetected, fileInfo);
         fileState.set(filePath, {
           offset: result.newOffset,
           mtimeMs: stat.mtimeMs,
@@ -299,6 +354,8 @@ export function createStore({
           projectDirName,
           sessionIds: Array.from(sessionIds),
           compactDetected,
+          recentMessageKeys: recentKeys(result),
+          ...subagentFileState(fileInfo),
           ...fileIdentity(stat),
         });
         changed = true;
@@ -318,6 +375,7 @@ export function createStore({
 
         const result = await parseFile(filePath, {
           startOffset: replacedOrTruncated ? 0 : prev.offset,
+          seenMessageKeys: replacedOrTruncated ? [] : prev.recentMessageKeys || [],
         });
         const compactDetected = mergeCompactDetection(
           replacedOrTruncated ? undefined : prev.compactDetected,
@@ -328,6 +386,7 @@ export function createStore({
           prev.projectDirName,
           result,
           compactDetected,
+          fileInfo,
         );
         const sessionIds = replacedOrTruncated
           ? touchedSessionIds
@@ -339,6 +398,8 @@ export function createStore({
           projectDirName: prev.projectDirName,
           sessionIds: Array.from(sessionIds),
           compactDetected,
+          recentMessageKeys: recentKeys(result),
+          ...subagentFileState(fileInfo),
           ...fileIdentity(stat),
         });
         changed = true;
@@ -365,6 +426,16 @@ export function createStore({
         sessions.delete(sessionId);
       }
     }
+  }
+
+  function recentKeys(result) {
+    return Array.isArray(result.recentMessageKeys) ? result.recentMessageKeys : [];
+  }
+
+  function subagentFileState(fileInfo) {
+    return fileInfo.agentId && fileInfo.parentSessionId
+      ? { agentId: fileInfo.agentId, parentSessionId: fileInfo.parentSessionId }
+      : {};
   }
 
   function fileIdentity(stat) {

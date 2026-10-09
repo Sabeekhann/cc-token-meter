@@ -33,6 +33,19 @@ export function formatCompactSummary(summary = {}) {
     `Pricing quality: ${integer(quality.exactCostMessageCount)}/${integer(quality.messageCount)} messages matched known pricing · verified ${summary.pricing?.verifiedOn || 'unknown'}`,
   ];
 
+  const attribution = summary.attribution || {};
+  const subagents = attribution.subagents || {};
+  const topTool = Array.isArray(attribution.tools) ? attribution.tools[0] : null;
+  if (subagents.runs > 0 || topTool) {
+    const subagentCopy = subagents.runs > 0
+      ? `${formatPercent(subagents.share)} of tokens in ${integer(subagents.runs)} subagent run${integer(subagents.runs) === 1 ? '' : 's'} · ${formatCost(subagents.costUsd)}`
+      : 'no subagent runs';
+    const toolCopy = topTool
+      ? ` · largest tool results: ${topTool.name} (~${formatTokens(topTool.estimatedTokens)} tokens in ${integer(topTool.calls)} calls)`
+      : '';
+    lines.push(`Attribution: ${subagentCopy}${toolCopy}`);
+  }
+
   return `${lines.join('\n')}\n`;
 }
 

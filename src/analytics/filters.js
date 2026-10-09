@@ -116,10 +116,20 @@ function rebuildSession(session, records, rollups, filters) {
       ? session.toolEvents.filter((event) => dateMatches(event.timestamp, filters))
       : [];
 
+  // Tool counters are kept per local day, so date scopes stay exact; like
+  // tool events they carry no model, so model scopes omit them.
+  const toolStatsByDay = {};
+  if (!filters.model) {
+    for (const [date, stats] of Object.entries(session.toolStatsByDay || {})) {
+      if (date !== 'unknown' && dateKeyMatches(date, filters)) toolStatsByDay[date] = stats;
+    }
+  }
+
   return {
     ...session,
     ...totals,
     models,
+    toolStatsByDay,
     firstTimestamp,
     lastTimestamp: lastUnit?.lastTimestamp || null,
     gitBranch: lastUnit?.gitBranch || session.gitBranch || null,

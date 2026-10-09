@@ -53,3 +53,14 @@ test('dashboard assets remain fully local and connect only to local API paths', 
   assert.match(js, /fetch\('\/api\/budget'/);
   assert.match(js, /new EventSource\('\/api\/stream'\)/);
 });
+
+test('overview attributes usage to subagents and tools with an explicit estimate note', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /id="subagentTypes" class="rank-list"/);
+  assert.match(html, /id="toolAttribution" class="rank-list"/);
+  assert.match(js, /renderAttribution\(summary\.attribution\)/);
+  assert.match(js, /Result tokens are estimated from result size/);
+  assert.match(js, /detailRow\('Subagents', subagentSummary\(session\)\)/);
+});
