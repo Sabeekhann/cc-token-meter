@@ -8,10 +8,11 @@ import {
   aggregateByHourOfWeek,
   getTodayTotal,
   tokenTotal,
+  localDateKey,
   forecastBurnRate,
   buildTimeline,
 } from '../ingest/aggregate.js';
-import { computeAlerts } from '../budget/alerts.js';
+import { computeAlerts, computePlanAlerts } from '../budget/alerts.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
 import { buildUsageIntelligence } from '../analytics/overview.js';
@@ -98,13 +99,9 @@ export function buildSummary(store, options = {}) {
     sessionId: s.sessionId,
     tokenTotal: s.tokenTotal,
     costUsd: s.costUsd,
+    lastTimestamp: s.lastTimestamp,
   }));
 
-  const alerts = computeAlerts(
-    { tokenTotal: todayTotal.tokenTotal, costUsd: todayTotal.costUsd },
-    activeSessionTotals,
-    config
-  );
   const intelligence = buildUsageIntelligence(sessions, { now: generatedAt });
   // Subscription windows are account-wide, so plan intelligence always uses
   // every session rather than the filtered scope.
@@ -113,6 +110,18 @@ export function buildSummary(store, options = {}) {
     now: generatedAt,
     byDay: filtered ? undefined : byDay,
   });
+
+  // Session caps apply to sessions that ran today; finished history would
+  // otherwise raise the same alerts forever.
+  const todayKey = localDateKey(generatedAt);
+  const alerts = [
+    ...computeAlerts(
+      { tokenTotal: todayTotal.tokenTotal, costUsd: todayTotal.costUsd },
+      activeSessionTotals.filter((s) => s.lastTimestamp && localDateKey(s.lastTimestamp) === todayKey),
+      config
+    ),
+    ...computePlanAlerts(plan, config),
+  ];
 
   const tips = [];
   for (const s of sessions) {

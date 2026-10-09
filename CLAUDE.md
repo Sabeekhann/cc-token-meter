@@ -119,9 +119,14 @@ read this file before starting any development or design task in this repo.
     `80`) and `plan` (`api`|`pro`|`max5x`|`max20x`, default `api`). `readConfig()` never throws on a missing file or malformed JSON
     — falls back to defaults silently in both cases, since a corrupt local
     config file shouldn't crash the CLI/server.
-  - `alerts.js` — pure function `computeAlerts(todayTotals,
-    activeSessionTotals, config)` → alert list (`level: 'warning'|
-    'exceeded'`, `message`).
+  - `alerts.js` — pure `computeAlerts(todayTotals, activeSessionTotals,
+    config)` and `computePlanAlerts(plan, config)` → alerts `{ id, level:
+    'warn'|'exceeded', scope: 'day'|'session'|'window'|'week', message }`.
+    `id` is stable per measured thing (`day-cost`, `session-cost:<id>`,
+    `window-tokens:<windowStart>`, `window-pace:<windowStart>`,
+    `week-tokens`) so clients can notify once. Plan alerts fire only for
+    user-set limits, never the personal-record baseline. `buildSummary()`
+    passes only sessions active today to `computeAlerts()`.
 - `src/cli/`
   - `index.js` — argv parsing/dispatch.
   - `commands/start.js` — starts the dashboard server (default command).
@@ -203,6 +208,12 @@ read this file before starting any development or design task in this repo.
     `prefers-color-scheme` unless the viewer toggles it (stored per browser
     in `localStorage`, wrapped in try/catch). New colors must be tokens, not
     literals. Desktop, tablet, and mobile layouts are included.
+  - Active `summary.alerts` render in an Overview strip. Opt-in desktop
+    notifications (Settings) use the browser Notification API from the open
+    tab: permission is requested only from the toggle, each alert notifies
+    once per `id`+level per local day (remembered in `localStorage`), and a
+    visible tab gets a toast instead. There is no service worker, so nothing
+    is delivered while the dashboard is closed.
   - A command palette (Ctrl/⌘+K) jumps to views, projects, and sessions;
     `g` + `o`/`l`/`p`/`i`/`s` switches views and `/` focuses project search.
     Shortcuts are ignored while typing in form fields.

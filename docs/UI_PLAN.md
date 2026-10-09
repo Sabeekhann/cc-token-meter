@@ -96,6 +96,9 @@ Settings are task-focused and small:
 - Budget changes are saved locally, then the summary is refetched so the UI
   updates even when no new transcript message arrives.
 - Empty, loading, disconnected, and fallback-pricing states are explicit.
+- Active budget and plan alerts show in an Overview strip; opt-in desktop
+  notifications (Settings) fire once per alert level per day or window, only
+  after the user grants permission from the toggle.
 
 ## Visual system
 

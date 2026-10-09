@@ -155,6 +155,20 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
+## Budget alerts and desktop notifications
+
+Active budget and plan alerts appear at the top of Overview: daily token or
+cost caps, per-session caps for sessions running today, and, in plan mode,
+your 5-hour window and weekly limits, including a warning when the current
+window is on pace to pass its limit before it resets.
+
+Turn on **Settings → Desktop notifications** to get them as desktop
+notifications while the dashboard tab is open in the background. Each alert
+notifies once per level per day (or once per 5-hour window), so you won't be
+spammed. Notifications come from the local page via your browser, and
+nothing is sent anywhere. If you need alerts without the dashboard open, use
+the [status line](#claude-code-status-line).
+
 ## What-if model pricing
 
 The Projects view shows what the same tokens would cost on other Claude

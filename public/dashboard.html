@@ -99,6 +99,8 @@
             </button>
           </div>
 
+          <div id="alertStrip" class="alert-strip hidden" role="status" aria-live="polite"></div>
+
           <div class="metric-grid">
             <article class="metric-card accent-card">
               <div class="metric-topline">
@@ -444,6 +446,17 @@
                   <h3>Your data stays here.</h3>
                   <p>Transcripts are read locally and never modified. The dashboard binds only to <code>127.0.0.1</code>.</p>
                 </div>
+              </article>
+              <article class="panel notify-panel" aria-labelledby="notifyTitle">
+                <p class="panel-kicker">ALERTS</p>
+                <h3 id="notifyTitle">Desktop notifications</h3>
+                <p class="notify-copy">Get a notification when a daily or session budget, a 5-hour window limit, or a weekly limit is close or passed. Notifications come from this dashboard tab, so keep it open in the background.</p>
+                <label class="notify-toggle">
+                  <input id="notifyToggle" type="checkbox" />
+                  <span>Notify me about budget and plan limits</span>
+                </label>
+                <p id="notifyStatus" class="notify-status" role="status">Checking browser support…</p>
+                <button id="notifyTest" class="secondary-button" type="button" disabled>Send a test notification</button>
               </article>
               <article class="panel local-files-panel">
                 <p class="panel-kicker">LOCAL FILES</p>

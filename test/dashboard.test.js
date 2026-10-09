@@ -108,3 +108,19 @@ test('projects view offers what-if pricing with an explicit same-token caveat', 
   assert.match(js, /renderWhatIf\(projectSummary\)/);
   assert.match(js, /whatIf = projectSummary && projectSummary\.whatIf;/);
 });
+
+test('dashboard shows active alerts and offers opt-in desktop notifications', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /id="alertStrip" class="alert-strip hidden" role="status" aria-live="polite"/);
+  assert.match(html, /<label class="notify-toggle">\s*<input id="notifyToggle" type="checkbox" \/>/);
+  assert.match(html, /id="notifyTest"/);
+  // Permission is requested only from the toggle's change handler (a user gesture).
+  assert.match(js, /toggle\.addEventListener\('change'[\s\S]*?Notification\.requestPermission\(\)/);
+  assert.equal((js.match(/requestPermission\(/g) || []).length, 1);
+  // Each alert notifies once per level per day; storage failures never break the page.
+  assert.match(js, /alert\.id \+ '\|' \+ alert\.level \+ '\|' \+ today/);
+  assert.match(js, /function readStorage[\s\S]*?try \{[\s\S]*?\} catch/);
+  assert.match(js, /if \(document\.hidden\) showDesktopNotification/);
+});

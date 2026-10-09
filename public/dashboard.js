@@ -10,6 +10,9 @@
   };
 
   var THEME_KEY = 'cc-token-meter.theme';
+  var NOTIFY_KEY = 'cc-token-meter.notify';
+  var NOTIFIED_KEY = 'cc-token-meter.notified';
+  var NOTIFIED_TTL_MS = 3 * 24 * 60 * 60 * 1000;
   var DEFAULT_CONTEXT_WINDOW = 200000;
   var EXTENDED_CONTEXT_WINDOW = 1000000;
   var WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -46,6 +49,8 @@
     whatIfOptionsKey: '',
     settingsHydrated: false,
     toastTimer: null,
+    notifyEnabled: false,
+    notified: {},
     paletteItems: [],
     paletteIndex: 0,
     paletteReturnFocus: null,
@@ -80,6 +85,7 @@
   bindFilters();
   bindSettings();
   bindTheme();
+  bindNotifications();
   bindPalette();
   bindShortcuts();
   connect();
@@ -507,6 +513,8 @@
       scheduleProjectRefresh();
     }
     updateGlobalChrome(summary);
+    renderAlertStrip(summary.alerts);
+    notifyAlerts(summary.alerts);
     renderCurrentView();
   }
 
@@ -1588,6 +1596,146 @@
 
   function escapeHtmlAttr(value) {
     return escapeHtml(value).replace(/"/g, '&quot;');
+  }
+
+  function renderAlertStrip(alerts) {
+    var strip = byId('alertStrip');
+    var list = Array.isArray(alerts) ? alerts.slice() : [];
+    list.sort(function (a, b) { return (b.level === 'exceeded') - (a.level === 'exceeded'); });
+    strip.classList.toggle('hidden', list.length === 0);
+    strip.innerHTML = list.slice(0, 4).map(function (alert) {
+      var level = alert.level === 'exceeded' ? 'exceeded' : 'warn';
+      return '<div class="alert-item ' + level + '"><strong>' + (level === 'exceeded' ? 'Over limit' : 'Heads up') + '</strong><span>' + escapeHtml(alert.message || '') + '</span></div>';
+    }).join('');
+  }
+
+  function notificationsSupported() {
+    return typeof window.Notification === 'function';
+  }
+
+  function readStorage(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStorage(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      // Preferences still apply for this page view when storage is blocked.
+    }
+  }
+
+  function notificationsEnabled() {
+    return notificationsSupported() && window.Notification.permission === 'granted' && state.notifyEnabled;
+  }
+
+  function bindNotifications() {
+    state.notifyEnabled = readStorage(NOTIFY_KEY) === 'on';
+    try {
+      state.notified = JSON.parse(readStorage(NOTIFIED_KEY) || '{}') || {};
+    } catch {
+      state.notified = {};
+    }
+    var toggle = byId('notifyToggle');
+    var testButton = byId('notifyTest');
+
+    toggle.addEventListener('change', async function () {
+      if (!toggle.checked) {
+        state.notifyEnabled = false;
+        writeStorage(NOTIFY_KEY, 'off');
+        syncNotificationControls();
+        return;
+      }
+      if (notificationsSupported() && window.Notification.permission === 'default') {
+        try {
+          await window.Notification.requestPermission();
+        } catch {
+          // Treated as not granted below.
+        }
+      }
+      state.notifyEnabled = notificationsSupported() && window.Notification.permission === 'granted';
+      writeStorage(NOTIFY_KEY, state.notifyEnabled ? 'on' : 'off');
+      syncNotificationControls();
+      if (state.notifyEnabled && state.summary) notifyAlerts(state.summary.alerts);
+    });
+
+    testButton.addEventListener('click', function () {
+      if (!notificationsEnabled()) return;
+      showDesktopNotification('test', 'Notifications are working. You will hear from CC Token Meter when a budget or plan limit is close.');
+    });
+
+    syncNotificationControls();
+  }
+
+  function syncNotificationControls() {
+    var toggle = byId('notifyToggle');
+    var status = byId('notifyStatus');
+    var testButton = byId('notifyTest');
+    status.className = 'notify-status';
+    if (!notificationsSupported()) {
+      toggle.checked = false;
+      toggle.disabled = true;
+      testButton.disabled = true;
+      status.textContent = 'This browser does not support desktop notifications.';
+      return;
+    }
+    var permission = window.Notification.permission;
+    toggle.disabled = false;
+    toggle.checked = state.notifyEnabled && permission === 'granted';
+    testButton.disabled = !toggle.checked;
+    if (permission === 'denied') {
+      status.className = 'notify-status error';
+      status.textContent = 'Notifications are blocked for this page. Allow them in your browser\'s site settings, then turn this on again.';
+    } else if (toggle.checked) {
+      status.textContent = 'On. Each alert notifies once per level per day, or once per 5-hour window.';
+    } else {
+      status.textContent = 'Off. Alerts still appear at the top of Overview.';
+    }
+  }
+
+  function notifyAlerts(alerts) {
+    if (!Array.isArray(alerts) || alerts.length === 0) return;
+    var enabled = notificationsEnabled();
+    var now = Date.now();
+    var today = localDateString(new Date());
+    var changed = false;
+    Object.keys(state.notified).forEach(function (key) {
+      if (now - state.notified[key] > NOTIFIED_TTL_MS) {
+        delete state.notified[key];
+        changed = true;
+      }
+    });
+    if (enabled) {
+      alerts.forEach(function (alert) {
+        if (!alert || !alert.id) return;
+        // Day and session alerts repeat each day; window ids already include
+        // the window start, so each window notifies on its own.
+        var key = alert.id + '|' + alert.level + '|' + today;
+        if (state.notified[key]) return;
+        state.notified[key] = now;
+        changed = true;
+        if (document.hidden) showDesktopNotification(alert.id, alert.message);
+        else showToast(alert.message);
+      });
+    }
+    if (changed) writeStorage(NOTIFIED_KEY, JSON.stringify(state.notified));
+  }
+
+  function showDesktopNotification(tag, message) {
+    try {
+      var notification = new window.Notification('CC Token Meter', { body: String(message || ''), tag: 'cc-token-meter:' + tag });
+      notification.addEventListener('click', function () {
+        window.focus();
+        setView('overview', true, true);
+        notification.close();
+      });
+    } catch {
+      showToast(message);
+    }
   }
 
   function showToast(message) {

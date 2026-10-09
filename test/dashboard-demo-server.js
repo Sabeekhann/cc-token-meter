@@ -19,7 +19,8 @@ const config = {
   // Preview subscription mode with CC_TOKEN_METER_DEMO_PLAN=pro|max5x|max20x.
   plan: process.env.CC_TOKEN_METER_DEMO_PLAN || 'api',
   planMonthlyUsd: null,
-  blockTokenLimit: null,
+  // Preview window alerts with CC_TOKEN_METER_DEMO_BLOCK_LIMIT=<tokens>.
+  blockTokenLimit: Number(process.env.CC_TOKEN_METER_DEMO_BLOCK_LIMIT) || null,
   weeklyTokenLimit: null,
 };
 
