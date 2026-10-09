@@ -149,7 +149,7 @@ jobs:
     needs: [preflight, create-release]
     if: always() && needs.preflight.result == 'success' && (github.event_name == 'release' || needs.preflight.outputs.release_exists == 'true' || needs.create-release.result == 'success')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -190,7 +190,19 @@ jobs:
       - name: Verify npm publication
         env:
           VERSION: ${{ needs.preflight.outputs.version }}
-        run: test "$(npm view "cc-token-meter@$VERSION" version --registry=https://registry.npmjs.org)" = "$VERSION"
+        # The registry can take a few minutes to serve a new version after
+        # `npm publish` returns, so poll for up to 10 minutes.
+        run: |
+          for attempt in $(seq 1 40); do
+            if [ "$(npm view "cc-token-meter@$VERSION" version --registry=https://registry.npmjs.org 2>/dev/null)" = "$VERSION" ]; then
+              echo "cc-token-meter@$VERSION is available (attempt $attempt)."
+              exit 0
+            fi
+            echo "cc-token-meter@$VERSION is not visible yet (attempt $attempt/40); retrying in 15s."
+            sleep 15
+          done
+          echo "::error::cc-token-meter@$VERSION was not visible on the npm registry after 10 minutes."
+          exit 1
 
   github-packages:
     name: GitHub Packages

@@ -83,6 +83,7 @@ test('publishing supports explicit maintainer dispatch and GitHub releases with 
   assert.doesNotMatch(publishWorkflow, /NPM_TOKEN/);
   assert.doesNotMatch(npmPublishJob, /NODE_AUTH_TOKEN/);
   assert.match(npmPublishJob, /id-token: write/);
+  assert.match(npmPublishJob, /for attempt in \$\(seq 1 40\)/, 'npm verification waits for registry propagation');
   assert.match(githubPackagesJob, /packages: write/);
   assert.match(githubPackagesJob, /registry-url: https:\/\/npm\.pkg\.github\.com/);
   assert.match(githubPackagesJob, /NODE_AUTH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
