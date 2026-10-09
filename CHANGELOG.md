@@ -5,6 +5,11 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-10-09
+
+Design release: a full visual redesign of the local dashboard. No changes to
+accounting, data, the API, or the CLI.
+
 ### Changed
 
 - Redesigned dashboard: brand gradient visual system with matching dark and
@@ -14,6 +19,7 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pricing, restyled insight cards, and sectioned settings with a notification
   toggle. Session spans of 48 hours or more now read as days and hours.
 - README screenshots and product tour updated for the new design.
+- Updated the `open` dependency from 11.0.1 to 11.0.2.
 
 ## [1.3.0] — 2026-10-09
 
