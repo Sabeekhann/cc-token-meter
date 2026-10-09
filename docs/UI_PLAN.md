@@ -81,6 +81,8 @@ The insights view turns heuristics into an action queue:
 Settings are task-focused and small:
 
 - daily token and cost budgets;
+- monthly cost or token budget, shown on Overview as month-to-date progress
+  with a run-rate month-end projection;
 - per-session cost budget;
 - warning threshold;
 - save feedback and validation;

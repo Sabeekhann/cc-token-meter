@@ -359,6 +359,42 @@ export function getTodayTotal(sessions) {
  *   projectedCostUsd: number,
  * }}
  */
+/**
+ * Month-to-date totals for the local calendar month containing `now`, plus a
+ * simple run-rate projection to month end: usage so far divided by the
+ * elapsed share of the month (at least one day, so the 1st of the month
+ * doesn't project wildly), times the days in the month.
+ *
+ * @param {Array<{date: string, tokenTotal?: number, costUsd?: number}>} dailyTotals aggregateByDay() output
+ * @param {Date|string|number} [now]
+ */
+export function getMonthToDate(dailyTotals, now = Date.now()) {
+  const current = new Date(now);
+  const todayKey = localDateKey(current.toISOString());
+  const month = todayKey ? todayKey.slice(0, 7) : null;
+  const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
+  const daysInMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
+  const elapsedDays = Math.max(1, (current.getTime() - monthStart.getTime()) / (24 * 60 * 60 * 1000));
+
+  let tokenTotal = 0;
+  let costUsd = 0;
+  for (const day of Array.isArray(dailyTotals) ? dailyTotals : []) {
+    if (!month || !day || typeof day.date !== 'string' || !day.date.startsWith(month) || day.date > todayKey) continue;
+    tokenTotal += day.tokenTotal || 0;
+    costUsd += day.costUsd || 0;
+  }
+
+  return {
+    month,
+    tokenTotal,
+    costUsd,
+    daysInMonth,
+    elapsedDays: Math.min(elapsedDays, daysInMonth),
+    projectedTokens: (tokenTotal / Math.min(elapsedDays, daysInMonth)) * daysInMonth,
+    projectedCostUsd: (costUsd / Math.min(elapsedDays, daysInMonth)) * daysInMonth,
+  };
+}
+
 export function forecastBurnRate(dailyTotals, options = {}) {
   const windowDays = options.windowDays || 7;
   const projectionDays = options.projectionDays || 30;

@@ -24,6 +24,7 @@ export function formatCompactSummary(summary = {}) {
     `Scope: ${formatScope(summary.filters || {})}`,
     `Selected: ${formatTokens(selected.tokenTotal)} tokens · ${formatCost(selected.costUsd)}`,
     `Today: ${formatTokens(today.tokenTotal)} tokens · ${formatCost(today.costUsd)}`,
+    formatMonthLine(summary.month, summary.config || {}),
     `Active: ${integer(active.sessionCount)} session${integer(active.sessionCount) === 1 ? '' : 's'} · ${formatTokens(velocity.tokensPerMinute)}/min · ${formatCost(velocity.costPerHour)}/hour`,
     `Cache: ${formatPercent(cache.reuseRate)} reuse · ${formatCost(cache.estimatedSavingsUsd)} estimated input cost avoided`,
     topProject
@@ -62,6 +63,18 @@ function formatPlanLine(plan) {
 function formatSignedPercent(ratio) {
   const value = Math.round(numberOr0(ratio) * 100);
   return value > 0 ? `+${value}%` : `${value}%`;
+}
+
+function formatMonthLine(month, config) {
+  if (!month || !month.month) return `Month: no usage yet`;
+  const base = `Month (${month.month}): ${formatTokens(month.tokenTotal)} tokens · ${formatCost(month.costUsd)}`;
+  if (config.monthlyCostCapUsd > 0) {
+    return `${base} · ${formatPercent(month.costUsd / config.monthlyCostCapUsd)} of ${formatCost(config.monthlyCostCapUsd)} budget · on pace for ${formatCost(month.projectedCostUsd)}`;
+  }
+  if (config.monthlyTokenCap > 0) {
+    return `${base} · ${formatPercent(month.tokenTotal / config.monthlyTokenCap)} of ${formatTokens(config.monthlyTokenCap)}-token budget · on pace for ${formatTokens(month.projectedTokens)} tokens`;
+  }
+  return `${base} · on pace for ${formatCost(month.projectedCostUsd)}`;
 }
 
 function formatScope(filters) {

@@ -46,6 +46,8 @@ export async function handleApiRoute(req, res, url, store) {
       'dailyCostCapUsd',
       'sessionTokenCap',
       'sessionCostCapUsd',
+      'monthlyTokenCap',
+      'monthlyCostCapUsd',
       'warnThresholdPct',
       'plan',
       'planMonthlyUsd',

@@ -155,6 +155,16 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
+### Monthly budgets
+
+Set a monthly cap with `cc-token-meter --set-monthly-budget-usd 200` (or
+`--set-monthly-budget-tokens`), or in Settings. Overview's forecast panel
+shows month-to-date usage against the budget and where the month's run rate
+lands by month end. `--summary` prints the same as a `Month:` line. Monthly
+budgets cover all projects, whatever filter is applied. The status line shows
+daily and session budgets only, because it reads just today's transcripts to
+stay fast.
+
 ## Managing insights
 
 Each recommendation in **Insights** can be snoozed for a day, snoozed for a
@@ -167,7 +177,9 @@ written there.
 ## Budget alerts and desktop notifications
 
 Active budget and plan alerts appear at the top of Overview: daily token or
-cost caps, per-session caps for sessions running today, and, in plan mode,
+cost caps, per-session caps for sessions running today, monthly cost or token
+budgets (with an early warning when the month's run rate will pass the
+budget), and, in plan mode,
 your 5-hour window and weekly limits, including a warning when the current
 window is on pace to pass its limit before it resets.
 
@@ -299,6 +311,8 @@ The commands below assume a global install. For one-off use, replace
 | `cc-token-meter --set-budget-usd <n>` | Set a daily estimated-cost cap. |
 | `cc-token-meter --set-budget-tokens <n>` | Set a daily token cap. |
 | `cc-token-meter --set-session-budget-usd <n>` | Set a per-session estimated-cost cap. |
+| `cc-token-meter --set-monthly-budget-usd <n>` | Set a monthly estimated-cost cap (`0` clears). |
+| `cc-token-meter --set-monthly-budget-tokens <n>` | Set a monthly token cap (`0` clears). |
 | `cc-token-meter --set-plan <id>` | Set your plan: `api`, `pro`, `max5x`, or `max20x`. |
 | `cc-token-meter --set-block-token-limit <n>` | Set a 5-hour window token limit (`0` clears). |
 | `cc-token-meter --set-weekly-token-limit <n>` | Set a rolling 7-day token limit (`0` clears). |

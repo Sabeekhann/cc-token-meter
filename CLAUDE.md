@@ -24,6 +24,7 @@ read this file before starting any development or design task in this repo.
   `--statusline` (one line for Claude Code's `statusLine` command),
   `--statusline-config` (print setup instructions),
   `--set-budget-usd`/`--set-budget-tokens`/`--set-session-budget-usd`,
+  `--set-monthly-budget-usd`/`--set-monthly-budget-tokens`,
   `--set-plan`/`--set-block-token-limit`/`--set-weekly-token-limit`,
   `--port`, `--no-open`, `--help`, `--version`. `src/cli/index.js` loads
   each command module on demand so `--statusline` starts fast.
@@ -66,7 +67,9 @@ read this file before starting any development or design task in this repo.
   - `aggregate.js` — pure functions: `tokenTotal(session)`,
     `aggregateByProject(sessions)`, exact per-message
     `aggregateByBranch(sessions)`, `aggregateByDay(sessions)` (already a
-    full daily time series), `aggregateByHourOfWeek(sessions)` (local
+    full daily time series), `getMonthToDate(byDay, now)` (local
+    calendar month totals plus a run-rate month-end projection, elapsed
+    days floored at 1), `aggregateByHourOfWeek(sessions)` (local
     weekday × hour grid from detailed usageRecords only, for the activity
     heatmap), `getTodayTotal(sessions)`, `localDateKey`.
 - `src/analytics/overview.js` — pure active-session, recent velocity, cache
@@ -114,6 +117,7 @@ read this file before starting any development or design task in this repo.
     `~/.claude-token-meter/config.json`; transcript files are strictly
     read-only. Shape:
     `{ dailyTokenCap, dailyCostCapUsd, sessionTokenCap, sessionCostCapUsd,
+    monthlyTokenCap, monthlyCostCapUsd,
     warnThresholdPct, plan, planMonthlyUsd, blockTokenLimit,
     weeklyTokenLimit, insightStates }`, all nullable except `warnThresholdPct` (default
     `80`) and `plan` (`api`|`pro`|`max5x`|`max20x`, default `api`). `readConfig()` never throws on a missing file or malformed JSON
@@ -130,7 +134,9 @@ read this file before starting any development or design task in this repo.
     'warn'|'exceeded', scope: 'day'|'session'|'window'|'week', message }`.
     `id` is stable per measured thing (`day-cost`, `session-cost:<id>`,
     `window-tokens:<windowStart>`, `window-pace:<windowStart>`,
-    `week-tokens`) so clients can notify once. Plan alerts fire only for
+    `week-tokens`, `month-cost:<YYYY-MM>`, `month-pace-cost:<YYYY-MM>`, and
+    token equivalents) so clients can notify once. `computeMonthAlerts(month,
+    config)` adds monthly budget and on-pace alerts. Plan alerts fire only for
     user-set limits, never the personal-record baseline. `buildSummary()`
     passes only sessions active today to `computeAlerts()`.
 - `src/cli/`
@@ -177,7 +183,8 @@ read this file before starting any development or design task in this repo.
     concern (see `sse.js`).
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
-    `byDay`, `byHourOfWeek`, `forecast`, `intelligence`, `hiddenTips`
+    `byDay`, `byHourOfWeek`, `forecast`, `month` (month-to-date from all
+    sessions, ignoring filters), `intelligence`, `hiddenTips`
     (dismissed or snoozed, with `userState`; `tips` holds only visible
     ones; `config` omits `insightStates`), `plan` (always
     computed from all sessions, ignoring filters), `whatIf` (filtered
@@ -287,6 +294,8 @@ cc-token-meter --statusline-config            Show status line setup instruction
 cc-token-meter --set-budget-usd <n>           Set daily cost cap (USD) and exit
 cc-token-meter --set-budget-tokens <n>        Set daily token cap and exit
 cc-token-meter --set-session-budget-usd <n>   Set per-session cost cap (USD) and exit
+cc-token-meter --set-monthly-budget-usd <n>   Set monthly cost cap (USD, 0 clears)
+cc-token-meter --set-monthly-budget-tokens <n> Set monthly token cap (0 clears)
 cc-token-meter --set-plan <id>                Set plan: api, pro, max5x, max20x
 cc-token-meter --set-block-token-limit <n>    Set a 5-hour window token limit (0 clears)
 cc-token-meter --set-weekly-token-limit <n>   Set a rolling 7-day token limit (0 clears)

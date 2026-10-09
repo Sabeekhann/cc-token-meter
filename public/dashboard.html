@@ -211,6 +211,11 @@
                 <div><span>Daily average</span><strong id="averageDailyCost">—</strong></div>
                 <div><span>Projected tokens</span><strong id="projectedTokens">—</strong></div>
               </div>
+              <div class="month-budget">
+                <div class="month-budget-head"><span id="monthLabel">This month</span><strong id="monthSpend">—</strong></div>
+                <div class="month-meter" aria-hidden="true"><span id="monthBar"></span><i id="monthProjected" class="hidden"></i></div>
+                <small id="monthMeta">Set a monthly budget in Settings to track it here.</small>
+              </div>
               <div id="forecastMessage" class="forecast-message neutral">Forecast updates from your local history.</div>
             </article>
           </div>
@@ -391,6 +396,16 @@
                   <span>Session cost cap (USD)</span>
                   <input id="sessionCostCapUsd" name="sessionCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 5.00" />
                   <small>Warn when one session becomes expensive.</small>
+                </label>
+                <label>
+                  <span>Monthly cost cap (USD)</span>
+                  <input id="monthlyCostCapUsd" name="monthlyCostCapUsd" type="number" min="0" step="0.01" placeholder="e.g. 200.00" />
+                  <small>Estimated cost budget for each calendar month.</small>
+                </label>
+                <label>
+                  <span>Monthly token cap</span>
+                  <input id="monthlyTokenCap" name="monthlyTokenCap" type="number" min="0" step="100000" placeholder="e.g. 50000000" />
+                  <small>Warns early when you're on pace to pass it.</small>
                 </label>
                 <label>
                   <span>Warning threshold (%)</span>

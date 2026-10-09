@@ -7,12 +7,13 @@ import {
   aggregateByDay,
   aggregateByHourOfWeek,
   getTodayTotal,
+  getMonthToDate,
   tokenTotal,
   localDateKey,
   forecastBurnRate,
   buildTimeline,
 } from '../ingest/aggregate.js';
-import { computeAlerts, computePlanAlerts } from '../budget/alerts.js';
+import { computeAlerts, computeMonthAlerts, computePlanAlerts } from '../budget/alerts.js';
 import { partitionTips } from '../budget/insightStates.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
@@ -112,6 +113,9 @@ export function buildSummary(store, options = {}) {
     byDay: filtered ? undefined : byDay,
   });
 
+  // Monthly budgets are account-wide, like plan windows: always all sessions.
+  const month = getMonthToDate(filtered ? aggregateByDay(snapshot.sessions) : byDay, generatedAt);
+
   // Session caps apply to sessions that ran today; finished history would
   // otherwise raise the same alerts forever.
   const todayKey = localDateKey(generatedAt);
@@ -122,6 +126,7 @@ export function buildSummary(store, options = {}) {
       config
     ),
     ...computePlanAlerts(plan, config),
+    ...computeMonthAlerts(month, config),
   ];
 
   const tips = [];
@@ -185,6 +190,7 @@ export function buildSummary(store, options = {}) {
     byDay,
     byHourOfWeek: aggregateByHourOfWeek(sessions),
     forecast,
+    month,
     intelligence,
     plan,
     whatIf: buildWhatIf(sessions, { now: generatedAt }),

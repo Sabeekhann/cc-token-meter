@@ -50,6 +50,8 @@ function parseArgs(argv) {
     setBudgetUsd: null,
     setBudgetTokens: null,
     setSessionBudgetUsd: null,
+    setMonthlyBudgetUsd: null,
+    setMonthlyBudgetTokens: null,
     setPlan: null,
     setBlockTokenLimit: null,
     setWeeklyTokenLimit: null,
@@ -88,6 +90,12 @@ function parseArgs(argv) {
         opts.setSessionBudgetUsd = parseRequiredNumber('--set-session-budget-usd', value);
         break;
       }
+      case '--set-monthly-budget-usd':
+        opts.setMonthlyBudgetUsd = parseRequiredNumber('--set-monthly-budget-usd', argv[++i]);
+        break;
+      case '--set-monthly-budget-tokens':
+        opts.setMonthlyBudgetTokens = parseRequiredNumber('--set-monthly-budget-tokens', argv[++i]);
+        break;
       case '--set-plan': {
         const value = parseRequiredString('--set-plan', argv[++i]);
         if (!['api', 'pro', 'max5x', 'max20x'].includes(value)) {
@@ -235,6 +243,19 @@ export async function main(argv) {
   if (opts.setSessionBudgetUsd !== null) {
     const { setBudgetCommand } = await loadCommand('setBudget');
     await setBudgetCommand({ sessionCostCapUsd: opts.setSessionBudgetUsd });
+    return;
+  }
+
+  if (opts.setMonthlyBudgetUsd !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
+    // 0 clears the budget.
+    await setBudgetCommand({ monthlyCostCapUsd: opts.setMonthlyBudgetUsd || null });
+    return;
+  }
+
+  if (opts.setMonthlyBudgetTokens !== null) {
+    const { setBudgetCommand } = await loadCommand('setBudget');
+    await setBudgetCommand({ monthlyTokenCap: opts.setMonthlyBudgetTokens || null });
     return;
   }
 

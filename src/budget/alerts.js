@@ -77,6 +77,39 @@ export function computePlanAlerts(plan, config) {
   return alerts;
 }
 
+/**
+ * Monthly budget alerts for the local calendar month. Besides the usual
+ * warn/exceeded levels, a cap that is not yet near but will be passed at
+ * the month's run rate gets an on-pace warning, so there is time to adjust.
+ *
+ * @param {ReturnType<import('../ingest/aggregate.js').getMonthToDate>} month
+ * @param {{monthlyCostCapUsd?: number|null, monthlyTokenCap?: number|null, warnThresholdPct?: number}} config
+ * @returns {Array<{id: string, level: 'warn'|'exceeded', scope: 'month', message: string}>}
+ */
+export function computeMonthAlerts(month, config) {
+  const alerts = [];
+  if (!month || !month.month) return alerts;
+  const evaluate = createEvaluator(alerts, config);
+  const checks = [
+    ['cost', "This month's cost", month.costUsd, month.projectedCostUsd, config.monthlyCostCapUsd, 'usd'],
+    ['tokens', "This month's token usage", month.tokenTotal, month.projectedTokens, config.monthlyTokenCap, 'tokens'],
+  ];
+  for (const [kind, label, actual, projected, cap, unit] of checks) {
+    const id = `month-${kind}:${month.month}`;
+    const before = alerts.length;
+    evaluate(id, 'month', label, actual, cap, unit);
+    if (alerts.length === before && typeof cap === 'number' && cap > 0 && projected >= cap) {
+      alerts.push({
+        id: `month-pace-${kind}:${month.month}`,
+        level: 'warn',
+        scope: 'month',
+        message: `${label} is on pace for ${formatUnit(projected, unit)} by month end, above your ${formatUnit(cap, unit)} budget.`,
+      });
+    }
+  }
+  return alerts;
+}
+
 function createEvaluator(alerts, config) {
   const warnThresholdPct = typeof config.warnThresholdPct === 'number' ? config.warnThresholdPct : 80;
   return function evaluate(id, scope, label, actual, cap, unit) {

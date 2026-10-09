@@ -427,6 +427,8 @@
         dailyTokenCap: inputNumberOrNull('dailyTokenCap'),
         dailyCostCapUsd: inputNumberOrNull('dailyCostCapUsd'),
         sessionCostCapUsd: inputNumberOrNull('sessionCostCapUsd'),
+        monthlyCostCapUsd: inputNumberOrNull('monthlyCostCapUsd'),
+        monthlyTokenCap: inputNumberOrNull('monthlyTokenCap'),
         warnThresholdPct: inputNumberOrNull('warnThresholdPct') || 80,
         plan: byId('planSelect').value,
         planMonthlyUsd: inputNumberOrNull('planMonthlyUsd'),
@@ -591,6 +593,7 @@
     renderHeatmap(summary.byHourOfWeek);
     renderPlan(summary.plan);
     renderForecast(summary.forecast || {}, config);
+    renderMonthBudget(summary.month, config);
     renderTokenMix(allTime);
     renderTopProjects(projects);
     renderTopInsights(tips);
@@ -892,6 +895,50 @@
     return flag === true
       ? '<abbr class="est-badge" title="Includes a model without a local pricing row, so this cost uses fallback pricing.">≈ est.</abbr>'
       : '';
+  }
+
+  function renderMonthBudget(month, config) {
+    var bar = byId('monthBar');
+    var marker = byId('monthProjected');
+    if (!month || !month.month) {
+      byId('monthSpend').textContent = '—';
+      byId('monthMeta').textContent = 'Monthly usage appears after the first session this month.';
+      bar.style.width = '0%';
+      marker.classList.add('hidden');
+      return;
+    }
+    var date = new Date(month.month + '-01T12:00:00');
+    byId('monthLabel').textContent = Number.isNaN(date.getTime()) ? 'This month' : date.toLocaleDateString([], { month: 'long' }) + ' so far';
+    var costCap = typeof config.monthlyCostCapUsd === 'number' && config.monthlyCostCapUsd > 0 ? config.monthlyCostCapUsd : null;
+    var tokenCap = !costCap && typeof config.monthlyTokenCap === 'number' && config.monthlyTokenCap > 0 ? config.monthlyTokenCap : null;
+    var used = costCap ? month.costUsd : tokenCap ? month.tokenTotal : null;
+    var projected = costCap ? month.projectedCostUsd : tokenCap ? month.projectedTokens : null;
+    var cap = costCap || tokenCap;
+    var fmt = costCap ? formatCost : formatCompact;
+
+    if (!cap) {
+      byId('monthSpend').textContent = formatCost(month.costUsd || 0) + ' · ' + formatCompact(month.tokenTotal || 0) + ' tok';
+      byId('monthMeta').textContent = 'On pace for ' + formatCost(month.projectedCostUsd || 0) + ' by month end. Set a monthly budget in Settings to track it.';
+      bar.style.width = '0%';
+      marker.classList.add('hidden');
+      return;
+    }
+    var ratio = used / cap;
+    var projectedRatio = projected / cap;
+    byId('monthSpend').textContent = fmt(used) + ' of ' + fmt(cap) + (tokenCap ? ' tok' : '') + ' · ' + formatPercent(ratio);
+    bar.style.width = Math.min(100, ratio * 100) + '%';
+    bar.style.background = ratio >= 1 ? 'var(--red)' : (ratio * 100 >= (config.warnThresholdPct || 80) || projectedRatio >= 1) ? 'var(--amber)' : 'var(--teal)';
+    marker.classList.toggle('hidden', !(projectedRatio > 0));
+    marker.style.left = 'calc(' + Math.min(100, projectedRatio * 100).toFixed(1) + '% - 1px)';
+    byId('monthMeta').textContent = 'On pace for ' + fmt(projected) + (tokenCap ? ' tok' : '') + ' by month end (' + formatPercent(projectedRatio) + ' of budget).';
+    // The forecast badge otherwise reflects only the daily cap; a monthly
+    // budget on pace to be passed must not read as "On track".
+    if (projectedRatio >= 1) {
+      byId('forecastBadge').textContent = 'Over pace';
+      byId('forecastBadge').className = 'soft-badge warn';
+      byId('forecastMessage').className = 'forecast-message warn';
+      byId('forecastMessage').textContent = 'At this month\'s rate you will pass your ' + fmt(cap) + (tokenCap ? '-token' : '') + ' monthly budget before month end.';
+    }
   }
 
   function renderForecast(forecast, config) {
@@ -1319,6 +1366,8 @@
     setInputValue('dailyTokenCap', config.dailyTokenCap);
     setInputValue('dailyCostCapUsd', config.dailyCostCapUsd);
     setInputValue('sessionCostCapUsd', config.sessionCostCapUsd);
+    setInputValue('monthlyCostCapUsd', config.monthlyCostCapUsd);
+    setInputValue('monthlyTokenCap', config.monthlyTokenCap);
     setInputValue('warnThresholdPct', config.warnThresholdPct == null ? 80 : config.warnThresholdPct);
     byId('planSelect').value = config.plan || 'api';
     setInputValue('planMonthlyUsd', config.planMonthlyUsd);

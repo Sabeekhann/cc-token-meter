@@ -379,6 +379,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[t
 .forecast-stats { display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 0;border-top:1px solid var(--line); }
 .forecast-stats span { display:block;color:var(--faint);font-size:9.5px; }
 .forecast-stats strong { display:block;margin-top:4px;color:var(--ink);font-size:12.5px;font-variant-numeric:tabular-nums; }
+.month-budget { margin:2px 0 14px;padding:12px 0 0;border-top:1px solid var(--line); }
+.month-budget-head { display:flex;align-items:baseline;justify-content:space-between;gap:10px; }
+.month-budget-head span { color:var(--faint);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em; }
+.month-budget-head strong { color:var(--ink);font-size:12.5px;font-variant-numeric:tabular-nums; }
+.month-meter { position:relative;height:6px;margin-top:9px;background:var(--line-soft);border-radius:99px;overflow:hidden; }
+.month-meter span { position:absolute;inset:0 auto 0 0;width:0;background:var(--teal);border-radius:inherit;transition:width .35s ease; }
+.month-meter i { position:absolute;top:0;bottom:0;width:2px;background:var(--ink-strong);opacity:.55; }
+.month-budget small { display:block;margin-top:7px;color:var(--muted);font-size:9.5px;line-height:1.45; }
 .forecast-message { margin-top:auto;padding:10px 11px;border-radius:10px;font-size:9.5px;line-height:1.45; }
 .forecast-message.neutral { color:var(--muted);background:var(--card-soft); }
 .forecast-message.good { color:var(--teal-ink);background:var(--teal-soft); }
