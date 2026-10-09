@@ -40,3 +40,14 @@ test('compact summary is useful for an empty fresh install', () => {
   assert.match(output, /Top project: no usage/);
   assert.match(output, /Recommendations: 0 active/);
 });
+
+test('compact summary attributes usage to subagents and the heaviest tool', () => {
+  const output = formatCompactSummary({
+    attribution: {
+      subagents: { runs: 3, share: 0.25, costUsd: 4.5 },
+      tools: [{ name: 'Read', calls: 42, estimatedTokens: 370_000 }],
+    },
+  });
+  assert.match(output, /Attribution: 25% of tokens in 3 subagent runs · \$4\.50 · largest tool results: Read \(~370,000 tokens in 42 calls\)/);
+  assert.doesNotMatch(formatCompactSummary({}), /Attribution:/);
+});

@@ -143,3 +143,63 @@ test('handles multi-model session file correctly', async () => {
   const models = result.usageRecords.map((r) => r.model);
   assert.deepEqual(models, ['claude-sonnet-5', 'claude-opus-4-5', 'claude-haiku-4-5']);
 });
+
+// split-response-session.jsonl mirrors how current Claude Code versions write
+// one API response as several assistant lines (one per content block), each
+// repeating the response's full usage, plus a finished-subagent tool_result.
+test('counts usage once per API response even when it spans several block lines', async () => {
+  const result = await parseSessionFile(path.join(FIXTURES_DIR, 'split-response-session.jsonl'));
+
+  assert.equal(result.usageRecords.length, 2, 'two responses, five assistant lines');
+  assert.deepEqual(result.usageRecords.map((r) => r.outputTokens), [100, 200]);
+  assert.deepEqual(
+    result.toolUseEvents.map((e) => e.name),
+    ['Task', 'mcp__github__get_file', 'Read'],
+    'tool_use blocks are still read from every line',
+  );
+  assert.deepEqual(result.recentMessageKeys, ['msg_split_1:req_split_1', 'msg_split_2:req_split_2']);
+});
+
+test('a response split across incremental reads is not counted twice', async () => {
+  const filePath = path.join(FIXTURES_DIR, 'split-response-session.jsonl');
+  const raw = fs.readFileSync(filePath);
+  // Stop after the first block line of response 2.
+  let cut = 0;
+  for (let i = 0; i < 5; i += 1) cut = raw.indexOf(0x0a, cut) + 1;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-split-'));
+  const tmpFile = path.join(tmpDir, 'session.jsonl');
+  try {
+    fs.writeFileSync(tmpFile, raw.subarray(0, cut));
+    const first = await parseSessionFile(tmpFile);
+    assert.equal(first.usageRecords.length, 2);
+
+    fs.writeFileSync(tmpFile, raw);
+    const second = await parseSessionFile(tmpFile, {
+      startOffset: first.newOffset,
+      seenMessageKeys: first.recentMessageKeys,
+    });
+    assert.equal(second.usageRecords.length, 0, 'remaining lines repeat response 2');
+    assert.equal(second.toolUseEvents.length, 2);
+
+    const withoutKeys = await parseSessionFile(tmpFile, { startOffset: first.newOffset });
+    assert.equal(withoutKeys.usageRecords.length, 1, 'without carried keys the repeat would count again');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('reports finished subagents by id and type without reading their prompt or report', async () => {
+  const result = await parseSessionFile(path.join(FIXTURES_DIR, 'split-response-session.jsonl'));
+  assert.deepEqual(result.subagentEvents, [{
+    agentId: 'a1b2c3',
+    agentType: 'Explore',
+    toolUseId: 'toolu_split_1',
+    timestamp: '2026-10-01T10:00:30.000Z',
+  }]);
+  assert.doesNotMatch(JSON.stringify(result), /SYNTHETIC-PROMPT-MUST-NOT-BE-READ/);
+});
+
+test('assistant lines without a message id each still count', async () => {
+  const result = await parseSessionFile(path.join(FIXTURES_DIR, 'simple-session.jsonl'));
+  assert.equal(result.usageRecords.length, 3);
+});

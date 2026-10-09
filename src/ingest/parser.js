@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import { isCompactEvent } from './compact.js';
 
 const TOOL_NAMES_WITH_FILE_PATH = new Set(['Read', 'Edit', 'Write', 'MultiEdit']);
+// Lines of one API response are written consecutively, so only the most
+// recent keys need to be remembered between incremental reads.
+const RECENT_MESSAGE_KEY_LIMIT = 64;
 
 /**
  * Stream-parse a single JSONL session transcript file starting at a given
@@ -17,22 +20,35 @@ const TOOL_NAMES_WITH_FILE_PATH = new Set(['Read', 'Edit', 'Write', 'MultiEdit']
  * specifically on the LAST line read. In that case we do not advance the
  * offset past it, so it will be re-read (complete) on the next poll cycle.
  *
+ * Claude Code writes one API response as several `assistant` lines, one
+ * per content block (`apiBlockIndex` 0, 1, …), and every line repeats the
+ * response's full `usage`. Usage is therefore counted once per response,
+ * keyed by `message.id` + `requestId`; tool_use blocks are still read from
+ * every line because each line carries a different block. Pass the
+ * previous call's `recentMessageKeys` as `seenMessageKeys` so a response
+ * split across two incremental reads is not counted twice.
+ *
  * @param {string} filePath
- * @param {{startOffset?: number}} [opts]
+ * @param {{startOffset?: number, seenMessageKeys?: string[]}} [opts]
  * @returns {Promise<{
  *   usageRecords: Array<object>,
  *   toolUseEvents: Array<object>,
  *   toolResultEvents: Array<object>,
+ *   subagentEvents: Array<{agentId: string, agentType: string|null, toolUseId: string|null, timestamp: string|null}>,
  *   compactDetected: boolean,
  *   compactDetectionComplete: boolean,
+ *   recentMessageKeys: string[],
  *   newOffset: number,
  * }>}
  */
-export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
+export async function parseSessionFile(filePath, { startOffset = 0, seenMessageKeys = [] } = {}) {
   const usageRecords = [];
   const toolUseEvents = [];
   const toolResultEvents = [];
+  const subagentEvents = [];
   const compactEvents = { detected: false };
+  const messageKeys = { seen: new Set(Array.isArray(seenMessageKeys) ? seenMessageKeys : []), recent: [] };
+  if (Array.isArray(seenMessageKeys)) messageKeys.recent.push(...seenMessageKeys.slice(-RECENT_MESSAGE_KEY_LIMIT));
 
   // If the file shrank below the requested offset (e.g. truncated/rotated),
   // fall back to reading from the start to avoid an invalid stream range.
@@ -48,8 +64,10 @@ export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
       usageRecords,
       toolUseEvents,
       toolResultEvents,
+      subagentEvents,
       compactDetected: false,
       compactDetectionComplete: false,
+      recentMessageKeys: messageKeys.recent,
       newOffset: startOffset,
     };
   }
@@ -57,7 +75,7 @@ export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
   const stream = fs.createReadStream(filePath, { start: effectiveStartOffset });
   let offset = effectiveStartOffset;
   let pending = Buffer.alloc(0);
-  const events = { usageRecords, toolUseEvents, toolResultEvents, compactEvents };
+  const events = { usageRecords, toolUseEvents, toolResultEvents, subagentEvents, compactEvents, messageKeys };
 
   // Split the raw byte stream ourselves instead of relying on readline.
   // This preserves the exact on-disk delimiter width for both LF and CRLF,
@@ -86,8 +104,10 @@ export async function parseSessionFile(filePath, { startOffset = 0 } = {}) {
     usageRecords,
     toolUseEvents,
     toolResultEvents,
+    subagentEvents,
     compactDetected: compactEvents.detected,
     compactDetectionComplete: effectiveStartOffset === 0,
+    recentMessageKeys: messageKeys.recent.slice(-RECENT_MESSAGE_KEY_LIMIT),
     newOffset: offset,
   };
 }
@@ -111,7 +131,7 @@ function processSerializedLine(serializedLine, events) {
   return true;
 }
 
-function processLine(obj, { usageRecords, toolUseEvents, toolResultEvents, compactEvents }) {
+function processLine(obj, { usageRecords, toolUseEvents, toolResultEvents, subagentEvents, compactEvents, messageKeys }) {
   if (!obj || typeof obj !== 'object' || typeof obj.type !== 'string') {
     return;
   }
@@ -121,12 +141,13 @@ function processLine(obj, { usageRecords, toolUseEvents, toolResultEvents, compa
   switch (obj.type) {
     case 'assistant': {
       const record = normalizeAssistantLine(obj);
-      if (record) usageRecords.push(record);
+      if (record && !isRepeatedResponse(record.messageKey, messageKeys)) usageRecords.push(record);
       extractToolUseEvents(obj, toolUseEvents);
       break;
     }
     case 'user': {
       extractToolResultEvents(obj, toolResultEvents);
+      extractSubagentEvent(obj, subagentEvents);
       break;
     }
     // Known-but-unused types — explicitly no-op so the switch documents
@@ -151,8 +172,12 @@ function normalizeAssistantLine(obj) {
   if (!usage || typeof usage !== 'object') return null;
 
   const cacheCreation = usage.cache_creation || {};
+  const messageId = typeof message.id === 'string' ? message.id : null;
+  const requestId = typeof obj.requestId === 'string' ? obj.requestId : null;
 
   return {
+    messageKey: messageId ? `${messageId}:${requestId || ''}` : null,
+    agentId: typeof obj.agentId === 'string' ? obj.agentId : null,
     sessionId: obj.sessionId ?? null,
     projectCwd: obj.cwd ?? null,
     timestamp: obj.timestamp ?? null,
@@ -166,6 +191,36 @@ function normalizeAssistantLine(obj) {
     gitBranch: obj.gitBranch ?? null,
     version: obj.version ?? null,
   };
+}
+
+function isRepeatedResponse(messageKey, messageKeys) {
+  // Lines without a message id cannot be matched, so each one counts.
+  if (!messageKey) return false;
+  if (messageKeys.seen.has(messageKey)) return true;
+  messageKeys.seen.add(messageKey);
+  messageKeys.recent.push(messageKey);
+  if (messageKeys.recent.length > RECENT_MESSAGE_KEY_LIMIT * 2) {
+    messageKeys.recent.splice(0, messageKeys.recent.length - RECENT_MESSAGE_KEY_LIMIT);
+  }
+  return false;
+}
+
+/**
+ * A finished subagent run is reported back to the parent session as a
+ * tool_result whose `toolUseResult` names the agent. Only the identifiers
+ * and type are kept; the prompt and report text are never read.
+ */
+function extractSubagentEvent(obj, subagentEvents) {
+  const result = obj.toolUseResult;
+  if (!result || typeof result !== 'object' || typeof result.agentId !== 'string') return;
+  const content = obj.message && Array.isArray(obj.message.content) ? obj.message.content : [];
+  const block = content.find((item) => item && item.type === 'tool_result');
+  subagentEvents.push({
+    agentId: result.agentId,
+    agentType: typeof result.agentType === 'string' ? result.agentType : null,
+    toolUseId: block && typeof block.tool_use_id === 'string' ? block.tool_use_id : null,
+    timestamp: obj.timestamp ?? null,
+  });
 }
 
 function numOr0(v) {

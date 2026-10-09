@@ -6,11 +6,12 @@ import { resolveProjectsDirectory } from '../paths.js';
  * Discover all Claude Code session transcript files on disk.
  *
  * Claude Code writes to ~/.claude/projects/<sanitized-cwd>/<uuid>.jsonl.
- * There is also a same-named sibling directory <uuid>/ next to the .jsonl file,
- * so discovery intentionally inspects exactly one project-directory level and
- * accepts regular files ending in .jsonl only.
+ * A same-named sibling directory <uuid>/ holds session side files. Of its
+ * contents only subagent transcripts, <uuid>/subagents/agent-<id>.jsonl, are
+ * returned (with `agentId` and `parentSessionId`); everything else in it is
+ * ignored, and only regular files ending in .jsonl are ever accepted.
  *
- * @returns {Promise<Array<{sessionId: string, projectDirName: string, filePath: string, mtimeMs: number, size: number}>>}
+ * @returns {Promise<Array<{sessionId: string, projectDirName: string, filePath: string, mtimeMs: number, size: number, agentId?: string, parentSessionId?: string}>>}
  */
 export async function discoverSessionFiles() {
   const projectsRoot = resolveProjectsDirectory();
@@ -37,6 +38,10 @@ export async function discoverSessionFiles() {
     }
 
     for (const transcriptEntry of transcriptEntries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (transcriptEntry.isDirectory()) {
+        results.push(...discoverSubagentFiles(projectPath, projectEntry.name, transcriptEntry.name));
+        continue;
+      }
       if (!transcriptEntry.isFile() || path.extname(transcriptEntry.name) !== '.jsonl') continue;
 
       const filePath = path.join(projectPath, transcriptEntry.name);
@@ -59,6 +64,53 @@ export async function discoverSessionFiles() {
   }
 
   return results;
+}
+
+const SUBAGENT_FILE_PATTERN = /^agent-([A-Za-z0-9_-]{1,128})\.jsonl$/;
+
+function discoverSubagentFiles(projectPath, projectDirName, parentSessionId) {
+  const subagentPath = path.join(projectPath, parentSessionId, 'subagents');
+  let entries;
+  try {
+    entries = fs.readdirSync(subagentPath, { withFileTypes: true });
+  } catch {
+    // Most sessions have no subagents directory.
+    return [];
+  }
+
+  const results = [];
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const match = SUBAGENT_FILE_PATTERN.exec(entry.name);
+    if (!entry.isFile() || !match) continue;
+    const filePath = path.join(subagentPath, entry.name);
+    let stat;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      continue;
+    }
+    results.push({
+      sessionId: subagentSessionId(parentSessionId, match[1]),
+      parentSessionId,
+      agentId: match[1],
+      projectDirName,
+      filePath,
+      mtimeMs: stat.mtimeMs,
+      size: stat.size,
+    });
+  }
+  return results;
+}
+
+/**
+ * Subagent usage is tracked as its own aggregate so a changed or removed
+ * subagent file can be rebuilt without touching the parent transcript.
+ *
+ * @param {string} parentSessionId
+ * @param {string} agentId
+ */
+export function subagentSessionId(parentSessionId, agentId) {
+  return `${parentSessionId}:agent-${agentId}`;
 }
 
 /**

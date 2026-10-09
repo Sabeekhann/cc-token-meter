@@ -336,6 +336,47 @@
     renderTokenMix(allTime);
     renderTopProjects(projects);
     renderTopInsights(tips);
+    renderAttribution(summary.attribution);
+  }
+
+  function renderAttribution(attribution) {
+    var subagents = attribution && attribution.subagents;
+    var types = subagents && Array.isArray(subagents.byType) ? subagents.byType : [];
+    byId('subagentShare').textContent = subagents && subagents.runs > 0
+      ? formatPercent(subagents.share) + ' of tokens · ' + subagents.runs + ' run' + (subagents.runs === 1 ? '' : 's')
+      : 'No subagent runs';
+    byId('subagentTypes').innerHTML = types.length === 0
+      ? '<div class="empty-state compact">No subagent usage in this scope. When Claude Code delegates to Task/Explore agents, their tokens and cost appear here.</div>'
+      : types.slice(0, 5).map(function (type, index) {
+        return '<div class="rank-row">' +
+          '<span class="rank-number">' + (index + 1) + '</span>' +
+          '<div class="rank-copy"><strong>' + escapeHtml(type.agentType || 'Unlabelled subagent') + '</strong><span>' + type.runs + ' run' + (type.runs === 1 ? '' : 's') + ' · ' + escapeHtml(formatNumber(type.messageCount)) + ' message' + (type.messageCount === 1 ? '' : 's') + '</span></div>' +
+          '<div class="rank-cost"><strong>' + escapeHtml(formatCost(type.costUsd || 0)) + '</strong><span>' + escapeHtml(formatCompact(type.tokenTotal || 0)) + ' tok</span></div>' +
+        '</div>';
+      }).join('');
+
+    var tools = attribution && Array.isArray(attribution.tools) ? attribution.tools : [];
+    var totals = (attribution && attribution.toolTotals) || {};
+    byId('toolTotals').textContent = totals.calls > 0
+      ? formatNumber(totals.calls) + ' calls · ' + formatNumber(totals.distinctTools) + ' tools'
+      : 'No tool calls';
+    byId('toolAttribution').innerHTML = tools.length === 0
+      ? '<div class="empty-state compact">No tool calls in this scope.</div>'
+      : tools.slice(0, 6).map(function (tool, index) {
+        var label = tool.server ? tool.name.replace(/^mcp__.+?__/, '') : tool.name;
+        return '<div class="rank-row">' +
+          '<span class="rank-number">' + (index + 1) + '</span>' +
+          '<div class="rank-copy"><strong title="' + escapeHtmlAttr(tool.name) + '">' + escapeHtml(label) + (tool.server ? '<span class="tool-badge">MCP · ' + escapeHtml(tool.server) + '</span>' : '') + '</strong><span>' + escapeHtml(formatNumber(tool.calls)) + ' call' + (tool.calls === 1 ? '' : 's') + '</span></div>' +
+          '<div class="rank-cost"><strong>≈' + escapeHtml(formatCompact(tool.estimatedTokens || 0)) + '</strong><span>result tok</span></div>' +
+        '</div>';
+      }).join('');
+
+    var servers = attribution && Array.isArray(attribution.mcpServers) ? attribution.mcpServers : [];
+    byId('mcpServers').textContent = (servers.length
+      ? 'MCP servers: ' + servers.slice(0, 4).map(function (server) {
+        return server.server + ' ≈' + formatCompact(server.estimatedTokens) + ' tok in ' + formatNumber(server.calls) + ' calls';
+      }).join(' · ') + '. '
+      : '') + 'Result tokens are estimated from result size (about ' + ((attribution && attribution.bytesPerTokenEstimate) || 4) + ' bytes per token) and count only what each call returned, not later re-reads from cache.';
   }
 
   function overviewSentence(today, active, velocity, projects, tips) {
@@ -582,6 +623,7 @@
           detailRow('Model' + (models.length > 1 ? 's' : ''), escapeHtml(models.join(', ') || 'Unknown')) +
           detailRow('Claude Code version', escapeHtml(session.version || 'Not recorded')) +
           detailRow('Pricing quality', session.estimatedCostUsed ? 'Fallback estimate used' : 'Recognized local pricing rows') +
+          detailRow('Subagents', subagentSummary(session)) +
         '</dl>' +
         '<div class="velocity-card"><span>Workspace velocity · last ' + (velocity.windowMinutes || 15) + ' min</span><strong>' + escapeHtml(formatCompact(velocity.tokensPerMinute || 0)) + ' tokens/min</strong><small>' + escapeHtml(formatCost(velocity.costPerHour || 0)) + '/hour if this short-term pace continues</small></div>' +
         '</article>' +
@@ -591,6 +633,19 @@
       state.selectedSessionId = event.target.value;
       renderLive();
     });
+  }
+
+  function subagentSummary(session) {
+    var agents = Array.isArray(session.subagents) ? session.subagents : [];
+    if (agents.length === 0) return 'None in this session';
+    var types = {};
+    agents.forEach(function (agent) {
+      var label = agent.agentType || 'unlabelled';
+      types[label] = (types[label] || 0) + 1;
+    });
+    var typeCopy = Object.keys(types).map(function (label) { return types[label] + '× ' + label; }).join(', ');
+    return escapeHtml(agents.length + ' run' + (agents.length === 1 ? '' : 's') + ' (' + typeCopy + ') · ' +
+      formatCompact(session.subagentTokenTotal || 0) + ' tokens · ' + formatCost(session.subagentCostUsd || 0) + ' on top of this session');
   }
 
   function liveMetric(label, value) {

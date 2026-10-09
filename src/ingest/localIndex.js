@@ -1,12 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveStateDirectory } from '../paths.js';
-import { compactSessionHistory } from './retention.js';
 
 // v3 bounds per-message history and moves older exact counters into daily
-// rollups. v2 remains readable for a one-way, automatic local migration.
+// rollups.
 export const LOCAL_INDEX_VERSION = 3;
-const MIGRATABLE_INDEX_VERSION = 2;
+// Bumped whenever ingestion starts counting differently. An index written
+// under an older revision holds totals the current parser would not produce
+// (revision 2: one usage per API response instead of per content-block line,
+// plus subagent transcripts), so it is rebuilt from transcripts once rather
+// than restored or migrated.
+export const ACCOUNTING_REVISION = 2;
 export function defaultIndexFile(home) {
   return path.join(resolveStateDirectory(home), `usage-index-v${LOCAL_INDEX_VERSION}.json`);
 }
@@ -26,23 +30,13 @@ export function readLocalIndex(filePath = DEFAULT_INDEX_FILE) {
 }
 
 /**
- * Read a current index, or migrate the previous v2 shape in memory. When the
- * default v3 path does not exist, the sibling v2 path is checked so an upgrade
- * remains warm and the caller can atomically write the migrated v3 index.
+ * Read a current index. Indexes from an older accounting revision, including
+ * every v2 index, are treated as absent so the caller rebuilds them from the
+ * read-only transcripts instead of carrying old totals forward.
  */
 export function readLocalIndexWithStatus(filePath = DEFAULT_INDEX_FILE) {
   const primary = readIndexCandidate(filePath);
   if (primary.exists) return normalizeCandidate(primary.value, filePath);
-
-  if (path.basename(filePath) === `usage-index-v${LOCAL_INDEX_VERSION}.json`) {
-    const previousPath = path.join(
-      path.dirname(filePath),
-      `usage-index-v${MIGRATABLE_INDEX_VERSION}.json`,
-    );
-    const previous = readIndexCandidate(previousPath);
-    if (previous.exists) return normalizeCandidate(previous.value, previousPath);
-  }
-
   return null;
 }
 
@@ -55,31 +49,10 @@ function readIndexCandidate(filePath) {
 }
 
 function normalizeCandidate(value, sourcePath) {
-  if (isValidIndex(value, LOCAL_INDEX_VERSION)) {
+  if (isValidIndex(value, LOCAL_INDEX_VERSION) && value.accountingRevision === ACCOUNTING_REVISION) {
     return { index: value, migrated: false, sourcePath };
   }
-  if (isValidIndex(value, MIGRATABLE_INDEX_VERSION)) {
-    return { index: migrateV2Index(value), migrated: true, sourcePath };
-  }
   return null;
-}
-
-export function migrateV2Index(index) {
-  const sessions = index.sessions.map((session) => compactSessionHistory({
-    ...session,
-    dailyRollups: [],
-    usageRecords: Array.isArray(session.usageRecords) ? session.usageRecords : [],
-  }));
-
-  return {
-    ...index,
-    version: LOCAL_INDEX_VERSION,
-    sessions,
-    totalIngestedMessages: sessions.reduce(
-      (sum, session) => sum + numberOr0(session.messageCount),
-      0,
-    ),
-  };
 }
 
 /**
@@ -102,6 +75,7 @@ export function writeLocalIndex(index, filePath = DEFAULT_INDEX_FILE) {
   const payload = {
     ...index,
     version: LOCAL_INDEX_VERSION,
+    accountingRevision: ACCOUNTING_REVISION,
     writtenAt: new Date().toISOString(),
   };
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -135,8 +109,4 @@ function isValidIndex(value, version) {
     Array.isArray(value.files) &&
     typeof value.totalIngestedMessages === 'number'
   );
-}
-
-function numberOr0(value) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
