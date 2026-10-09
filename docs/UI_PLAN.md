@@ -26,7 +26,9 @@ The default view provides a useful answer in under ten seconds:
 - a 14-day burn chart and 30-day forecast;
 - token composition;
 - top projects by estimated cost;
-- the three highest-priority recommendations.
+- the three highest-priority recommendations;
+- 14-day sparklines on the token and cost cards;
+- a weekday × hour heatmap of recent detailed usage.
 
 ### Live session
 
@@ -36,7 +38,9 @@ The live view focuses on one selected session:
 - total tokens, estimated cost, message count, and current burn velocity;
 - per-message token timeline with cumulative burn;
 - tool-event markers for correlating large reads/outputs with spikes;
-- direct navigation from a recommendation to its affected session.
+- direct navigation from a recommendation to its affected session;
+- an estimated context-window gauge for the latest message, with a
+  `/compact` prompt as it nears the limit.
 
 When no session has been active recently, the view clearly says so and offers
 the most recent session instead of displaying empty charts without context.
@@ -76,6 +80,8 @@ Settings are task-focused and small:
 
 - Desktop uses a persistent sidebar; mobile uses a compact horizontal view
   switcher.
+- A command palette (Ctrl/⌘+K) and `g`-prefixed shortcuts reach every view,
+  project, and recent session from the keyboard.
 - Server-Sent Events keep metrics current and visibly report connection state.
 - Only the active view is re-rendered when new data arrives.
 - Project search and insight filters are immediate and local.
@@ -86,7 +92,8 @@ Settings are task-focused and small:
 ## Visual system
 
 - Dark navigation rail plus a calm off-white workspace for hierarchy and
-  long-session readability.
+  long-session readability, with a matching dark theme that follows the OS
+  preference or a per-browser toggle.
 - Coral is the primary action/data color; teal represents healthy/local/live
   states; amber and red are reserved for attention and exceeded states.
 - System fonts only, so the dashboard remains fully offline.

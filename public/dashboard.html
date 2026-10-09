@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="light" />
+  <meta name="color-scheme" content="light dark" />
   <title>Token Meter — Local Claude Code Intelligence</title>
   <link rel="stylesheet" href="/dashboard.css" />
+  <script src="/dashboard.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to dashboard content</a>
@@ -67,6 +68,12 @@
           <h1 id="viewTitle" tabindex="-1">Overview</h1>
         </div>
         <div class="topbar-actions">
+          <button id="paletteTrigger" class="palette-trigger" type="button" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">
+            <span>Jump to…</span><kbd>⌘K</kbd>
+          </button>
+          <button id="themeToggle" class="icon-button" type="button" aria-label="Switch color theme" title="Switch color theme">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" /></svg>
+          </button>
           <div id="connectionStatus" class="connection-pill connecting" role="status">
             <span class="status-dot"></span>
             <span class="connection-copy">Connecting</span>
@@ -100,6 +107,7 @@
               </div>
               <strong id="todayTokens" class="metric-value">—</strong>
               <div id="todayTokensMeta" class="metric-meta">Waiting for local data</div>
+              <svg id="tokenSpark" class="metric-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="metric-progress"><span id="tokenBudgetBar"></span></div>
             </article>
             <article class="metric-card">
@@ -109,6 +117,7 @@
               </div>
               <strong id="todayCost" class="metric-value">—</strong>
               <div id="todayCostMeta" class="metric-meta">Local pricing estimate</div>
+              <svg id="costSpark" class="metric-spark cost" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"></svg>
               <div class="metric-progress"><span id="costBudgetBar"></span></div>
             </article>
             <article class="metric-card">
@@ -169,6 +178,18 @@
               <div id="forecastMessage" class="forecast-message neutral">Forecast updates from your local history.</div>
             </article>
           </div>
+
+          <article class="panel heatmap-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">WORK RHYTHM</p>
+                <h3 id="heatmapTitle">When your tokens burn</h3>
+              </div>
+              <div class="heat-legend" aria-hidden="true">Less <i style="background:var(--heat-empty)"></i><i style="background:rgba(239,118,89,.35)"></i><i style="background:rgba(239,118,89,.65)"></i><i style="background:var(--coral)"></i> More</div>
+            </div>
+            <div id="usageHeatmap" class="heatmap loading-block" role="group" aria-labelledby="heatmapTitle" aria-describedby="heatmapSummary"></div>
+            <p id="heatmapSummary" class="chart-summary" aria-live="polite">Loading your local weekday and hour activity.</p>
+          </article>
 
           <div class="overview-grid lower-grid">
             <article class="panel">
@@ -359,6 +380,13 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/dashboard.js"></script>
+
+  <div id="paletteBackdrop" class="palette-backdrop hidden">
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <label><span class="sr-only">Search commands</span><input id="paletteInput" type="text" placeholder="Jump to a view, project, or session…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" /></label>
+      <ul id="paletteList" class="palette-list" role="listbox"></ul>
+      <div class="palette-hint"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span><span><kbd>g</kbd> then <kbd>o</kbd>/<kbd>l</kbd>/<kbd>p</kbd>/<kbd>i</kbd>/<kbd>s</kbd> views</span></div>
+    </div>
+  </div>
 </body>
 </html>

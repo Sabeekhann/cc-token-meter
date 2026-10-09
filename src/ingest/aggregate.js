@@ -256,6 +256,40 @@ export function aggregateByDay(sessions) {
   return Array.from(byDay.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+/**
+ * Bucket detailed usage records into a local weekday × hour-of-day grid for
+ * the dashboard activity heatmap. Only per-message usageRecords carry a
+ * timestamp precise enough for this; compacted dailyRollups are skipped, so
+ * the grid describes each session's bounded recent detail window rather
+ * than all-time history.
+ *
+ * Weekday indexes follow Date#getDay() (0 = Sunday) in the host machine's
+ * local timezone, matching localDateKey().
+ *
+ * @param {Array<object>} sessions
+ * @returns {{tokens: number[][], messages: number[][], recordCount: number}}
+ */
+export function aggregateByHourOfWeek(sessions) {
+  const tokens = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  const messages = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  let recordCount = 0;
+
+  for (const s of sessions) {
+    const records = Array.isArray(s.usageRecords) ? s.usageRecords : [];
+    for (const record of records) {
+      const d = new Date(record.timestamp);
+      if (!record.timestamp || !Number.isFinite(d.getTime())) continue;
+      const day = d.getDay();
+      const hour = d.getHours();
+      tokens[day][hour] += tokenTotal(record);
+      messages[day][hour] += 1;
+      recordCount += 1;
+    }
+  }
+
+  return { tokens, messages, recordCount };
+}
+
 function addUnitToDay(bucket, record, session) {
   bucket.inputTokens += record.inputTokens || 0;
   bucket.outputTokens += record.outputTokens || 0;

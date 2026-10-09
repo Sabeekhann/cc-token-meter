@@ -4,6 +4,7 @@ import {
   aggregateByProject,
   aggregateByBranch,
   aggregateByDay,
+  aggregateByHourOfWeek,
   getTodayTotal,
   forecastBurnRate,
   buildTimeline,
@@ -504,4 +505,39 @@ test('buildTimeline passes sessions at exactly the 500-point cap through untouch
   for (let i = 0; i < 500; i++) {
     assert.equal(timeline.usage[i].inputTokens, i);
   }
+});
+
+test('aggregateByHourOfWeek buckets detailed records by local weekday and hour', () => {
+  // Local-time constructors keep the expected buckets timezone-independent.
+  const mondayNine = new Date(2026, 7, 3, 9, 15); // Monday
+  const mondayNineLater = new Date(2026, 7, 3, 9, 50);
+  const sundayTwentyThree = new Date(2026, 7, 9, 23, 5); // Sunday
+  const session = makeSession({
+    usageRecords: [
+      { timestamp: mondayNine.toISOString(), inputTokens: 100, outputTokens: 20 },
+      { timestamp: mondayNineLater.toISOString(), inputTokens: 30, cacheReadInputTokens: 50 },
+      { timestamp: sundayTwentyThree.toISOString(), outputTokens: 7 },
+      { timestamp: 'not-a-date', inputTokens: 999 },
+      { inputTokens: 999 },
+    ],
+    dailyRollups: [{ date: '2026-08-01', inputTokens: 5000, messageCount: 4 }],
+  });
+
+  const grid = aggregateByHourOfWeek([session]);
+
+  assert.equal(grid.tokens.length, 7);
+  assert.ok(grid.tokens.every((row) => row.length === 24));
+  assert.equal(grid.tokens[1][9], 200);
+  assert.equal(grid.messages[1][9], 2);
+  assert.equal(grid.tokens[0][23], 7);
+  assert.equal(grid.messages[0][23], 1);
+  assert.equal(grid.recordCount, 3);
+  const total = grid.tokens.flat().reduce((sum, value) => sum + value, 0);
+  assert.equal(total, 207, 'invalid timestamps and compacted rollups are excluded');
+});
+
+test('aggregateByHourOfWeek returns an empty grid without detailed records', () => {
+  const grid = aggregateByHourOfWeek([makeSession({ usageRecords: undefined })]);
+  assert.equal(grid.recordCount, 0);
+  assert.ok(grid.tokens.flat().every((value) => value === 0));
 });

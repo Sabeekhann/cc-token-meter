@@ -9,6 +9,14 @@
     settings: 'Settings'
   };
 
+  var THEME_KEY = 'cc-token-meter.theme';
+  var DEFAULT_CONTEXT_WINDOW = 200000;
+  var EXTENDED_CONTEXT_WINDOW = 1000000;
+  var WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var VIEW_SHORTCUTS = { o: 'overview', l: 'live', p: 'projects', i: 'insights', s: 'settings' };
+
+  applyTheme(readStoredTheme());
+
   var TIP_KINDS = [
     { prefix: 'repeatedReads', icon: '↻', label: 'Repeated file reads' },
     { prefix: 'cacheRatio', icon: '◐', label: 'Cache reuse dropped' },
@@ -35,7 +43,12 @@
     expandedProject: null,
     selectedSessionId: null,
     settingsHydrated: false,
-    toastTimer: null
+    toastTimer: null,
+    paletteItems: [],
+    paletteIndex: 0,
+    paletteReturnFocus: null,
+    pendingGoKey: false,
+    pendingGoTimer: null
   };
 
   var dom = {
@@ -52,17 +65,240 @@
     projectFilterSummary: byId('projectFilterSummary'),
     clearProjectFilters: byId('clearProjectFilters'),
     budgetForm: byId('budgetForm'),
-    toast: byId('toast')
+    toast: byId('toast'),
+    themeToggle: byId('themeToggle'),
+    paletteTrigger: byId('paletteTrigger'),
+    paletteBackdrop: byId('paletteBackdrop'),
+    paletteInput: byId('paletteInput'),
+    paletteList: byId('paletteList')
   };
 
   hydrateProjectFilterState();
   bindNavigation();
   bindFilters();
   bindSettings();
+  bindTheme();
+  bindPalette();
+  bindShortcuts();
   connect();
 
   function byId(id) {
     return document.getElementById(id);
+  }
+
+  function readStoredTheme() {
+    try {
+      var stored = window.localStorage.getItem(THEME_KEY);
+      return stored === 'light' || stored === 'dark' ? stored : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function applyTheme(theme) {
+    if (theme) document.documentElement.setAttribute('data-theme', theme);
+    else document.documentElement.removeAttribute('data-theme');
+  }
+
+  function effectiveTheme() {
+    var explicit = document.documentElement.getAttribute('data-theme');
+    if (explicit === 'light' || explicit === 'dark') return explicit;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function bindTheme() {
+    syncThemeToggle();
+    dom.themeToggle.addEventListener('click', toggleTheme);
+    if (window.matchMedia) {
+      var query = window.matchMedia('(prefers-color-scheme: dark)');
+      if (query.addEventListener) query.addEventListener('change', syncThemeToggle);
+    }
+  }
+
+  function toggleTheme() {
+    var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try {
+      window.localStorage.setItem(THEME_KEY, next);
+    } catch {
+      // Theme still applies for this page view when storage is unavailable.
+    }
+    syncThemeToggle();
+  }
+
+  function syncThemeToggle() {
+    var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    dom.themeToggle.setAttribute('aria-label', 'Switch to ' + next + ' theme');
+    dom.themeToggle.title = 'Switch to ' + next + ' theme';
+    dom.themeToggle.innerHTML = next === 'light'
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" /></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" /></svg>';
+  }
+
+  function bindPalette() {
+    var isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+    var hint = dom.paletteTrigger.querySelector('kbd');
+    if (hint && !isMac) hint.textContent = 'Ctrl K';
+    dom.paletteTrigger.addEventListener('click', openPalette);
+    dom.paletteInput.addEventListener('input', function () {
+      state.paletteIndex = 0;
+      renderPalette();
+    });
+    dom.paletteInput.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        var count = state.paletteItems.length;
+        if (count === 0) return;
+        state.paletteIndex = (state.paletteIndex + (event.key === 'ArrowDown' ? 1 : -1) + count) % count;
+        renderPalette(true);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        runPaletteItem(state.paletteItems[state.paletteIndex]);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closePalette();
+      } else if (event.key === 'Tab') {
+        // The input is the only focusable control inside the modal dialog.
+        event.preventDefault();
+      }
+    });
+    dom.paletteBackdrop.addEventListener('mousedown', function (event) {
+      if (event.target === dom.paletteBackdrop) closePalette();
+    });
+    dom.paletteList.addEventListener('click', function (event) {
+      var item = event.target.closest('[data-palette-index]');
+      if (item) runPaletteItem(state.paletteItems[Number(item.getAttribute('data-palette-index'))]);
+    });
+  }
+
+  function paletteOpen() {
+    return !dom.paletteBackdrop.classList.contains('hidden');
+  }
+
+  function openPalette() {
+    if (paletteOpen()) return;
+    state.paletteReturnFocus = document.activeElement;
+    state.paletteIndex = 0;
+    dom.paletteInput.value = '';
+    dom.paletteBackdrop.classList.remove('hidden');
+    renderPalette();
+    dom.paletteInput.focus();
+  }
+
+  function closePalette() {
+    if (!paletteOpen()) return;
+    dom.paletteBackdrop.classList.add('hidden');
+    var target = state.paletteReturnFocus;
+    state.paletteReturnFocus = null;
+    if (target && typeof target.focus === 'function' && document.contains(target)) target.focus();
+  }
+
+  function paletteCommands() {
+    var commands = Object.keys(VIEW_TITLES).map(function (view) {
+      return { label: 'Go to ' + VIEW_TITLES[view], hint: 'View', run: function () { setView(view, true, true); } };
+    });
+    commands.push({
+      label: 'Switch to ' + (effectiveTheme() === 'dark' ? 'light' : 'dark') + ' theme',
+      hint: 'Appearance',
+      run: toggleTheme
+    });
+    var summary = state.summary || {};
+    (Array.isArray(summary.byProject) ? summary.byProject.slice() : [])
+      .sort(function (a, b) { return finiteOr0(b.costUsd) - finiteOr0(a.costUsd); })
+      .slice(0, 25)
+      .forEach(function (project) {
+        commands.push({
+          label: shortProjectName(project.project),
+          hint: 'Project · ' + formatCost(project.costUsd || 0),
+          search: String(project.project || ''),
+          run: function () {
+            dom.projectSearch.value = lastPathSegment(project.project);
+            state.projectQuery = dom.projectSearch.value.toLowerCase();
+            setView('projects', true, true);
+          }
+        });
+      });
+    (Array.isArray(summary.sessions) ? summary.sessions.slice() : [])
+      .sort(function (a, b) { return timestampOf(b.lastTimestamp) - timestampOf(a.lastTimestamp); })
+      .slice(0, 15)
+      .forEach(function (session) {
+        commands.push({
+          label: shortProjectName(session.project) + ' · ' + String(session.sessionId || '').slice(0, 8),
+          hint: 'Session · ' + formatRelative(session.lastTimestamp, summary.generatedAt),
+          search: String(session.sessionId || '') + ' ' + String(session.gitBranch || ''),
+          run: function () {
+            state.selectedSessionId = session.sessionId;
+            setView('live', true, true);
+          }
+        });
+      });
+    return commands;
+  }
+
+  function renderPalette(keepItems) {
+    if (!keepItems) {
+      var query = dom.paletteInput.value.trim().toLowerCase();
+      state.paletteItems = paletteCommands().filter(function (command) {
+        if (!query) return true;
+        return (command.label + ' ' + command.hint + ' ' + (command.search || '')).toLowerCase().indexOf(query) !== -1;
+      }).slice(0, 30);
+      state.paletteIndex = Math.min(state.paletteIndex, Math.max(0, state.paletteItems.length - 1));
+    }
+    if (state.paletteItems.length === 0) {
+      dom.paletteList.innerHTML = '<li class="palette-empty">No matching views, projects, or sessions.</li>';
+      dom.paletteInput.removeAttribute('aria-activedescendant');
+      return;
+    }
+    dom.paletteList.innerHTML = state.paletteItems.map(function (command, index) {
+      return '<li id="palette-item-' + index + '" class="palette-item" role="option" data-palette-index="' + index + '" aria-selected="' + (index === state.paletteIndex) + '">' +
+        '<span>' + escapeHtml(command.label) + '</span><small>' + escapeHtml(command.hint) + '</small></li>';
+    }).join('');
+    dom.paletteInput.setAttribute('aria-activedescendant', 'palette-item-' + state.paletteIndex);
+    var active = byId('palette-item-' + state.paletteIndex);
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function runPaletteItem(command) {
+    if (!command) return;
+    closePalette();
+    command.run();
+  }
+
+  function isTypingTarget(target) {
+    if (!target || !target.tagName) return false;
+    var tag = target.tagName.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  }
+
+  function bindShortcuts() {
+    document.addEventListener('keydown', function (event) {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && String(event.key).toLowerCase() === 'k') {
+        event.preventDefault();
+        if (paletteOpen()) closePalette();
+        else openPalette();
+        return;
+      }
+      if (paletteOpen() || event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
+
+      if (state.pendingGoKey) {
+        state.pendingGoKey = false;
+        window.clearTimeout(state.pendingGoTimer);
+        var view = VIEW_SHORTCUTS[String(event.key).toLowerCase()];
+        if (view) {
+          event.preventDefault();
+          setView(view, true, true);
+        }
+        return;
+      }
+      if (event.key === 'g') {
+        state.pendingGoKey = true;
+        state.pendingGoTimer = window.setTimeout(function () { state.pendingGoKey = false; }, 1200);
+      } else if (event.key === '/') {
+        event.preventDefault();
+        if (state.view !== 'projects') setView('projects', true, false);
+        dom.projectSearch.focus();
+      }
+    });
   }
 
   function bindNavigation() {
@@ -332,6 +568,9 @@
 
     byId('allTimeCost').textContent = formatCost(allTime.costUsd || 0) + ' all time';
     renderBurnChart(summary.byDay || []);
+    renderSparkline('tokenSpark', summary.byDay || [], 'tokenTotal');
+    renderSparkline('costSpark', summary.byDay || [], 'costUsd');
+    renderHeatmap(summary.byHourOfWeek);
     renderForecast(summary.forecast || {}, config);
     renderTokenMix(allTime);
     renderTopProjects(projects);
@@ -439,6 +678,122 @@
       formatNumber(peak.tokenTotal || 0) + ' tokens on ' + peak.date + '.';
   }
 
+  function renderSparkline(id, byDay, key) {
+    var target = byId(id);
+    var days = (Array.isArray(byDay) ? byDay : []).slice(-14);
+    if (days.length < 2) {
+      target.innerHTML = '';
+      return;
+    }
+    var max = Math.max.apply(null, days.map(function (day) { return finiteOr0(day[key]); })) || 1;
+    var points = days.map(function (day, index) {
+      var x = (index / (days.length - 1)) * 100;
+      var y = 28 - (finiteOr0(day[key]) / max) * 26;
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    });
+    target.innerHTML = '<polyline points="' + points.join(' ') + '"></polyline>';
+  }
+
+  function renderHeatmap(grid) {
+    var target = byId('usageHeatmap');
+    var summaryEl = byId('heatmapSummary');
+    target.classList.remove('loading-block');
+    var tokens = grid && Array.isArray(grid.tokens) ? grid.tokens : [];
+    var messages = grid && Array.isArray(grid.messages) ? grid.messages : [];
+    if (!grid || !grid.recordCount || tokens.length !== 7) {
+      target.innerHTML = '<div class="empty-state compact">Your weekday and hour rhythm appears once detailed message history is recorded.</div>';
+      summaryEl.textContent = 'No detailed message history is available for the activity heatmap yet.';
+      return;
+    }
+
+    // Monday-first rows read more naturally for a working week.
+    var order = [1, 2, 3, 4, 5, 6, 0];
+    var cell = 22;
+    var gap = 3;
+    var left = 36;
+    var top = 4;
+    var width = left + 24 * (cell + gap);
+    var height = top + 7 * (cell + gap) + 18;
+    var max = 0;
+    var peak = { day: 0, hour: 0, tokens: 0 };
+    order.forEach(function (day) {
+      for (var hour = 0; hour < 24; hour++) {
+        var value = finiteOr0(tokens[day] && tokens[day][hour]);
+        if (value > max) max = value;
+        if (value > peak.tokens) peak = { day: day, hour: hour, tokens: value };
+      }
+    });
+
+    var cells = '';
+    order.forEach(function (day, row) {
+      var y = top + row * (cell + gap);
+      cells += '<text class="chart-label" x="0" y="' + (y + cell / 2 + 3) + '">' + WEEKDAYS[day] + '</text>';
+      for (var hour = 0; hour < 24; hour++) {
+        var value = finiteOr0(tokens[day] && tokens[day][hour]);
+        var count = finiteOr0(messages[day] && messages[day][hour]);
+        var intensity = max > 0 && value > 0 ? 0.18 + 0.82 * Math.sqrt(value / max) : 0;
+        var fill = intensity > 0 ? ' style="fill:rgba(239,118,89,' + intensity.toFixed(3) + ')"' : '';
+        cells += '<rect class="heat-cell" x="' + (left + hour * (cell + gap)) + '" y="' + y + '" width="' + cell + '" height="' + cell + '" rx="4"' + fill + '>' +
+          '<title>' + escapeHtml(WEEKDAYS[day] + ' ' + hourLabel(hour) + ' · ' + formatNumber(value) + ' tokens · ' + formatNumber(count) + ' messages') + '</title></rect>';
+      }
+    });
+    var labels = '';
+    for (var tick = 0; tick < 24; tick += 3) {
+      labels += '<text class="chart-label" x="' + (left + tick * (cell + gap)) + '" y="' + (height - 3) + '">' + hourLabel(tick) + '</text>';
+    }
+    target.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Tokens by weekday and hour of day">' + cells + labels + '</svg>';
+    summaryEl.textContent = 'Busiest slot: ' + WEEKDAYS[peak.day] + ' ' + hourLabel(peak.hour) + '–' + hourLabel((peak.hour + 1) % 24) +
+      ' with ' + formatNumber(peak.tokens) + ' tokens. Based on ' + formatNumber(grid.recordCount) +
+      ' recent detailed messages in your local time zone.';
+  }
+
+  function hourLabel(hour) {
+    return String(hour).padStart(2, '0') + ':00';
+  }
+
+  function contextWindowFor(model, observedMax) {
+    // Claude Code marks extended-context sessions with a [1m] model suffix;
+    // a prompt larger than the standard window also proves the larger one.
+    if (/\[1m\]/i.test(String(model || '')) || observedMax > DEFAULT_CONTEXT_WINDOW) return EXTENDED_CONTEXT_WINDOW;
+    return DEFAULT_CONTEXT_WINDOW;
+  }
+
+  function renderContextGauge(session) {
+    var usage = session.timeline && Array.isArray(session.timeline.usage) ? session.timeline.usage : [];
+    if (usage.length === 0) return '';
+    var promptSize = function (point) {
+      return finiteOr0(point.inputTokens) + finiteOr0(point.cacheCreationInputTokens) + finiteOr0(point.cacheReadInputTokens);
+    };
+    var last = usage[usage.length - 1];
+    var current = promptSize(last);
+    var observedMax = usage.reduce(function (max, point) { return Math.max(max, promptSize(point)); }, 0);
+    var windowSize = contextWindowFor(last.model, observedMax);
+    var ratio = Math.min(1, current / windowSize);
+    var radius = 26;
+    var circumference = 2 * Math.PI * radius;
+    var level = ratio >= .8 ? 'danger' : ratio >= .6 ? 'warn' : '';
+    var advice = ratio >= .8
+      ? 'Close to the limit. Run /compact or start a focused session before quality drops.'
+      : ratio >= .6
+        ? 'Context is filling up. Plan a /compact at the next natural break.'
+        : 'Plenty of room in the current context.';
+    return '<div class="context-card"><div class="gauge-row">' +
+      '<svg viewBox="0 0 64 64" role="img" aria-label="' + escapeHtmlAttr(formatPercent(ratio) + ' of the estimated context window used') + '">' +
+        '<circle class="gauge-track" cx="32" cy="32" r="' + radius + '"></circle>' +
+        '<circle class="gauge-fill ' + level + '" cx="32" cy="32" r="' + radius + '" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - ratio)).toFixed(2) + '"></circle>' +
+        '<text class="gauge-text" x="32" y="37" text-anchor="middle">' + escapeHtml(Math.round(ratio * 100) + '%') + '</text>' +
+      '</svg>' +
+      '<div><span>Context window · latest message</span><strong>' + escapeHtml(formatCompact(current) + ' of ' + formatCompact(windowSize)) + '</strong>' +
+      '<small>' + escapeHtml(advice) + ' Window size is estimated from the model and observed prompts.</small></div>' +
+    '</div></div>';
+  }
+
+  function estimateBadge(flag) {
+    return flag === true
+      ? '<abbr class="est-badge" title="Includes a model without a local pricing row, so this cost uses fallback pricing.">≈ est.</abbr>'
+      : '';
+  }
+
   function renderForecast(forecast, config) {
     var badge = byId('forecastBadge');
     var message = byId('forecastMessage');
@@ -510,7 +865,7 @@
       return '<div class="rank-row">' +
         '<span class="rank-number">' + (index + 1) + '</span>' +
         '<div class="rank-copy"><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + project.sessions.length + ' session' + (project.sessions.length === 1 ? '' : 's') + '</span></div>' +
-        '<div class="rank-cost"><strong>' + escapeHtml(formatCost(project.costUsd || 0)) + '</strong><span>' + escapeHtml(formatCompact(project.tokenTotal || 0)) + ' tok</span></div>' +
+        '<div class="rank-cost"><strong>' + escapeHtml(formatCost(project.costUsd || 0)) + estimateBadge(project.estimatedCostUsed) + '</strong><span>' + escapeHtml(formatCompact(project.tokenTotal || 0)) + ' tok</span></div>' +
       '</div>';
     }).join('');
   }
@@ -566,7 +921,7 @@
         '</div>' +
         '<div class="live-metrics">' +
           liveMetric('Total tokens', formatCompact(session.tokenTotal || 0)) +
-          liveMetric('Estimated cost', formatCost(session.costUsd || 0)) +
+          liveMetric('Estimated cost', (session.estimatedCostUsed ? '≈ ' : '') + formatCost(session.costUsd || 0)) +
           liveMetric('Messages', formatNumber(session.messageCount || 0)) +
           liveMetric('Session span', formatDuration(session.firstTimestamp, session.lastTimestamp)) +
         '</div>' +
@@ -583,6 +938,7 @@
           detailRow('Claude Code version', escapeHtml(session.version || 'Not recorded')) +
           detailRow('Pricing quality', session.estimatedCostUsed ? 'Fallback estimate used' : 'Recognized local pricing rows') +
         '</dl>' +
+        renderContextGauge(session) +
         '<div class="velocity-card"><span>Workspace velocity · last ' + (velocity.windowMinutes || 15) + ' min</span><strong>' + escapeHtml(formatCompact(velocity.tokensPerMinute || 0)) + ' tokens/min</strong><small>' + escapeHtml(formatCost(velocity.costPerHour || 0)) + '/hour if this short-term pace continues</small></div>' +
         '</article>' +
       '</div>';
@@ -681,13 +1037,13 @@
         var expanded = state.expandedProject === project.project;
         var share = allProjectCost > 0 ? (project.costUsd || 0) / allProjectCost : 0;
         var sessions = expanded ? '<div class="project-session-details">' + project.sessions.slice(0, 8).map(function (session) {
-          return '<div class="project-session-row"><code>' + escapeHtml(String(session.sessionId || '').slice(0, 12)) + '</code><span>' + escapeHtml(formatCompact(session.tokenTotal || 0)) + ' tokens</span><strong>' + escapeHtml(formatCost(session.costUsd || 0)) + '</strong></div>';
+          return '<div class="project-session-row"><code>' + escapeHtml(String(session.sessionId || '').slice(0, 12)) + '</code><span>' + escapeHtml(formatCompact(session.tokenTotal || 0)) + ' tokens</span><strong>' + escapeHtml(formatCost(session.costUsd || 0)) + estimateBadge(session.estimatedCostUsed) + '</strong></div>';
         }).join('') + '</div>' : '';
         return '<button type="button" class="project-table-row" data-project-row="' + escapeHtmlAttr(project.project) + '" aria-expanded="' + expanded + '">' +
           '<span class="project-name-cell"><i class="project-avatar">' + escapeHtml(projectInitial(project.project)) + '</i><span><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + escapeHtml(project.project) + '</span></span></span>' +
           '<span class="table-number">' + project.sessions.length + '</span>' +
           '<span class="table-number">' + escapeHtml(formatCompact(project.tokenTotal || 0)) + '</span>' +
-          '<span class="table-number strong">' + escapeHtml(formatCost(project.costUsd || 0)) + '</span>' +
+          '<span class="table-number strong">' + escapeHtml(formatCost(project.costUsd || 0)) + estimateBadge(project.estimatedCostUsed) + '</span>' +
           '<span class="share-cell"><span class="share-bar"><span style="width:' + (share * 100).toFixed(2) + '%"></span></span><span class="table-number">' + escapeHtml(formatPercent(share)) + '</span></span>' +
         '</button>' + sessions;
       }).join('');
@@ -983,6 +1339,11 @@
       return formatCompact(tip.estimatedSavingsTokens) + ' tok potential';
     }
     return '';
+  }
+
+  function lastPathSegment(project) {
+    var parts = String(project || '').split(/[\\/]/).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
   }
 
   function projectInitial(project) {

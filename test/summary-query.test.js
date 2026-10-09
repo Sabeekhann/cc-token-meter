@@ -120,3 +120,46 @@ test('GET /api/summary returns 400 for invalid filter input without reading stor
   assert.equal(payload.error, 'Invalid summary filters');
   assert.match(payload.detail, /must not be after/);
 });
+
+test('summary exposes fallback-pricing flags per project/session and an hour-of-week grid', async () => {
+  const { buildSummary } = await import('../src/server/summary.js');
+  const record = (timestamp) => ({ timestamp, inputTokens: 10, outputTokens: 5, costUsd: 0.01 });
+  const sessions = [
+    {
+      sessionId: 'known',
+      projectCwd: '/work/alpha',
+      models: ['claude-sonnet-5'],
+      messageCount: 1,
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.01,
+      estimatedCostUsed: false,
+      lastTimestamp: '2026-08-03T09:00:00.000Z',
+      usageRecords: [record('2026-08-03T09:00:00.000Z')],
+      toolEvents: [],
+    },
+    {
+      sessionId: 'unknown-model',
+      projectCwd: '/work/alpha',
+      models: ['some-future-model'],
+      messageCount: 1,
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.01,
+      estimatedCostUsed: true,
+      lastTimestamp: '2026-08-03T10:00:00.000Z',
+      usageRecords: [record('2026-08-03T10:00:00.000Z')],
+      toolEvents: [],
+    },
+  ];
+  const store = { getSnapshot: () => ({ sessions, totalIngestedMessages: 2 }) };
+
+  const summary = buildSummary(store, { config: { warnThresholdPct: 80 } });
+  const alpha = summary.byProject.find((project) => project.project === '/work/alpha');
+
+  assert.equal(alpha.estimatedCostUsed, true);
+  const flags = Object.fromEntries(alpha.sessions.map((s) => [s.sessionId, s.estimatedCostUsed]));
+  assert.deepEqual(flags, { known: false, 'unknown-model': true });
+  assert.equal(summary.byHourOfWeek.recordCount, 2);
+  assert.equal(summary.byHourOfWeek.tokens.length, 7);
+});

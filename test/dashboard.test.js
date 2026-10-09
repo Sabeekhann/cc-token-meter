@@ -53,3 +53,31 @@ test('dashboard assets remain fully local and connect only to local API paths', 
   assert.match(js, /fetch\('\/api\/budget'/);
   assert.match(js, /new EventSource\('\/api\/stream'\)/);
 });
+
+test('dashboard ships an offline dark theme, command palette, and new usage visuals', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const css = fs.readFileSync(path.join(publicDir, 'dashboard.css'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /<meta name="color-scheme" content="light dark" \/>/);
+  assert.match(css, /@media \(prefers-color-scheme:dark\)/);
+  assert.match(css, /:root\[data-theme="dark"\]/);
+  assert.match(html, /id="themeToggle"/);
+  assert.match(js, /window\.localStorage\.getItem\(THEME_KEY\)/);
+  // Storage can be unavailable (private mode, blocked site data); theme
+  // persistence must never break rendering.
+  assert.match(js, /try \{\s*window\.localStorage\.setItem\(THEME_KEY, next\);\s*\} catch/);
+
+  assert.match(html, /id="paletteBackdrop"[^>]*>\s*<div class="palette" role="dialog" aria-modal="true"/);
+  assert.match(html, /id="paletteInput"[^>]+role="combobox"/);
+  assert.match(js, /event\.metaKey \|\| event\.ctrlKey\) && !event\.altKey && String\(event\.key\)\.toLowerCase\(\) === 'k'/);
+  assert.match(js, /isTypingTarget\(event\.target\)/);
+
+  assert.match(html, /id="usageHeatmap"[^>]+aria-describedby="heatmapSummary"/);
+  assert.match(html, /id="heatmapSummary" class="chart-summary"/);
+  assert.match(html, /id="tokenSpark"/);
+  assert.match(html, /id="costSpark"/);
+  assert.match(js, /renderContextGauge\(session\)/);
+  assert.match(js, /estimateBadge\(project\.estimatedCostUsed\)/);
+  assert.match(js, /estimateBadge\(session\.estimatedCostUsed\)/);
+});

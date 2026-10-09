@@ -62,7 +62,9 @@ read this file before starting any development or design task in this repo.
   - `aggregate.js` — pure functions: `tokenTotal(session)`,
     `aggregateByProject(sessions)`, exact per-message
     `aggregateByBranch(sessions)`, `aggregateByDay(sessions)` (already a
-    full daily time series), `getTodayTotal(sessions)`, `localDateKey`.
+    full daily time series), `aggregateByHourOfWeek(sessions)` (local
+    weekday × hour grid from detailed usageRecords only, for the activity
+    heatmap), `getTodayTotal(sessions)`, `localDateKey`.
 - `src/analytics/overview.js` — pure active-session, recent velocity, cache
   health/savings, model-mix, and data-quality intelligence.
 - `src/pricing/`
@@ -84,8 +86,8 @@ read this file before starting any development or design task in this repo.
     they will take effect.
   - `cost.js` — computes estimated cost per message from the pricing table.
     Falls back to a default (Sonnet-tier) rate for unrecognized models and
-    marks the result `estimated: true`/`usedFallback` — not currently
-    surfaced visually per-row in the dashboard.
+    marks the result `estimated: true`/`usedFallback`. The dashboard shows
+    an "≈ est." badge on project/session rows whose cost used it.
 - `src/budget/`
   - `config.js` — `readConfig()`/`writeConfig(updates)`, reads/writes
     `~/.claude-token-meter/config.json`; transcript files are strictly
@@ -130,8 +132,9 @@ read this file before starting any development or design task in this repo.
     concern (see `sse.js`).
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
-    `byDay`, `forecast`, `intelligence`, `sessions`, `tips`, `alerts`,
-    `config`, `totalIngestedMessages`). Reused
+    `byDay`, `byHourOfWeek`, `forecast`, `intelligence`, `sessions`, `tips`,
+    `alerts`, `config`, `totalIngestedMessages`; `byProject` entries and
+    their sessions carry `estimatedCostUsed`). Reused
     **verbatim** by both the SSE dashboard stream and the `--json` CLI
     command — any shape change must stay consistent across both consumers.
     Note: `sessionSummaries` includes `gitBranch`/`version`/`tokenTotal` but
@@ -160,7 +163,13 @@ read this file before starting any development or design task in this repo.
   - `dashboard.css` defines the offline system-font visual system: dark
     navigation rail, off-white workspace, coral usage/action accent, teal
     healthy/local/live state, blue comparison series, and amber/red warnings.
-    Desktop, tablet, and mobile layouts are included.
+    Colors are `:root` tokens with a dark theme that follows
+    `prefers-color-scheme` unless the viewer toggles it (stored per browser
+    in `localStorage`, wrapped in try/catch). New colors must be tokens, not
+    literals. Desktop, tablet, and mobile layouts are included.
+  - A command palette (Ctrl/⌘+K) jumps to views, projects, and sessions;
+    `g` + `o`/`l`/`p`/`i`/`s` switches views and `/` focuses project search.
+    Shortcuts are ignored while typing in form fields.
 - `docs/UI_PLAN.md` is the canonical information architecture, interaction,
   accessibility, privacy, and acceptance-criteria document for dashboard work.
 
@@ -255,9 +264,8 @@ Useful for scripting/CI-adjacent local checks.
 ## Known gaps (standing findings, not regressions)
 
 - Pricing table can lag official Anthropic pricing around scheduled changes
-  — treat dollar figures as estimates; `estimated`/`usedFallback` flags
-  exist in the data model but aren't rendered visually per-row in the
-  dashboard yet.
+  — treat dollar figures as estimates; fallback-priced rows are badged in
+  the dashboard, but a recognized row can still be out of date.
 - The first uncached scan still scales with total transcript history volume;
   warm starts restore the bounded v3 local index. Each session retains its
   newest 1,000 normalized usage records while older detail is compacted into
