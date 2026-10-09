@@ -81,6 +81,13 @@ read this file before starting any development or design task in this repo.
   API-equivalent value vs plan price). Anthropic publishes no subscription
   token limits — never encode guessed limits; progress must stay relative to
   user-set limits or the user's own history, and the UI must say so.
+- `src/analytics/whatIf.js` — pure `buildWhatIf(sessions)`: reprices the
+  scope's exact token totals (input, output, 5m/1h cache writes, cache reads)
+  on each `WHAT_IF_TARGETS` model through `computeCost()` at the current
+  pricing row, overall and per project. Cost is linear in token components,
+  so it works from session totals (no per-message pass). Targets name models
+  only, never prices. It answers "these tokens on model X", not "this work on
+  model X" — keep that caveat wherever it is shown.
 - `src/pricing/`
   - `models.js` — exports `PRICING_TABLE` (array of `{ id,
     matchSubstrings[], inputPerMTok, outputPerMTok, effectiveFrom,
@@ -121,7 +128,8 @@ read this file before starting any development or design task in this repo.
   - `commands/json.js` — restore/index + `buildSummary()` + JSON to stdout,
     no server (`--no-cache` forces an uncached scan).
   - `commands/summary.js` — compact human-readable totals, live burn, cache,
-    project, recommendation, and pricing-quality summary.
+    project, recommendation, and pricing-quality summary, plus what-if and
+    plan lines when available.
   - `commands/csv.js` — private atomic CSV export grouped by day, project,
     branch, or session; supports the same date/project filters as JSON.
   - `commands/doctor.js` — checks runtime compatibility, transcript access,
@@ -157,7 +165,8 @@ read this file before starting any development or design task in this repo.
   - `summary.js` — `buildSummary(store)` composes the full API/SSE
     payload (`generatedAt`, `today`, `allTime`, `byProject`, `byBranch`,
     `byDay`, `byHourOfWeek`, `forecast`, `intelligence`, `plan` (always
-    computed from all sessions, ignoring filters), `sessions`, `tips`,
+    computed from all sessions, ignoring filters), `whatIf` (filtered
+    scope), `sessions`, `tips`,
     `alerts`, `config`, `totalIngestedMessages`; `byProject` entries and
     their sessions carry `estimatedCostUsed`). Reused
     **verbatim** by both the SSE dashboard stream and the `--json` CLI
@@ -176,7 +185,9 @@ read this file before starting any development or design task in this repo.
   - Five task views: Overview, Live Session, Projects, Insights, Settings.
   - `renderBurnChart()` and `renderSessionTimeline()` create accessible local
     SVG charts without a chart dependency.
-  - `renderProjects()` supports search and expandable session details;
+  - `renderProjects()` supports search and expandable session details,
+    plus a what-if pricing panel (`renderWhatIf()`) for the filtered scope
+    or one selected project;
     `renderInsights()` ranks/filters evidence and deep-links to sessions.
   - The Settings form posts to `/api/budget`, then refetches `/api/summary`
     so config changes appear even when no transcript message changed.

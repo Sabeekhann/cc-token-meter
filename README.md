@@ -155,6 +155,17 @@ project, and model queries run through the same summary/filtering code as the
 local dashboard, so it is the best way to explore or work on the interface
 from source.
 
+## What-if model pricing
+
+The Projects view shows what the same tokens would cost on other Claude
+models (Fable 5, Opus 5, Sonnet 5, and Haiku 4.5) for everything in the
+current date/model scope or for one project. For example, "Sonnet 5:
+$15.32, −21%". `--summary` and `--json` include the same comparison.
+
+It reprices the exact token counts you used, at the current local pricing
+rows. Another model may need more or fewer tokens and give different results,
+so treat it as a price comparison, not a forecast.
+
 ## Pro and Max plan mode
 
 On a Claude subscription, dollars matter less than usage windows. Tell the

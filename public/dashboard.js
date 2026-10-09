@@ -42,6 +42,8 @@
     projectRequestId: 0,
     expandedProject: null,
     selectedSessionId: null,
+    whatIfProject: '',
+    whatIfOptionsKey: '',
     settingsHydrated: false,
     toastTimer: null,
     paletteItems: [],
@@ -368,6 +370,10 @@
     dom.projectTo.addEventListener('change', function () {
       state.projectTo = dom.projectTo.value;
       projectFiltersChanged();
+    });
+    byId('whatIfProject').addEventListener('change', function (event) {
+      state.whatIfProject = event.target.value;
+      renderProjects();
     });
     dom.clearProjectFilters.addEventListener('click', function () {
       state.projectRange = 'all';
@@ -1143,6 +1149,57 @@
       });
     }
     renderBranches(projectSummary);
+    renderWhatIf(projectSummary);
+  }
+
+  function renderWhatIf(projectSummary) {
+    var target = byId('whatIfRows');
+    var select = byId('whatIfProject');
+    var whatIf = projectSummary && projectSummary.whatIf;
+    var projects = whatIf && Array.isArray(whatIf.byProject) ? whatIf.byProject : [];
+
+    var optionsKey = projects.map(function (project) { return project.project; }).join('\n');
+    if (optionsKey !== state.whatIfOptionsKey) {
+      state.whatIfOptionsKey = optionsKey;
+      var allOption = document.createElement('option');
+      allOption.value = '';
+      allOption.textContent = 'All projects in scope';
+      select.replaceChildren(allOption);
+      projects.forEach(function (project) {
+        var option = document.createElement('option');
+        option.value = project.project;
+        option.textContent = shortProjectName(project.project);
+        select.appendChild(option);
+      });
+    }
+    var selected = state.whatIfProject && projects.find(function (project) { return project.project === state.whatIfProject; });
+    if (!selected) state.whatIfProject = '';
+    select.value = state.whatIfProject;
+
+    var scope = selected || (whatIf && whatIf.scope);
+    if (!scope || !Array.isArray(scope.costs) || !(scope.actualCostUsd > 0)) {
+      target.innerHTML = '<div class="empty-state compact">What-if pricing appears once this scope has priced usage.</div>';
+      return;
+    }
+
+    var actual = scope.actualCostUsd;
+    var max = Math.max.apply(null, scope.costs.map(function (cost) { return finiteOr0(cost.costUsd); }).concat([actual])) || 1;
+    var row = function (cls, title, subtitle, cost, delta) {
+      return '<div class="whatif-row ' + cls + '" role="listitem">' +
+        '<div><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
+        '<div class="whatif-bar"><span style="width:' + Math.max(1, (cost / max) * 100).toFixed(1) + '%"></span></div>' +
+        '<span class="whatif-cost">' + escapeHtml(formatCost(cost)) + '</span>' + delta + '</div>';
+    };
+    var rows = row('actual', 'Your actual mix', scope.estimated ? 'includes fallback pricing' : 'as recorded', actual,
+      '<span class="whatif-delta same">baseline</span>');
+    scope.costs.forEach(function (cost) {
+      var ratio = typeof cost.deltaRatio === 'number' ? cost.deltaRatio : 0;
+      var kind = Math.abs(ratio) < .005 ? 'same' : ratio < 0 ? 'cheaper' : 'pricier';
+      var deltaCopy = kind === 'same' ? 'same' : (ratio < 0 ? '−' : '+') + formatPercent(Math.abs(ratio));
+      rows += row(kind, cost.label, kind === 'cheaper' ? 'saves ' + formatCost(-cost.deltaUsd) : kind === 'pricier' ? 'costs ' + formatCost(cost.deltaUsd) + ' more' : 'about the same', finiteOr0(cost.costUsd),
+        '<span class="whatif-delta ' + kind + '">' + escapeHtml(deltaCopy) + '</span>');
+    });
+    target.innerHTML = rows;
   }
 
   function renderBranches(projectSummary) {

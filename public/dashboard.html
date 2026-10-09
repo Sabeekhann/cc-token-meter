@@ -309,6 +309,22 @@
           <article class="panel table-panel">
             <div id="projectsTable" class="data-table"></div>
           </article>
+          <article class="panel whatif-panel" aria-labelledby="whatIfTitle">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">WHAT-IF PRICING</p>
+                <h3 id="whatIfTitle">Same tokens on another model</h3>
+              </div>
+              <label class="explorer-field whatif-field">
+                <span>Compare</span>
+                <select id="whatIfProject" aria-label="What-if pricing scope">
+                  <option value="">All projects in scope</option>
+                </select>
+              </label>
+            </div>
+            <div id="whatIfRows" class="whatif-rows" role="list"></div>
+            <p id="whatIfNote" class="chart-summary">Assumes the same token counts. Another model may use more or fewer tokens and give different results, so treat this as a price comparison, not a forecast.</p>
+          </article>
           <article class="panel branch-panel">
             <div class="panel-header">
               <div>

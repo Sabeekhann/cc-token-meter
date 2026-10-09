@@ -16,6 +16,7 @@ import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
 import { buildUsageIntelligence } from '../analytics/overview.js';
 import { buildPlanIntelligence } from '../analytics/plan.js';
+import { buildWhatIf } from '../analytics/whatIf.js';
 import { filterSessions, normalizeSummaryFilters } from '../analytics/filters.js';
 import { PRICING_VERIFIED_ON } from '../pricing/models.js';
 
@@ -170,6 +171,7 @@ export function buildSummary(store, options = {}) {
     forecast,
     intelligence,
     plan,
+    whatIf: buildWhatIf(sessions, { now: generatedAt }),
     sessions: sessionSummaries,
     tips,
     alerts,

@@ -33,6 +33,14 @@ export function formatCompactSummary(summary = {}) {
     `Pricing quality: ${integer(quality.exactCostMessageCount)}/${integer(quality.messageCount)} messages matched known pricing · verified ${summary.pricing?.verifiedOn || 'unknown'}`,
   ];
 
+  const whatIf = summary.whatIf && summary.whatIf.scope;
+  if (whatIf && whatIf.actualCostUsd > 0 && Array.isArray(whatIf.costs) && whatIf.costs.length > 0) {
+    const options = whatIf.costs
+      .map((cost) => `${cost.label} ${formatCost(cost.costUsd)} (${formatSignedPercent(cost.deltaRatio)})`)
+      .join(' · ');
+    lines.push(`What-if, same tokens: ${options} vs ${formatCost(whatIf.actualCostUsd)} actual`);
+  }
+
   const plan = summary.plan;
   if (plan && plan.plan && plan.plan !== 'api') lines.push(formatPlanLine(plan));
 
@@ -49,6 +57,11 @@ function formatPlanLine(plan) {
     ? ` (${value.multipleOfPlan >= 1 ? `${value.multipleOfPlan.toFixed(1)}x` : `${formatPercent(value.multipleOfPlan)} of`} the ${formatCost(value.planMonthlyUsd)} plan)`
     : '';
   return `Plan: ${plan.planLabel} · ${windowText} · ${formatCost(value.monthToDateUsd)} API-equivalent this month${multiple}`;
+}
+
+function formatSignedPercent(ratio) {
+  const value = Math.round(numberOr0(ratio) * 100);
+  return value > 0 ? `+${value}%` : `${value}%`;
 }
 
 function formatScope(filters) {

@@ -58,7 +58,10 @@ The projects view supports investigation and comparison:
 - cost, token, session-count, and relative-share columns;
 - expandable session details;
 - a branch breakdown using exact per-message attribution;
-- readable short names while retaining full paths in tooltips.
+- readable short names while retaining full paths in tooltips;
+- what-if pricing: the same token totals repriced on each comparison model
+  for the filtered scope or one project, with savings or extra cost and a
+  visible same-token caveat.
 
 ### Insights
 

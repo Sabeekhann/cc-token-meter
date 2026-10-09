@@ -56,3 +56,19 @@ test('compact summary adds a plan line for subscription users only', () => {
   );
   assert.doesNotMatch(formatCompactSummary({ plan: { plan: 'api' } }), /Plan:/);
 });
+
+test('compact summary lists what-if prices for the same tokens', () => {
+  const output = formatCompactSummary({
+    whatIf: {
+      scope: {
+        actualCostUsd: 20,
+        costs: [
+          { label: 'Big', costUsd: 40, deltaRatio: 1 },
+          { label: 'Small', costUsd: 5, deltaRatio: -0.75 },
+        ],
+      },
+    },
+  });
+  assert.match(output, /What-if, same tokens: Big \$40\.00 \(\+100%\) · Small \$5\.00 \(-75%\) vs \$20\.00 actual/);
+  assert.doesNotMatch(formatCompactSummary({ whatIf: { scope: { actualCostUsd: 0, costs: [] } } }), /What-if/);
+});

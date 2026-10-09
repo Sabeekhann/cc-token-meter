@@ -97,3 +97,14 @@ test('dashboard shows subscription windows only for plan users and saves plan se
   // Anthropic publishes no plan token limits; the UI must say progress is local.
   assert.match(html, /Anthropic doesn't publish plan token limits/);
 });
+
+test('projects view offers what-if pricing with an explicit same-token caveat', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'dashboard.html'), 'utf8');
+  const js = fs.readFileSync(path.join(publicDir, 'dashboard.js'), 'utf8');
+
+  assert.match(html, /<label class="explorer-field whatif-field">[\s\S]*?<select id="whatIfProject"/);
+  assert.match(html, /id="whatIfRows" class="whatif-rows" role="list"/);
+  assert.match(html, /Assumes the same token counts/);
+  assert.match(js, /renderWhatIf\(projectSummary\)/);
+  assert.match(js, /whatIf = projectSummary && projectSummary\.whatIf;/);
+});
