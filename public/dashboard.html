@@ -25,6 +25,7 @@
         </span>
       </a>
 
+      <p class="nav-label" aria-hidden="true">Workspace</p>
       <nav class="nav-list" aria-label="Dashboard views">
         <button class="nav-item active" type="button" data-view="overview" aria-current="page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z" /></svg>
@@ -69,6 +70,7 @@
         </div>
         <div class="topbar-actions">
           <button id="paletteTrigger" class="palette-trigger" type="button" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg>
             <span>Jump to…</span><kbd>⌘K</kbd>
           </button>
           <button id="themeToggle" class="icon-button" type="button" aria-label="Switch color theme" title="Switch color theme">
@@ -247,7 +249,7 @@
                 <p class="panel-kicker">WORK RHYTHM</p>
                 <h3 id="heatmapTitle">When your tokens burn</h3>
               </div>
-              <div class="heat-legend" aria-hidden="true">Less <i style="background:var(--heat-empty)"></i><i style="background:rgba(239,118,89,.35)"></i><i style="background:rgba(239,118,89,.65)"></i><i style="background:var(--coral)"></i> More</div>
+              <div class="heat-legend" aria-hidden="true">Less <i style="background:var(--heat-0)"></i><i style="background:var(--heat-1)"></i><i style="background:var(--heat-2)"></i><i style="background:var(--heat-3)"></i><i style="background:var(--heat-4)"></i> More</div>
             </div>
             <div id="usageHeatmap" class="heatmap loading-block" role="group" aria-labelledby="heatmapTitle" aria-describedby="heatmapSummary"></div>
             <p id="heatmapSummary" class="chart-summary" aria-live="polite">Loading your local weekday and hour activity.</p>
@@ -541,7 +543,7 @@
 
   <div id="paletteBackdrop" class="palette-backdrop hidden">
     <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
-      <label><span class="sr-only">Search commands</span><input id="paletteInput" type="text" placeholder="Jump to a view, project, or session…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" /></label>
+      <label class="palette-search"><span class="sr-only">Search commands</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg><input id="paletteInput" type="text" placeholder="Jump to a view, project, or session…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" /></label>
       <ul id="paletteList" class="palette-list" role="listbox"></ul>
       <div class="palette-hint"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span><span><kbd>g</kbd> then <kbd>o</kbd>/<kbd>l</kbd>/<kbd>p</kbd>/<kbd>i</kbd>/<kbd>s</kbd> views</span></div>
     </div>

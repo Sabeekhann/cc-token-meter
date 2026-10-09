@@ -39,7 +39,7 @@ test('keyboard interaction covers navigation, filters, expandable rows, and sess
 });
 
 test('focus and interactive target styles meet the 44 CSS-pixel contract', () => {
-  assert.match(css, /focus-visible[^\{]*\{[^}]*outline:3px solid #3959dc/s);
+  assert.match(css, /focus-visible[^\{]*\{[^}]*outline:3px solid var\(--focus\)/s);
   for (const selector of ['secondary-button', 'primary-button', 'metric-link', 'text-button', 'session-picker', 'search-field', 'filter-button', 'session-button', 'range-button', 'clear-filter-button']) {
     assert.match(css, new RegExp(`\\.${selector}[^\\{]*\\{[^}]*min-height:44px`, 's'));
   }
@@ -62,11 +62,16 @@ test('responsive rules cover the 1440, 1024, 768, and 390 pixel matrix', () => {
 });
 
 test('functional secondary text uses the strengthened readable palette', () => {
-  assert.match(css, /--muted:#5f6b82;/);
-  assert.match(css, /--faint:#657087;/);
-  assert.match(css, /\.table-head[^\{]*\{[^}]*font-size:10\.5px/s);
-  assert.match(css, /\.explorer-field[^\{]*\{[^}]*font-size:10\.5px/s);
-  assert.match(css, /\.empty-state\.compact[^\{]*\{[^}]*font-size:12px/s);
+  assert.match(css, /--muted:#566078;/);
+  assert.match(css, /--faint:#616b81;/);
+  assert.match(css, /\.table-head[^\{]*\{[^}]*font-size:var\(--fs-11\)/s);
+  assert.match(css, /\.explorer-field[^\{]*\{[^}]*font-size:var\(--fs-11\)/s);
+  assert.match(css, /\.empty-state\.compact[^\{]*\{[^}]*font-size:var\(--fs-13\)/s);
+  assert.match(css, /--fs-11:11px;/);
+  // Nothing in the stylesheet (SVG chart labels included) renders below 11px.
+  for (const match of css.matchAll(/font-size:(\d+(?:\.\d+)?)px/g)) {
+    assert.ok(Number(match[1]) >= 11, `font-size ${match[0]} is below the 11px minimum`);
+  }
 });
 
 test('charts have text summaries and histories stay bounded', () => {

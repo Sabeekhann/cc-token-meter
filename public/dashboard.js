@@ -668,7 +668,7 @@
     var capText = kind === 'tokens' ? formatCompact(cap) : formatCost(cap);
     meta.textContent = usedText + ' of ' + capText + ' · ' + Math.round(ratio * 100) + '%';
     bar.style.width = Math.min(100, Math.max(0, ratio * 100)) + '%';
-    bar.style.background = ratio >= 1 ? 'var(--red)' : ratio >= .8 ? 'var(--amber)' : 'var(--coral)';
+    bar.style.background = ratio >= 1 ? 'var(--grad-danger)' : ratio >= .8 ? 'var(--grad-warn)' : 'var(--grad-brand-h)';
   }
 
   function renderBurnChart(byDay) {
@@ -895,7 +895,7 @@
       byId('planWindowTokens').textContent = formatCompact(block.tokenTotal) + ' tok';
       byId('planWindowReset').textContent = 'Resets in ' + formatMinutes(block.remainingMinutes) + ' · at ' + formatTime(block.end);
       bar.style.width = (ratio == null ? 0 : Math.min(100, ratio * 100)) + '%';
-      bar.style.background = ratio == null ? 'var(--teal)' : ratio >= 1 ? 'var(--red)' : ratio >= .8 ? 'var(--amber)' : 'var(--teal)';
+      bar.style.background = ratio == null ? 'var(--grad-good)' : ratio >= 1 ? 'var(--grad-danger)' : ratio >= .8 ? 'var(--grad-warn)' : 'var(--grad-good)';
       marker.classList.toggle('hidden', projected == null);
       if (projected != null) marker.style.left = 'calc(' + Math.min(100, projected * 100).toFixed(1) + '% - 1px)';
 
@@ -1024,7 +1024,7 @@
     var projectedRatio = projected / cap;
     byId('monthSpend').textContent = fmt(used) + ' of ' + fmt(cap) + (tokenCap ? ' tok' : '') + ' · ' + formatPercent(ratio);
     bar.style.width = Math.min(100, ratio * 100) + '%';
-    bar.style.background = ratio >= 1 ? 'var(--red)' : (ratio * 100 >= (config.warnThresholdPct || 80) || projectedRatio >= 1) ? 'var(--amber)' : 'var(--teal)';
+    bar.style.background = ratio >= 1 ? 'var(--grad-danger)' : (ratio * 100 >= (config.warnThresholdPct || 80) || projectedRatio >= 1) ? 'var(--grad-warn)' : 'var(--grad-good)';
     marker.classList.toggle('hidden', !(projectedRatio > 0));
     marker.style.left = 'calc(' + Math.min(100, projectedRatio * 100).toFixed(1) + '% - 1px)';
     byId('monthMeta').textContent = 'On pace for ' + fmt(projected) + (tokenCap ? ' tok' : '') + ' by month end (' + formatPercent(projectedRatio) + ' of budget).';
