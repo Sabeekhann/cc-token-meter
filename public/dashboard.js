@@ -55,7 +55,10 @@
     paletteIndex: 0,
     paletteReturnFocus: null,
     pendingGoKey: false,
-    pendingGoTimer: null
+    pendingGoTimer: null,
+    burnDays: [],
+    countUps: {},
+    overviewResizeTimer: null
   };
 
   var dom = {
@@ -90,6 +93,7 @@
   byId('downloadReportNames').addEventListener('click', function () { downloadWeeklyReport(true); });
   bindPalette();
   bindShortcuts();
+  bindOverviewCharts();
   connect();
 
   function byId(id) {
@@ -558,11 +562,11 @@
     var projects = summary.byProject || [];
 
     byId('overviewSummary').textContent = overviewSentence(today, active, velocity, projects, tips);
-    byId('todayTokens').textContent = formatCompact(today.tokenTotal || 0);
+    setCountUp('todayTokens', today.tokenTotal || 0, formatCompact);
     byId('todayTokens').title = formatNumber(today.tokenTotal || 0) + ' tokens';
-    byId('todayCost').textContent = formatCost(today.costUsd || 0);
-    byId('cacheReuse').textContent = formatPercent(cache.reuseRate || 0);
-    byId('activeSessions').textContent = String(active.sessionCount || 0);
+    setCountUp('todayCost', today.costUsd || 0, formatCost);
+    setCountUp('cacheReuse', cache.reuseRate || 0, formatPercent);
+    setCountUp('activeSessions', active.sessionCount || 0, function (value) { return String(Math.round(value)); });
 
     setBudgetMetric(
       'todayTokensMeta',
@@ -589,10 +593,8 @@
       : 'No activity in the last ' + (active.windowMinutes || 10) + ' minutes';
 
     byId('allTimeCost').textContent = formatCost(allTime.costUsd || 0) + ' all time';
-    renderBurnChart(summary.byDay || []);
     renderSparkline('tokenSpark', summary.byDay || [], 'tokenTotal');
     renderSparkline('costSpark', summary.byDay || [], 'costUsd');
-    renderHeatmap(summary.byHourOfWeek);
     renderPlan(summary.plan);
     renderEfficiency(summary.efficiency, summary.week);
     renderForecast(summary.forecast || {}, config);
@@ -601,6 +603,10 @@
     renderTopProjects(projects);
     renderTopInsights(tips);
     renderAttribution(summary.attribution);
+    // Charts measure their stretched panels, so draw them after the cards
+    // that share their rows.
+    renderBurnChart(summary.byDay || []);
+    renderHeatmap(summary.byHourOfWeek);
   }
 
   function renderAttribution(attribution) {
@@ -609,12 +615,14 @@
     byId('subagentShare').textContent = subagents && subagents.runs > 0
       ? formatPercent(subagents.share) + ' of tokens · ' + subagents.runs + ' run' + (subagents.runs === 1 ? '' : 's')
       : 'No subagent runs';
+    var subagentTokens = types.reduce(function (sum, type) { return sum + finiteOr0(type.tokenTotal); }, 0);
     byId('subagentTypes').innerHTML = types.length === 0
       ? '<div class="empty-state compact">No subagent usage in this scope. When Claude Code delegates to Task/Explore agents, their tokens and cost appear here.</div>'
       : types.slice(0, 5).map(function (type, index) {
+        var share = subagentTokens > 0 ? finiteOr0(type.tokenTotal) / subagentTokens : 0;
         return '<div class="rank-row">' +
           '<span class="rank-number">' + (index + 1) + '</span>' +
-          '<div class="rank-copy"><strong>' + escapeHtml(type.agentType || 'Unlabelled subagent') + '</strong><span>' + type.runs + ' run' + (type.runs === 1 ? '' : 's') + ' · ' + escapeHtml(formatNumber(type.messageCount)) + ' message' + (type.messageCount === 1 ? '' : 's') + '</span></div>' +
+          '<div class="rank-copy"><strong>' + escapeHtml(type.agentType || 'Unlabelled subagent') + '</strong><span>' + type.runs + ' run' + (type.runs === 1 ? '' : 's') + ' · ' + escapeHtml(formatNumber(type.messageCount)) + ' message' + (type.messageCount === 1 ? '' : 's') + ' · ' + escapeHtml(formatPercent(share)) + '</span>' + rankShare(share) + '</div>' +
           '<div class="rank-cost"><strong>' + escapeHtml(formatCost(type.costUsd || 0)) + '</strong><span>' + escapeHtml(formatCompact(type.tokenTotal || 0)) + ' tok</span></div>' +
         '</div>';
       }).join('');
@@ -624,13 +632,15 @@
     byId('toolTotals').textContent = totals.calls > 0
       ? formatNumber(totals.calls) + ' calls · ' + formatNumber(totals.distinctTools) + ' tools'
       : 'No tool calls';
+    var toolTokens = tools.reduce(function (sum, tool) { return sum + finiteOr0(tool.estimatedTokens); }, 0);
     byId('toolAttribution').innerHTML = tools.length === 0
       ? '<div class="empty-state compact">No tool calls in this scope.</div>'
       : tools.slice(0, 6).map(function (tool, index) {
         var label = tool.server ? tool.name.replace(/^mcp__.+?__/, '') : tool.name;
+        var share = toolTokens > 0 ? finiteOr0(tool.estimatedTokens) / toolTokens : 0;
         return '<div class="rank-row">' +
           '<span class="rank-number">' + (index + 1) + '</span>' +
-          '<div class="rank-copy"><strong title="' + escapeHtmlAttr(tool.name) + '">' + escapeHtml(label) + (tool.server ? '<span class="tool-badge">MCP · ' + escapeHtml(tool.server) + '</span>' : '') + '</strong><span>' + escapeHtml(formatNumber(tool.calls)) + ' call' + (tool.calls === 1 ? '' : 's') + '</span></div>' +
+          '<div class="rank-copy"><strong title="' + escapeHtmlAttr(tool.name) + '">' + escapeHtml(label) + (tool.server ? '<span class="tool-badge">MCP · ' + escapeHtml(tool.server) + '</span>' : '') + '</strong><span>' + escapeHtml(formatNumber(tool.calls)) + ' call' + (tool.calls === 1 ? '' : 's') + ' · ' + escapeHtml(formatPercent(share)) + ' of result tokens</span>' + rankShare(share) + '</div>' +
           '<div class="rank-cost"><strong>≈' + escapeHtml(formatCompact(tool.estimatedTokens || 0)) + '</strong><span>result tok</span></div>' +
         '</div>';
       }).join('');
@@ -641,6 +651,43 @@
         return server.server + ' ≈' + formatCompact(server.estimatedTokens) + ' tok in ' + formatNumber(server.calls) + ' calls';
       }).join(' · ') + '. '
       : '') + 'Result tokens are estimated from result size (about ' + ((attribution && attribution.bytesPerTokenEstimate) || 4) + ' bytes per token) and count only what each call returned, not later re-reads from cache.';
+  }
+
+  function rankShare(ratio) {
+    var pct = Math.min(100, Math.max(0, finiteOr0(ratio) * 100));
+    return '<div class="rank-share" aria-hidden="true"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
+  }
+
+  function prefersReducedMotion() {
+    return Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  // Count a KPI up (or down) from its last shown value. The first render and
+  // reduced-motion viewers get the final value immediately.
+  function setCountUp(id, value, format) {
+    var el = byId(id);
+    var target = finiteOr0(value);
+    var previous = state.countUps[id];
+    if (previous && previous.frame) window.cancelAnimationFrame(previous.frame);
+    var from = previous ? previous.current : null;
+    var entry = { current: target, frame: 0 };
+    state.countUps[id] = entry;
+    if (from === null || from === target || prefersReducedMotion() || typeof window.requestAnimationFrame !== 'function') {
+      el.textContent = format(target);
+      return;
+    }
+    var start = null;
+    var duration = 700;
+    entry.current = from;
+    function step(now) {
+      if (start === null) start = now;
+      var t = Math.min(1, (now - start) / duration);
+      var eased = 1 - Math.pow(1 - t, 3);
+      entry.current = t >= 1 ? target : from + (target - from) * eased;
+      el.textContent = format(entry.current);
+      entry.frame = t < 1 ? window.requestAnimationFrame(step) : 0;
+    }
+    entry.frame = window.requestAnimationFrame(step);
   }
 
   function overviewSentence(today, active, velocity, projects, tips) {
@@ -671,77 +718,197 @@
     bar.style.background = ratio >= 1 ? 'var(--grad-danger)' : ratio >= .8 ? 'var(--grad-warn)' : 'var(--grad-brand-h)';
   }
 
+  function bindOverviewCharts() {
+    var chart = byId('burnChart');
+    chart.addEventListener('pointermove', function (event) {
+      var hit = event.target && event.target.closest ? event.target.closest('[data-burn-index]') : null;
+      if (hit) showBurnTooltip(Number(hit.getAttribute('data-burn-index')));
+      else hideBurnTooltip();
+    });
+    chart.addEventListener('pointerleave', hideBurnTooltip);
+    // Charts are drawn at the container's pixel width so labels keep their
+    // real size; redraw them when the layout width changes.
+    window.addEventListener('resize', function () {
+      window.clearTimeout(state.overviewResizeTimer);
+      state.overviewResizeTimer = window.setTimeout(function () {
+        if (state.view !== 'overview' || !state.summary) return;
+        renderBurnChart(state.summary.byDay || []);
+        renderHeatmap(state.summary.byHourOfWeek);
+      }, 150);
+    });
+  }
+
+  function niceCeil(value) {
+    if (!(value > 0)) return 1;
+    var magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+    var fraction = value / magnitude;
+    // Each candidate splits into four round gridline steps.
+    var steps = [1, 1.2, 1.6, 2, 2.4, 3, 4, 6, 8, 10];
+    for (var i = 0; i < steps.length; i++) {
+      if (fraction <= steps[i] + 1e-9) return steps[i] * magnitude;
+    }
+    return 10 * magnitude;
+  }
+
+  function roundedTopBar(x, y, w, h, r) {
+    var radius = Math.min(r, w / 2, h);
+    var bottom = y + h;
+    return 'M' + x.toFixed(1) + ',' + bottom.toFixed(1) +
+      'V' + (y + radius).toFixed(1) +
+      'Q' + x.toFixed(1) + ',' + y.toFixed(1) + ' ' + (x + radius).toFixed(1) + ',' + y.toFixed(1) +
+      'H' + (x + w - radius).toFixed(1) +
+      'Q' + (x + w).toFixed(1) + ',' + y.toFixed(1) + ' ' + (x + w).toFixed(1) + ',' + (y + radius).toFixed(1) +
+      'V' + bottom.toFixed(1) + 'Z';
+  }
+
+  function smoothPath(points) {
+    var d = 'M' + points[0][0].toFixed(1) + ',' + points[0][1].toFixed(1);
+    for (var i = 1; i < points.length; i++) {
+      var p0 = points[i - 1];
+      var p1 = points[i];
+      var mid = ((p0[0] + p1[0]) / 2).toFixed(1);
+      d += 'C' + mid + ',' + p0[1].toFixed(1) + ' ' + mid + ',' + p1[1].toFixed(1) + ' ' + p1[0].toFixed(1) + ',' + p1[1].toFixed(1);
+    }
+    return d;
+  }
+
+  function burnDayLabel(day) {
+    var date = new Date(day.date + 'T12:00:00');
+    return Number.isNaN(date.getTime()) ? String(day.date) : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
   function renderBurnChart(byDay) {
     var chart = byId('burnChart');
     var days = (Array.isArray(byDay) ? byDay : []).slice(-14);
     chart.classList.remove('loading-block');
+    chart.classList.remove('is-hovering');
+    state.burnDays = days;
     if (days.length === 0) {
       chart.innerHTML = '<div class="empty-state compact">Usage history will appear after Claude Code records a session.</div>';
       byId('burnChartSummary').textContent = 'No usage history is available yet.';
       return;
     }
 
-    var width = 720;
-    var height = 220;
-    var left = 42;
-    var right = 12;
-    var top = 16;
-    var bottom = 30;
+    // The SVG is absolutely positioned, so the box size comes from layout:
+    // its width from the column and its height from the stretched panel.
+    var width = Math.max(280, Math.round(chart.clientWidth || 720));
+    var height = Math.max(220, Math.min(380, Math.round(chart.clientHeight || 252)));
+    var left = 46;
+    var right = 50;
+    var top = 30;
+    var bottom = 32;
     var plotW = width - left - right;
     var plotH = height - top - bottom;
-    var maxTokens = Math.max.apply(null, days.map(function (d) { return d.tokenTotal || 0; })) || 1;
-    var maxCost = Math.max.apply(null, days.map(function (d) { return d.costUsd || 0; })) || 1;
+    var baseY = top + plotH;
+    var rawMaxTokens = Math.max.apply(null, days.map(function (d) { return finiteOr0(d.tokenTotal); }));
+    var rawMaxCost = Math.max.apply(null, days.map(function (d) { return finiteOr0(d.costUsd); }));
+    var maxTokens = niceCeil(rawMaxTokens);
+    var maxCost = rawMaxCost > 0 ? niceCeil(rawMaxCost) : 1;
     var slot = plotW / days.length;
-    var barWidth = Math.min(24, Math.max(7, slot * .44));
+    var barWidth = Math.min(30, Math.max(8, slot * .56));
+    var todayKey = localDateString(new Date());
 
     var grid = '';
-    for (var g = 0; g <= 3; g++) {
-      var gy = top + (plotH / 3) * g;
-      var labelValue = maxTokens * (1 - g / 3);
-      grid += '<line class="chart-grid-line" x1="' + left + '" y1="' + gy.toFixed(1) + '" x2="' + (width - right) + '" y2="' + gy.toFixed(1) + '"></line>';
-      grid += '<text class="chart-label" x="0" y="' + (gy + 3).toFixed(1) + '">' + escapeHtml(formatCompact(labelValue)) + '</text>';
+    for (var g = 0; g <= 4; g++) {
+      var gy = top + (plotH / 4) * g;
+      grid += '<line class="' + (g === 4 ? 'burn-baseline' : 'burn-grid') + '" x1="' + left + '" y1="' + gy.toFixed(1) + '" x2="' + (width - right) + '" y2="' + gy.toFixed(1) + '"></line>';
+      grid += '<text class="burn-axis" text-anchor="end" x="' + (left - 10) + '" y="' + (gy + 4).toFixed(1) + '">' + escapeHtml(formatCompact(maxTokens * (1 - g / 4))) + '</text>';
+      grid += '<text class="burn-axis cost" x="' + (width - right + 10) + '" y="' + (gy + 4).toFixed(1) + '">' + escapeHtml(formatCost(maxCost * (1 - g / 4))) + '</text>';
     }
 
     var bars = '';
-    var points = [];
+    var hits = '';
     var labels = '';
+    var points = [];
+    var peakIndex = 0;
+    var labelEvery = Math.max(1, Math.ceil(days.length / Math.max(2, Math.floor(plotW / 64))));
     days.forEach(function (day, index) {
       var center = left + slot * index + slot / 2;
-      var barH = ((day.tokenTotal || 0) / maxTokens) * plotH;
-      var y = top + plotH - barH;
-      var date = new Date(day.date + 'T12:00:00');
-      var dayLabel = Number.isNaN(date.getTime()) ? day.date : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      bars += '<rect class="chart-bar" x="' + (center - barWidth / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(2, barH).toFixed(1) + '" rx="4"><title>' + escapeHtml(dayLabel + ': ' + formatNumber(day.tokenTotal || 0) + ' tokens · ' + formatCost(day.costUsd || 0)) + '</title></rect>';
-      var costY = top + plotH - ((day.costUsd || 0) / maxCost) * plotH;
-      points.push(center.toFixed(1) + ',' + costY.toFixed(1));
-      if (days.length <= 7 || index % 2 === 0 || index === days.length - 1) {
-        labels += '<text class="chart-label" text-anchor="middle" x="' + center.toFixed(1) + '" y="' + (height - 8) + '">' + escapeHtml(dayLabel) + '</text>';
+      var tokens = finiteOr0(day.tokenTotal);
+      if (tokens > finiteOr0(days[peakIndex].tokenTotal)) peakIndex = index;
+      var barH = Math.max(3, (tokens / maxTokens) * plotH);
+      var y = baseY - barH;
+      var isToday = day.date === todayKey;
+      bars += '<path class="burn-bar' + (isToday ? ' is-today' : '') + '" data-bar-index="' + index + '" d="' + roundedTopBar(center - barWidth / 2, y, barWidth, barH, 6) + '"></path>';
+      var costY = baseY - (finiteOr0(day.costUsd) / maxCost) * plotH;
+      points.push([center, costY]);
+      hits += '<rect class="burn-hit" data-burn-index="' + index + '" data-x="' + center.toFixed(1) + '" data-y="' + Math.min(y, costY).toFixed(1) + '" x="' + (left + slot * index).toFixed(1) + '" y="' + top + '" width="' + slot.toFixed(1) + '" height="' + plotH + '"></rect>';
+      if ((days.length - 1 - index) % labelEvery === 0) {
+        labels += '<text class="burn-axis' + (isToday ? ' is-today' : '') + '" text-anchor="middle" x="' + center.toFixed(1) + '" y="' + (height - 8) + '">' + escapeHtml(isToday ? 'Today' : burnDayLabel(day)) + '</text>';
       }
     });
 
-    var firstPoint = points[0].split(',');
-    var lastPoint = points[points.length - 1].split(',');
-    var areaPoints = left + ',' + (top + plotH) + ' ' + points.join(' ') + ' ' + lastPoint[0] + ',' + (top + plotH);
+    var linePath = smoothPath(points);
+    var areaPath = linePath + 'L' + points[points.length - 1][0].toFixed(1) + ',' + baseY + 'L' + points[0][0].toFixed(1) + ',' + baseY + 'Z';
     var dots = points.map(function (point, index) {
-      var pair = point.split(',');
-      return '<circle class="chart-dot" cx="' + pair[0] + '" cy="' + pair[1] + '" r="2.8"><title>' + escapeHtml(formatCost(days[index].costUsd || 0)) + '</title></circle>';
+      var last = index === points.length - 1;
+      return (last ? '<circle class="burn-halo" cx="' + point[0].toFixed(1) + '" cy="' + point[1].toFixed(1) + '" r="9"></circle>' : '') +
+        '<circle class="burn-dot" data-dot-index="' + index + '" cx="' + point[0].toFixed(1) + '" cy="' + point[1].toFixed(1) + '" r="' + (last ? 4.5 : 3.2) + '"></circle>';
     }).join('');
+
+    var peak = days[peakIndex];
+    var peakText = formatCompact(peak.tokenTotal || 0);
+    var peakCenter = left + slot * peakIndex + slot / 2;
+    var peakTop = baseY - Math.max(3, (finiteOr0(peak.tokenTotal) / maxTokens) * plotH);
+    var pillW = peakText.length * 7.4 + 18;
+    var pillX = Math.min(width - right - pillW, Math.max(left, peakCenter - pillW / 2));
+    var pillY = Math.max(2, Math.min(peakTop, points[peakIndex][1] - 6) - 28);
+    var peakLabel = finiteOr0(peak.tokenTotal) > 0
+      ? '<g class="burn-peak"><rect x="' + pillX.toFixed(1) + '" y="' + pillY.toFixed(1) + '" width="' + pillW.toFixed(1) + '" height="21" rx="10.5"></rect>' +
+        '<text x="' + (pillX + pillW / 2).toFixed(1) + '" y="' + (pillY + 14.5).toFixed(1) + '" text-anchor="middle">' + escapeHtml(peakText) + '</text></g>'
+      : '';
 
     chart.innerHTML =
       '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Fourteen day token and estimated cost chart">' +
         '<defs>' +
-          '<linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ef7659" stop-opacity=".58"></stop><stop offset="1" stop-color="#ef7659" stop-opacity=".13"></stop></linearGradient>' +
-          '<linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d7cf5" stop-opacity=".13"></stop><stop offset="1" stop-color="#5d7cf5" stop-opacity="0"></stop></linearGradient>' +
+          '<linearGradient id="burnBarGradient" x1="0" y1="0" x2="0" y2="1"><stop class="burn-stop-a" offset="0"></stop><stop class="burn-stop-b" offset=".55"></stop><stop class="burn-stop-c" offset="1"></stop></linearGradient>' +
+          '<linearGradient id="burnAreaGradient" x1="0" y1="0" x2="0" y2="1"><stop class="burn-area-a" offset="0"></stop><stop class="burn-area-b" offset="1"></stop></linearGradient>' +
+          '<filter id="burnGlow" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="4"></feGaussianBlur></filter>' +
         '</defs>' + grid +
-        '<polygon class="chart-area" points="' + areaPoints + '"></polygon>' +
-        bars + '<polyline class="chart-line" points="' + points.join(' ') + '"></polyline>' + dots + labels +
-      '</svg>';
+        '<path class="burn-area" d="' + areaPath + '"></path>' +
+        bars +
+        '<path class="burn-line-glow" d="' + linePath + '"></path>' +
+        '<path class="burn-line" d="' + linePath + '"></path>' + dots + peakLabel + labels + hits +
+      '</svg>' +
+      '<div class="burn-tooltip" role="presentation" hidden></div>';
     var totalTokens = days.reduce(function (sum, day) { return sum + finiteOr0(day.tokenTotal); }, 0);
     var totalCost = days.reduce(function (sum, day) { return sum + finiteOr0(day.costUsd); }, 0);
-    var peak = days.slice().sort(function (a, b) { return finiteOr0(b.tokenTotal) - finiteOr0(a.tokenTotal); })[0];
     byId('burnChartSummary').textContent = days.length + ' days shown: ' + formatNumber(totalTokens) +
       ' total tokens and ' + formatCost(totalCost) + ' estimated cost. Peak usage was ' +
       formatNumber(peak.tokenTotal || 0) + ' tokens on ' + peak.date + '.';
+  }
+
+  function showBurnTooltip(index) {
+    var chart = byId('burnChart');
+    var day = state.burnDays[index];
+    var tooltip = chart.querySelector('.burn-tooltip');
+    var svg = chart.querySelector('svg');
+    var hit = chart.querySelector('[data-burn-index="' + index + '"]');
+    if (!day || !tooltip || !svg || !hit) return;
+    var viewWidth = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal.width : 0;
+    var svgWidth = svg.getBoundingClientRect().width;
+    var scale = viewWidth > 0 ? svgWidth / viewWidth : 1;
+    tooltip.innerHTML = '<strong>' + escapeHtml(burnDayLabel(day)) + '</strong>' +
+      '<span><i class="tip-key bar"></i>' + escapeHtml(formatNumber(day.tokenTotal || 0)) + ' tokens</span>' +
+      '<span><i class="tip-key line"></i>' + escapeHtml(formatCost(day.costUsd || 0)) + ' est. cost</span>';
+    tooltip.hidden = false;
+    var x = Number(hit.getAttribute('data-x')) * scale;
+    var y = Number(hit.getAttribute('data-y')) * scale;
+    var half = tooltip.offsetWidth / 2;
+    tooltip.style.left = Math.min(svgWidth - half - 4, Math.max(half + 4, x)).toFixed(1) + 'px';
+    tooltip.style.top = Math.max(tooltip.offsetHeight + 4, y - 10).toFixed(1) + 'px';
+    chart.classList.add('is-hovering');
+    chart.querySelectorAll('[data-bar-index],[data-dot-index]').forEach(function (node) {
+      var nodeIndex = node.getAttribute('data-bar-index') || node.getAttribute('data-dot-index');
+      node.classList.toggle('is-active', Number(nodeIndex) === index);
+    });
+  }
+
+  function hideBurnTooltip() {
+    var chart = byId('burnChart');
+    var tooltip = chart.querySelector('.burn-tooltip');
+    if (tooltip) tooltip.hidden = true;
+    chart.classList.remove('is-hovering');
   }
 
   function renderSparkline(id, byDay, key) {
@@ -754,10 +921,13 @@
     var max = Math.max.apply(null, days.map(function (day) { return finiteOr0(day[key]); })) || 1;
     var points = days.map(function (day, index) {
       var x = (index / (days.length - 1)) * 100;
-      var y = 28 - (finiteOr0(day[key]) / max) * 26;
+      var y = 28 - (finiteOr0(day[key]) / max) * 24;
       return x.toFixed(1) + ',' + y.toFixed(1);
     });
-    target.innerHTML = '<polyline points="' + points.join(' ') + '"></polyline>';
+    var gradientId = id + 'Fill';
+    target.innerHTML = '<defs><linearGradient id="' + gradientId + '" x1="0" y1="0" x2="0" y2="1"><stop class="spark-stop-a" offset="0"></stop><stop class="spark-stop-b" offset="1"></stop></linearGradient></defs>' +
+      '<polygon class="spark-area" fill="url(#' + gradientId + ')" points="0,30 ' + points.join(' ') + ' 100,30"></polygon>' +
+      '<polyline points="' + points.join(' ') + '"></polyline>';
   }
 
   function renderHeatmap(grid) {
@@ -774,40 +944,64 @@
 
     // Monday-first rows read more naturally for a working week.
     var order = [1, 2, 3, 4, 5, 6, 0];
-    var cell = 22;
-    var gap = 3;
-    var left = 36;
-    var top = 4;
-    var width = left + 24 * (cell + gap);
-    var height = top + 7 * (cell + gap) + 18;
+    // Measure the free box (its own height cleared), then size cells so the
+    // grid fills the panel width and, when the row is stretched, its height.
+    target.style.height = '';
+    var available = Math.max(560, Math.round(target.clientWidth || 720));
+    var availableHeight = Math.round(target.clientHeight || 0);
+    var gap = 4;
+    var left = 42;
+    var top = 2;
+    var axis = 26;
+    var cell = Math.max(14, Math.min(34, Math.floor((available - left - gap * 23) / 24)));
+    var cellH = Math.max(cell, Math.min(Math.round(cell * 1.5), Math.floor((availableHeight - top - axis - gap * 6) / 7)));
+    var width = left + 24 * cell + 23 * gap;
+    var height = top + 7 * cellH + 6 * gap + axis;
     var max = 0;
     var peak = { day: 0, hour: 0, tokens: 0 };
+    var active = [];
     order.forEach(function (day) {
       for (var hour = 0; hour < 24; hour++) {
         var value = finiteOr0(tokens[day] && tokens[day][hour]);
+        if (value > 0) active.push(value);
         if (value > max) max = value;
         if (value > peak.tokens) peak = { day: day, hour: hour, tokens: value };
       }
     });
+    // Five steps: empty, then quartiles of the hours that had any usage, so a
+    // few huge hours don't wash every other active hour into one colour.
+    active.sort(function (a, b) { return a - b; });
+    var quantile = function (q) { return active.length ? active[Math.floor(q * (active.length - 1))] : 0; };
+    var q1 = quantile(.25);
+    var q2 = quantile(.5);
+    var q3 = quantile(.75);
+    var level = function (value) {
+      if (value <= 0) return 0;
+      if (value >= max || value > q3) return 4;
+      if (value > q2) return 3;
+      if (value > q1) return 2;
+      return 1;
+    };
+    var today = new Date().getDay();
 
     var cells = '';
     order.forEach(function (day, row) {
-      var y = top + row * (cell + gap);
-      cells += '<text class="chart-label" x="0" y="' + (y + cell / 2 + 3) + '">' + WEEKDAYS[day] + '</text>';
+      var y = top + row * (cellH + gap);
+      cells += '<text class="heat-axis' + (day === today ? ' is-today' : '') + '" text-anchor="end" x="' + (left - 10) + '" y="' + (y + cellH / 2 + 4).toFixed(1) + '">' + WEEKDAYS[day] + '</text>';
       for (var hour = 0; hour < 24; hour++) {
         var value = finiteOr0(tokens[day] && tokens[day][hour]);
         var count = finiteOr0(messages[day] && messages[day][hour]);
-        var intensity = max > 0 && value > 0 ? 0.18 + 0.82 * Math.sqrt(value / max) : 0;
-        var fill = intensity > 0 ? ' style="fill:rgba(239,118,89,' + intensity.toFixed(3) + ')"' : '';
-        cells += '<rect class="heat-cell" x="' + (left + hour * (cell + gap)) + '" y="' + y + '" width="' + cell + '" height="' + cell + '" rx="4"' + fill + '>' +
+        cells += '<rect class="heat-cell l' + level(value) + '" x="' + (left + hour * (cell + gap)) + '" y="' + y + '" width="' + cell + '" height="' + cellH + '" rx="' + Math.min(6, Math.round(cell / 5)) + '">' +
           '<title>' + escapeHtml(WEEKDAYS[day] + ' ' + hourLabel(hour) + ' · ' + formatNumber(value) + ' tokens · ' + formatNumber(count) + ' messages') + '</title></rect>';
       }
     });
     var labels = '';
-    for (var tick = 0; tick < 24; tick += 3) {
-      labels += '<text class="chart-label" x="' + (left + tick * (cell + gap)) + '" y="' + (height - 3) + '">' + hourLabel(tick) + '</text>';
+    var step = cell < 20 ? 6 : 3;
+    for (var tick = 0; tick < 24; tick += step) {
+      labels += '<text class="heat-axis" text-anchor="middle" x="' + (left + tick * (cell + gap) + cell / 2).toFixed(1) + '" y="' + (height - 6) + '">' + hourLabel(tick) + '</text>';
     }
-    target.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Tokens by weekday and hour of day">' + cells + labels + '</svg>';
+    target.style.height = height + 'px';
+    target.innerHTML = '<svg width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Tokens by weekday and hour of day">' + cells + labels + '</svg>';
     summaryEl.textContent = 'Busiest slot: ' + WEEKDAYS[peak.day] + ' ' + hourLabel(peak.hour) + '–' + hourLabel((peak.hour + 1) % 24) +
       ' with ' + formatNumber(peak.tokens) + ' tokens. Based on ' + formatNumber(grid.recordCount) +
       ' recent detailed messages in your local time zone.';
@@ -821,20 +1015,24 @@
       byId('efficiencyComponents').innerHTML = '<div class="empty-state compact">The weekly score appears once there is usage in the last 7 days.</div>';
       byId('efficiencySuggestion').textContent = '';
     } else {
-      var radius = 50;
+      var radius = 66;
       var circumference = 2 * Math.PI * radius;
-      var level = score >= 80 ? '' : score >= 55 ? 'warn' : 'danger';
-      target.innerHTML = '<svg viewBox="0 0 120 120" role="img" aria-label="' + escapeHtmlAttr('Weekly efficiency score ' + score + ' out of 100') + '">' +
-        '<circle class="gauge-track" cx="60" cy="60" r="' + radius + '"></circle>' +
-        '<circle class="gauge-fill ' + level + '" cx="60" cy="60" r="' + radius + '" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - score / 100)).toFixed(2) + '"></circle>' +
-        '<text class="score-value" x="60" y="66" text-anchor="middle">' + score + '</text>' +
-        '<text class="score-caption" x="60" y="82" text-anchor="middle">OF 100</text>' +
-      '</svg>';
+      var clamped = Math.min(100, Math.max(0, score));
+      var band = score >= 80 ? 'good' : score >= 50 ? 'warn' : 'bad';
+      var bandLabel = band === 'good' ? 'Efficient' : band === 'warn' ? 'Room to improve' : 'Needs attention';
+      target.innerHTML = '<svg viewBox="0 0 160 160" role="img" aria-label="' + escapeHtmlAttr('Weekly efficiency score ' + score + ' out of 100') + '">' +
+        '<defs><linearGradient id="effRingGradient" x1="0" y1="0" x2="1" y2="1"><stop class="eff-stop-a ' + band + '" offset="0"></stop><stop class="eff-stop-b ' + band + '" offset="1"></stop></linearGradient></defs>' +
+        '<circle class="eff-track" cx="80" cy="80" r="' + radius + '"></circle>' +
+        '<circle class="eff-arc ' + band + '" cx="80" cy="80" r="' + radius + '" transform="rotate(-90 80 80)" stroke="url(#effRingGradient)" stroke-dasharray="' + circumference.toFixed(2) + '" stroke-dashoffset="' + (circumference * (1 - clamped / 100)).toFixed(2) + '"></circle>' +
+        '<text class="eff-score-value" x="80" y="90" text-anchor="middle">' + score + '</text>' +
+        '<text class="eff-score-caption" x="80" y="112" text-anchor="middle">OF 100</text>' +
+      '</svg>' +
+      '<span class="chip ' + (band === 'good' ? 'good' : band === 'warn' ? 'warn' : 'danger') + '"><i class="chip-dot"></i>' + bandLabel + '</span>';
       byId('efficiencyComponents').innerHTML = (efficiency.components || []).map(function (item) {
         var ratio = item.max > 0 ? item.points / item.max : 0;
         return '<div class="efficiency-row"><div><strong>' + escapeHtml(item.label) + '</strong><small>' + escapeHtml(item.detail) + '</small></div>' +
-          '<div class="bar"><span class="' + (ratio >= .8 ? '' : ratio >= .5 ? 'mid' : 'low') + '" style="width:' + (ratio * 100).toFixed(1) + '%"></span></div>' +
-          '<b>' + item.points + '/' + item.max + '</b></div>';
+          '<div class="bar"><span class="' + (ratio >= .8 ? '' : ratio >= .5 ? 'mid' : 'low') + '" style="width:' + (Math.min(1, Math.max(0, ratio)) * 100).toFixed(1) + '%"></span></div>' +
+          '<b>' + escapeHtml(String(item.points)) + '<small>/' + escapeHtml(String(item.max)) + ' pts</small></b></div>';
       }).join('');
       byId('efficiencySuggestion').textContent = efficiency.suggestion ? 'Biggest opportunity: ' + efficiency.suggestion : 'Nothing to improve this week. Nice work.';
     }
@@ -876,11 +1074,14 @@
     var block = plan.currentBlock;
     var badge = byId('planWindowBadge');
     var bar = byId('planWindowBar');
+    var pace = byId('planWindowPace');
     var marker = byId('planWindowProjected');
     byId('planPanelKicker').textContent = (plan.planLabel + ' · ' + plan.blockHours + '-hour window').toUpperCase();
 
     if (!block) {
-      byId('planWindowTokens').textContent = '0 tok';
+      setPlanTokens(0);
+      byId('planWindowScale').textContent = plan.recordBlockTokens ? 'Record ' + formatCompact(plan.recordBlockTokens) : '—';
+      pace.style.width = '0%';
       byId('planWindowReset').textContent = 'No active window. Your next message starts one.';
       byId('planWindowMeta').textContent = plan.recordBlockTokens
         ? 'Your largest recent window used ' + formatCompact(plan.recordBlockTokens) + ' tokens.'
@@ -892,12 +1093,16 @@
     } else {
       var ratio = typeof block.ratio === 'number' ? block.ratio : null;
       var projected = typeof block.projectedRatio === 'number' ? block.projectedRatio : null;
-      byId('planWindowTokens').textContent = formatCompact(block.tokenTotal) + ' tok';
+      setPlanTokens(block.tokenTotal);
+      byId('planWindowScale').textContent = block.referenceKind === 'limit'
+        ? formatCompact(block.reference) + ' limit'
+        : block.referenceKind === 'record' ? formatCompact(block.reference) + ' record' : '—';
+      pace.style.width = (projected == null ? 0 : Math.min(100, projected * 100)).toFixed(1) + '%';
       byId('planWindowReset').textContent = 'Resets in ' + formatMinutes(block.remainingMinutes) + ' · at ' + formatTime(block.end);
       bar.style.width = (ratio == null ? 0 : Math.min(100, ratio * 100)) + '%';
       bar.style.background = ratio == null ? 'var(--grad-good)' : ratio >= 1 ? 'var(--grad-danger)' : ratio >= .8 ? 'var(--grad-warn)' : 'var(--grad-good)';
       marker.classList.toggle('hidden', projected == null);
-      if (projected != null) marker.style.left = 'calc(' + Math.min(100, projected * 100).toFixed(1) + '% - 1px)';
+      if (projected != null) marker.style.left = 'calc(' + Math.min(100, projected * 100).toFixed(1) + '% - 1.5px)';
 
       var referenceCopy = block.referenceKind === 'limit'
         ? formatPercent(ratio) + ' of your ' + formatCompact(block.reference) + '-token window limit'
@@ -914,8 +1119,11 @@
 
     var recent = Array.isArray(plan.recentBlocks) ? plan.recentBlocks : [];
     var maxBlock = Math.max.apply(null, recent.map(function (item) { return finiteOr0(item.tokenTotal); }).concat([1]));
+    byId('planHistoryPeak').textContent = recent.length
+      ? recent.length + ' window' + (recent.length === 1 ? '' : 's') + ' · peak ' + formatCompact(maxBlock) + ' tok'
+      : 'No windows yet';
     byId('planRecentBlocks').innerHTML = recent.map(function (item) {
-      var height = Math.max(6, (finiteOr0(item.tokenTotal) / maxBlock) * 100);
+      var height = Math.max(5, (finiteOr0(item.tokenTotal) / maxBlock) * 100);
       return '<span class="' + (item.active ? 'active' : '') + '" style="height:' + height.toFixed(1) + '%" title="' +
         escapeHtmlAttr(formatDateTime(item.start) + ' · ' + formatNumber(item.tokenTotal) + ' tokens · ' + formatCost(item.costUsd)) + '"></span>';
     }).join('');
@@ -932,6 +1140,10 @@
     byId('planWeeklyMeta').textContent = typeof weekly.ratio === 'number'
       ? formatPercent(weekly.ratio) + ' of your ' + formatCompact(weekly.limit) + '-token weekly limit.'
       : formatCost(weekly.costUsd || 0) + ' API-equivalent. Set a weekly limit in Settings to track pace.';
+  }
+
+  function setPlanTokens(tokens) {
+    byId('planWindowTokens').innerHTML = escapeHtml(formatCompact(tokens)) + '<span class="plan-unit">tok</span>';
   }
 
   function formatMinutes(minutes) {
@@ -1075,10 +1287,10 @@
 
   function renderTokenMix(allTime) {
     var entries = [
-      { key: 'inputTokens', label: 'Fresh input', cls: 'input' },
-      { key: 'outputTokens', label: 'Output', cls: 'output' },
-      { key: 'cacheCreationInputTokens', label: 'Cache writes', cls: 'write' },
-      { key: 'cacheReadInputTokens', label: 'Cache reads', cls: 'read' }
+      { key: 'inputTokens', label: 'Fresh input', cls: 'input', hint: 'Uncached prompt tokens' },
+      { key: 'outputTokens', label: 'Output', cls: 'output', hint: 'Model responses' },
+      { key: 'cacheCreationInputTokens', label: 'Cache writes', cls: 'write', hint: 'Prompt prefixes saved to cache' },
+      { key: 'cacheReadInputTokens', label: 'Cache reads', cls: 'read', hint: 'Prompt prefixes reused from cache' }
     ];
     var total = entries.reduce(function (sum, entry) { return sum + (allTime[entry.key] || 0); }, 0);
     if (total <= 0) {
@@ -1092,9 +1304,14 @@
     }).join('');
     var legend = entries.map(function (entry) {
       var value = allTime[entry.key] || 0;
-      return '<div class="mix-item"><i class="mix-swatch mix-' + entry.cls + '"></i><span>' + escapeHtml(entry.label) + '</span><strong>' + escapeHtml(formatCompact(value)) + ' · ' + escapeHtml(formatPercent(value / total)) + '</strong></div>';
+      return '<div class="mix-item"><i class="mix-swatch mix-' + entry.cls + '"></i>' +
+        '<div class="mix-label"><strong>' + escapeHtml(entry.label) + '</strong><small>' + escapeHtml(entry.hint) + '</small></div>' +
+        '<div class="mix-figure"><strong>' + escapeHtml(formatCompact(value)) + '</strong><small>' + escapeHtml(formatPercent(value / total)) + '</small></div></div>';
     }).join('');
-    byId('tokenMix').innerHTML = '<div class="mix-bar">' + segments + '</div><div class="mix-legend">' + legend + '</div>';
+    var readShare = (allTime.cacheReadInputTokens || 0) / total;
+    byId('tokenMix').innerHTML = '<div class="mix-total"><strong>' + escapeHtml(formatCompact(total)) + '</strong><span>tokens processed, all time</span></div>' +
+      '<div class="mix-bar">' + segments + '</div><div class="mix-legend">' + legend + '</div>' +
+      (readShare > 0 ? '<p class="mix-note">' + escapeHtml(formatPercent(readShare) + ' of all tokens were cache reads, billed at a tenth of the input rate.') + '</p>' : '');
   }
 
   function renderTopProjects(projects) {
@@ -1105,10 +1322,12 @@
       byId('topProjects').innerHTML = '<div class="empty-state compact">No projects found yet.</div>';
       return;
     }
+    var totalCost = (Array.isArray(projects) ? projects : []).reduce(function (sum, project) { return sum + finiteOr0(project.costUsd); }, 0);
     byId('topProjects').innerHTML = top.map(function (project, index) {
+      var share = totalCost > 0 ? finiteOr0(project.costUsd) / totalCost : 0;
       return '<div class="rank-row">' +
         '<span class="rank-number">' + (index + 1) + '</span>' +
-        '<div class="rank-copy"><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + project.sessions.length + ' session' + (project.sessions.length === 1 ? '' : 's') + '</span></div>' +
+        '<div class="rank-copy"><strong title="' + escapeHtmlAttr(project.project) + '">' + escapeHtml(shortProjectName(project.project)) + '</strong><span>' + project.sessions.length + ' session' + (project.sessions.length === 1 ? '' : 's') + ' · ' + escapeHtml(formatPercent(share)) + ' of cost</span>' + rankShare(share) + '</div>' +
         '<div class="rank-cost"><strong>' + escapeHtml(formatCost(project.costUsd || 0)) + estimateBadge(project.estimatedCostUsed) + '</strong><span>' + escapeHtml(formatCompact(project.tokenTotal || 0)) + ' tok</span></div>' +
       '</div>';
     }).join('');
@@ -1122,8 +1341,8 @@
     }
     byId('topInsights').innerHTML = top.map(function (tip) {
       var kind = tipKind(tip);
-      return '<div class="action-item">' +
-        '<span class="action-icon ' + (tip.severity === 'warn' ? 'warn' : '') + '">' + escapeHtml(kind.icon) + '</span>' +
+      return '<div class="action-item' + (tip.severity === 'warn' ? ' warn' : '') + '">' +
+        '<span class="action-icon ' + (tip.severity === 'warn' ? 'warn' : '') + '" aria-hidden="true">' + escapeHtml(kind.icon) + '</span>' +
         '<div class="action-copy"><strong>' + escapeHtml(kind.label) + '</strong><p>' + escapeHtml(tip.message || '') + '</p>' +
         (savingText(tip) ? '<span class="action-saving">' + escapeHtml(savingText(tip)) + '</span>' : '') + '</div>' +
       '</div>';

@@ -160,9 +160,14 @@
                   <strong id="planWindowTokens" class="plan-big">—</strong>
                   <span id="planWindowReset">No messages in the current window</span>
                 </div>
-                <div class="plan-meter" aria-hidden="true"><span id="planWindowBar"></span><i id="planWindowProjected"></i></div>
+                <div class="plan-meter" aria-hidden="true"><b id="planWindowPace" class="plan-pace"></b><span id="planWindowBar"></span><i id="planWindowProjected"></i></div>
+                <div class="plan-scale" aria-hidden="true"><span>0</span><span class="plan-scale-key"><i class="key-used"></i>Used <i class="key-pace"></i>Pace at reset</span><span id="planWindowScale">—</span></div>
                 <p id="planWindowMeta" class="plan-meta">Window progress appears after your first message.</p>
-                <div id="planRecentBlocks" class="plan-blocks" role="img" aria-label="Recent 5-hour windows"></div>
+                <div class="plan-history">
+                  <div class="plan-history-head"><span>Recent windows</span><span id="planHistoryPeak"></span></div>
+                  <div id="planRecentBlocks" class="plan-blocks" role="img" aria-label="Recent 5-hour windows"></div>
+                  <div class="plan-blocks-axis" aria-hidden="true"><span>Earlier</span><span>Now</span></div>
+                </div>
               </div>
               <div class="plan-side">
                 <div class="plan-stat">
@@ -235,7 +240,7 @@
             </div>
             <div class="efficiency-grid">
               <div id="efficiencyScore" class="efficiency-score"></div>
-              <div>
+              <div class="efficiency-body">
                 <div id="efficiencyComponents" class="efficiency-components"></div>
                 <p id="efficiencySuggestion" class="efficiency-suggestion"></p>
               </div>
@@ -243,20 +248,20 @@
             <p id="efficiencyWeek" class="chart-summary">Loading this week's usage…</p>
           </article>
 
-          <article class="panel heatmap-panel">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">WORK RHYTHM</p>
-                <h3 id="heatmapTitle">When your tokens burn</h3>
+          <div class="overview-grid rhythm-grid">
+            <article class="panel heatmap-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">WORK RHYTHM</p>
+                  <h3 id="heatmapTitle">When your tokens burn</h3>
+                </div>
+                <div class="heat-legend" aria-hidden="true" title="Active hours split into quartiles">Less <i class="heat-l0"></i><i class="heat-l1"></i><i class="heat-l2"></i><i class="heat-l3"></i><i class="heat-l4"></i> More</div>
               </div>
-              <div class="heat-legend" aria-hidden="true">Less <i style="background:var(--heat-0)"></i><i style="background:var(--heat-1)"></i><i style="background:var(--heat-2)"></i><i style="background:var(--heat-3)"></i><i style="background:var(--heat-4)"></i> More</div>
-            </div>
-            <div id="usageHeatmap" class="heatmap loading-block" role="group" aria-labelledby="heatmapTitle" aria-describedby="heatmapSummary"></div>
-            <p id="heatmapSummary" class="chart-summary" aria-live="polite">Loading your local weekday and hour activity.</p>
-          </article>
+              <div id="usageHeatmap" class="heatmap loading-block" role="group" aria-labelledby="heatmapTitle" aria-describedby="heatmapSummary"></div>
+              <p id="heatmapSummary" class="chart-summary" aria-live="polite">Loading your local weekday and hour activity.</p>
+            </article>
 
-          <div class="overview-grid lower-grid">
-            <article class="panel">
+            <article class="panel mix-panel">
               <div class="panel-header">
                 <div>
                   <p class="panel-kicker">COST DRIVERS</p>
@@ -266,32 +271,34 @@
               </div>
               <div id="tokenMix" class="token-mix"></div>
             </article>
-
-            <article class="panel">
-              <div class="panel-header">
-                <div>
-                  <p class="panel-kicker">TOP PROJECTS</p>
-                  <h3>Where usage is going</h3>
-                </div>
-                <button class="text-button" type="button" data-go-view="projects">View all</button>
-              </div>
-              <div id="topProjects" class="rank-list"><div class="empty-state compact">Loading projects…</div></div>
-            </article>
           </div>
 
           <div class="overview-grid lower-grid attribution-grid">
-            <article class="panel">
-              <div class="panel-header">
-                <div>
-                  <p class="panel-kicker">SUBAGENTS</p>
-                  <h3>Work delegated to subagents</h3>
+            <div class="overview-stack">
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">TOP PROJECTS</p>
+                    <h3>Where usage is going</h3>
+                  </div>
+                  <button class="text-button" type="button" data-go-view="projects">View all</button>
                 </div>
-                <span id="subagentShare" class="panel-total">—</span>
-              </div>
-              <div id="subagentTypes" class="rank-list"><div class="empty-state compact">Loading subagent usage…</div></div>
-            </article>
+                <div id="topProjects" class="rank-list"><div class="empty-state compact">Loading projects…</div></div>
+              </article>
 
-            <article class="panel">
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">SUBAGENTS</p>
+                    <h3>Work delegated to subagents</h3>
+                  </div>
+                  <span id="subagentShare" class="panel-total">—</span>
+                </div>
+                <div id="subagentTypes" class="rank-list"><div class="empty-state compact">Loading subagent usage…</div></div>
+              </article>
+            </div>
+
+            <article class="panel tools-panel">
               <div class="panel-header">
                 <div>
                   <p class="panel-kicker">TOOLS</p>
