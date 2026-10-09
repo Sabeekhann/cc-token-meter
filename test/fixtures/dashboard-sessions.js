@@ -184,8 +184,10 @@ function demoTimestamp(now, dayOffset, index) {
     return new Date(now).toISOString();
   }
 
+  // Spread history across working hours (08:00–20:59) so the activity
+  // heatmap shows a realistic rhythm instead of a single column.
   const date = new Date(now);
-  date.setHours(12, index % 60, 0, 0);
+  date.setHours(8 + ((index * 7 + dayOffset * 5) % 13), index % 60, 0, 0);
   date.setDate(date.getDate() - dayOffset);
   return date.toISOString();
 }
