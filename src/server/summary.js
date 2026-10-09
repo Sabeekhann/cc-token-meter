@@ -18,6 +18,7 @@ import { partitionTips } from '../budget/insightStates.js';
 import { readConfig } from '../budget/config.js';
 import { runHeuristics } from '../heuristics/index.js';
 import { buildUsageIntelligence } from '../analytics/overview.js';
+import { buildAttribution, subagentsByParent } from '../analytics/attribution.js';
 import { buildPlanIntelligence } from '../analytics/plan.js';
 import { buildWeek, scoreEfficiency } from '../analytics/efficiency.js';
 import { buildWhatIf } from '../analytics/whatIf.js';
@@ -77,7 +78,11 @@ export function buildSummary(store, options = {}) {
     }
   );
 
-  const sessionSummaries = sessions.map((s) => ({
+  // Subagent aggregates count toward every total above, but are listed under
+  // their parent session rather than as sessions of their own.
+  const mainSessions = sessions.filter((s) => !s.parentSessionId);
+  const subagents = subagentsByParent(sessions);
+  const sessionSummaries = mainSessions.map((s) => ({
     sessionId: s.sessionId,
     project: s.projectCwd || s.projectDirNameFallback || 'unknown',
     models: s.models,
@@ -96,12 +101,16 @@ export function buildSummary(store, options = {}) {
     gitBranch: s.gitBranch,
     version: s.version,
     timeline: buildTimeline(s),
+    subagents: subagents.get(s.sessionId) || [],
+    subagentTokenTotal: (subagents.get(s.sessionId) || []).reduce((sum, agent) => sum + agent.tokenTotal, 0),
+    subagentCostUsd: (subagents.get(s.sessionId) || []).reduce((sum, agent) => sum + agent.costUsd, 0),
   }));
 
+  // Session caps cover the work a session started, subagents included.
   const activeSessionTotals = sessionSummaries.map((s) => ({
     sessionId: s.sessionId,
-    tokenTotal: s.tokenTotal,
-    costUsd: s.costUsd,
+    tokenTotal: s.tokenTotal + s.subagentTokenTotal,
+    costUsd: (s.costUsd || 0) + s.subagentCostUsd,
     lastTimestamp: s.lastTimestamp,
   }));
 
@@ -131,11 +140,11 @@ export function buildSummary(store, options = {}) {
   ];
 
   const tips = [];
-  for (const s of sessions) {
+  for (const s of mainSessions) {
     const sessionTips = runHeuristics(
       s,
       s.toolEvents || [],
-      sessions,
+      mainSessions,
       [],
       { contextKey: heuristicContextKey },
     );
@@ -148,7 +157,9 @@ export function buildSummary(store, options = {}) {
   // The weekly view is account-wide, and dismissed insights still count
   // toward the score, so hiding a recommendation cannot raise it.
   const week = buildWeek(snapshot.sessions, generatedAt);
-  const efficiency = scoreEfficiency(week, snapshot.sessions, tips);
+  // Subagent runs count toward the week's usage but are not sessions of
+  // their own for the recommendation and /compact components.
+  const efficiency = scoreEfficiency(week, snapshot.sessions.filter((s) => !s.parentSessionId), tips);
   const publicConfig = { ...config };
   delete publicConfig.insightStates;
 
@@ -167,7 +178,7 @@ export function buildSummary(store, options = {}) {
       costUsd: p.costUsd,
       tokenTotal: p.tokenTotal,
       estimatedCostUsed: p.sessions.some((s) => s.estimatedCostUsed === true),
-      sessions: p.sessions.map((s) => ({
+      sessions: p.sessions.filter((s) => !s.parentSessionId).map((s) => ({
         sessionId: s.sessionId,
         messageCount: s.messageCount,
         tokenTotal: tokenTotal(s),
@@ -184,7 +195,7 @@ export function buildSummary(store, options = {}) {
       cacheReadInputTokens: b.cacheReadInputTokens,
       costUsd: b.costUsd,
       tokenTotal: b.tokenTotal,
-      sessions: b.sessions.map((s) => ({
+      sessions: b.sessions.filter((s) => !s.parentSessionId).map((s) => ({
         sessionId: s.sessionId,
         messageCount: s.messageCount,
         tokenTotal: tokenTotal(s),
@@ -201,6 +212,7 @@ export function buildSummary(store, options = {}) {
     intelligence,
     plan,
     whatIf: buildWhatIf(sessions, { now: generatedAt }),
+    attribution: buildAttribution(sessions),
     sessions: sessionSummaries,
     tips: visibleTips,
     hiddenTips,

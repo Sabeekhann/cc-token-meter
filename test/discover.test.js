@@ -81,3 +81,35 @@ test('missing projects directory returns an empty discovery result', async () =>
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }
 });
+
+test('discovers subagent transcripts in a session directory and nothing else there', async () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-token-meter-discover-agents-'));
+  const previousHome = process.env[HOME_OVERRIDE_ENV];
+  const home = path.join(temporaryRoot, 'home');
+  const project = path.join(home, '.claude', 'projects', '-project-a');
+  const sessionDir = path.join(project, 'parent-session');
+
+  try {
+    fs.mkdirSync(path.join(sessionDir, 'subagents', 'agent-nested.jsonl'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'parent-session.jsonl'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(sessionDir, 'subagents', 'agent-abc123.jsonl'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(sessionDir, 'subagents', 'agent-abc123.meta.json'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(sessionDir, 'subagents', 'notes.jsonl'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(sessionDir, 'other.jsonl'), '{}\n', 'utf8');
+    process.env[HOME_OVERRIDE_ENV] = home;
+
+    const files = await discoverSessionFiles();
+
+    assert.deepEqual(
+      files.map(({ sessionId, agentId, parentSessionId }) => [sessionId, agentId, parentSessionId]),
+      [
+        ['parent-session:agent-abc123', 'abc123', 'parent-session'],
+        ['parent-session', undefined, undefined],
+      ],
+    );
+  } finally {
+    if (previousHome === undefined) delete process.env[HOME_OVERRIDE_ENV];
+    else process.env[HOME_OVERRIDE_ENV] = previousHome;
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});

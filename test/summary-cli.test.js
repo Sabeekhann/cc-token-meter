@@ -72,3 +72,14 @@ test('compact summary lists what-if prices for the same tokens', () => {
   assert.match(output, /What-if, same tokens: Big \$40\.00 \(\+100%\) · Small \$5\.00 \(-75%\) vs \$20\.00 actual/);
   assert.doesNotMatch(formatCompactSummary({ whatIf: { scope: { actualCostUsd: 0, costs: [] } } }), /What-if/);
 });
+
+test('compact summary attributes usage to subagents and the heaviest tool', () => {
+  const output = formatCompactSummary({
+    attribution: {
+      subagents: { runs: 3, share: 0.25, costUsd: 4.5 },
+      tools: [{ name: 'Read', calls: 42, estimatedTokens: 370_000 }],
+    },
+  });
+  assert.match(output, /Attribution: 25% of tokens in 3 subagent runs · \$4\.50 · largest tool results: Read \(~370,000 tokens in 42 calls\)/);
+  assert.doesNotMatch(formatCompactSummary({}), /Attribution:/);
+});

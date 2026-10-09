@@ -5,6 +5,28 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Token and cost totals were overcounted.** Current Claude Code versions
+  write one API response as several transcript lines (one per content block),
+  each repeating the response's full usage. Every line was counted, inflating
+  tokens and estimated cost (2.36× on one real session). Usage is now counted
+  once per response (`message.id` + `requestId`), including across incremental
+  reads.
+- **Subagent usage was missing.** Subagent transcripts in
+  `<session>/subagents/agent-*.jsonl` were never read. They are now counted in
+  every total and attributed to the session that started them.
+- Local indexes from earlier versions are rebuilt once from transcripts so the
+  corrected accounting applies to all history.
+
+### Added
+
+- Subagent attribution: usage by agent type, per-session subagent runs in Live
+  session details, and session cost caps that include subagents.
+- Tool attribution: calls and result size per tool, grouped by MCP server,
+  kept per local day so date filters stay exact.
+- `--summary` and `--json` include the attribution.
+
 ## [1.2.0] — 2026-08-28
 
 Feature release adding exact, local-only usage exploration by model and date,

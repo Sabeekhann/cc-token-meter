@@ -61,7 +61,7 @@ export function buildWeek(sessions, now = Date.now()) {
     const projectBucket = projects.get(project) || { project, tokenTotal: 0, costUsd: 0, sessionIds: new Set() };
     projectBucket.tokenTotal += tokens;
     projectBucket.costUsd += cost;
-    projectBucket.sessionIds.add(session.sessionId);
+    if (!session.parentSessionId) projectBucket.sessionIds.add(session.sessionId);
     projects.set(project, projectBucket);
   };
 

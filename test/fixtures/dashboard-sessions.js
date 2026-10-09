@@ -18,6 +18,36 @@ const SESSION_SPECS = [
     dayOffsets: Array.from({ length: 20 }, (_, index) => 19 - index),
     scale: 5,
     repeatedRead: true,
+    subagentTypes: { 'demo-agent-1': 'Explore', 'demo-agent-2': 'general-purpose' },
+    toolStats: {
+      Read: { calls: 42, resultBytes: 1_480_000 },
+      Bash: { calls: 65, resultBytes: 610_000 },
+      mcp__synthetic_docs__search: { calls: 9, resultBytes: 940_000 },
+      Grep: { calls: 31, resultBytes: 220_000 },
+      Edit: { calls: 18, resultBytes: 24_000 },
+    },
+  },
+  {
+    // Synthetic subagent runs started by demo-session-alpha.
+    sessionId: 'demo-session-alpha:agent-demo-agent-1',
+    parentSessionId: 'demo-session-alpha',
+    agentId: 'demo-agent-1',
+    projectCwd: '/Users/example/projects/synthetic-alpha',
+    gitBranch: 'feature/synthetic-alpha',
+    model: DASHBOARD_DEMO_MODELS[2],
+    dayOffsets: [2, 1, 0],
+    scale: 2,
+    toolStats: { Grep: { calls: 24, resultBytes: 310_000 }, Glob: { calls: 11, resultBytes: 40_000 } },
+  },
+  {
+    sessionId: 'demo-session-alpha:agent-demo-agent-2',
+    parentSessionId: 'demo-session-alpha',
+    agentId: 'demo-agent-2',
+    projectCwd: '/Users/example/projects/synthetic-alpha',
+    gitBranch: 'feature/synthetic-alpha',
+    model: DASHBOARD_DEMO_MODELS[1],
+    dayOffsets: [0],
+    scale: 1,
   },
   {
     sessionId: 'demo-session-beta',
@@ -140,6 +170,10 @@ function createSession(spec, now) {
     dailyRollups: [],
     usageRecords,
     toolEvents: spec.repeatedRead ? repeatedReadEvents(spec, now) : [],
+    subagentTypes: spec.subagentTypes || {},
+    toolStatsByDay: spec.toolStats ? { [demoLocalDate(now, 0)]: spec.toolStats } : {},
+    parentSessionId: spec.parentSessionId || null,
+    agentId: spec.agentId || null,
   };
 }
 

@@ -71,6 +71,7 @@ The [latest GitHub release](https://github.com/Sabeekhann/cc-token-meter/release
 | **Overview** | Today's tokens and estimated cost, cache reuse, active sessions, a 14-day history, and a 30-day forecast. |
 | **Live Session** | Recent tokens/minute, estimated cost/hour, models, branches, and message-level burn while Claude Code is running. |
 | **Projects** | Exact per-message attribution across projects, branches, and sessions. |
+| **Attribution** | Subagent usage by agent type, and the tools and MCP servers returning the most data into context. |
 | **Insights** | Ranked, evidence-backed recommendations for repeated reads, cache degradation, large tool output, long context, and outlier sessions. |
 | **Budgets** | Daily token, daily cost, and per-session cost guardrails stored locally. |
 | **Exports** | Human-readable terminal summaries plus JSON and CSV for your own analysis. |
@@ -124,7 +125,7 @@ it does not require an Anthropic API key.
 | **Operating systems** | Linux, macOS, and Windows are covered by the compatibility workflow. |
 | **Claude Code data** | Existing local JSONL transcripts under `~/.claude/projects`. |
 | **Network posture** | No external runtime requests; the dashboard listens only on `127.0.0.1`. |
-| **Upgrade path** | Existing valid v2 indexes migrate automatically to the bounded v3 format. |
+| **Upgrade path** | Indexes written before the accounting fix in the next release are rebuilt once from your transcripts; later upgrades restore warm. |
 
 ### Install as a reusable command
 
@@ -320,8 +321,8 @@ It writes only its own local state under:
 | Local state is recoverable | Index writes are atomic; the index can be deleted and rebuilt from the original transcripts. |
 
 Use `--no-cache` to avoid reading or writing the local usage index.
-Existing v2 indexes migrate automatically without reparsing unchanged
-transcripts. See [large-history performance and retention](docs/PERFORMANCE.md)
+Indexes written by older versions are rebuilt once from the transcripts, so
+corrected accounting applies to your whole history. See [large-history performance and retention](docs/PERFORMANCE.md)
 for the retention contract and reproducible budgets.
 
 ## CLI reference
